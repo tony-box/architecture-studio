@@ -1,13 +1,13 @@
 ---
-name: concept-architecture-studio
-description: Use this plugin to brainstorm close-to-accurate concept architecture with dimensioned plans, project-axis elevations, conceptual MEP layouts, advisory local-code research, and an interactive 3D walkthrough.
+name: architecture-studio
+description: Use this plugin to brainstorm close-to-accurate Architecture with dimensioned plans, project-axis elevations, conceptual MEP layouts, advisory local-code research, and an interactive 3D walkthrough.
 license: MIT
 metadata:
   author: OpenDesign Community
   version: "0.1.0"
 ---
 
-# Concept Architecture Studio
+# Architecture Studio
 
 Use this plugin when the user wants to explore a building concept before
 handing it to a licensed architect or engineer. Produce internally consistent,

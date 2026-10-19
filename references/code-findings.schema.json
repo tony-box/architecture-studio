@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://open-design.ai/schemas/concept-code-findings.v1.json",
-  "title": "Concept Architecture Advisory Code Findings",
+  "title": "Architecture Advisory Code Findings",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "projectId", "jurisdiction", "status", "researchedAt", "findings", "coverage"],

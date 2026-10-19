@@ -1,4 +1,4 @@
-# Concept Architecture Acceptance Checklist
+# Architecture Acceptance Checklist
 
 ## P0 — Required Before Handoff
 

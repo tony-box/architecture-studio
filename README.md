@@ -1,6 +1,6 @@
-# Concept Architecture Studio
+# Architecture Studio
 
-Concept Architecture Studio is a portable OpenDesign plugin for exploring
+Architecture Studio is a portable OpenDesign plugin for exploring
 dimensionally consistent building ideas before professional design begins. One
 structured coordinate model drives plans, project-axis elevations, conceptual
 plumbing/electrical/mechanical systems, and an interactive 3D view.
@@ -21,9 +21,9 @@ adequacy, engineered system sizing, permit readiness, or construction accuracy.
 From the OpenDesign repository:
 
 ```bash
-corepack pnpm exec od plugin validate ./plugins/community/concept-architecture-studio --no-daemon
-corepack pnpm exec od plugin install ./plugins/community/concept-architecture-studio
-corepack pnpm exec od plugin apply concept-architecture-studio \
+corepack pnpm exec od plugin validate ./plugins/community/architecture-studio --no-daemon
+corepack pnpm exec od plugin install ./plugins/community/architecture-studio
+corepack pnpm exec od plugin apply architecture-studio \
   --input project_name="Workshop residence" \
   --input jurisdiction="Town, County, State, US" \
   --input building_program="Workshop below, two-bedroom residence above" \
@@ -69,8 +69,8 @@ private address, satellite imagery, photographs, or construction documents.
 ## Development Validation
 
 ```bash
-node --experimental-strip-types --test plugins/community/concept-architecture-studio/tests/studio-template.test.ts
-corepack pnpm exec od plugin validate ./plugins/community/concept-architecture-studio --no-daemon
+node --experimental-strip-types --test plugins/community/architecture-studio/tests/studio-template.test.ts
+corepack pnpm exec od plugin validate ./plugins/community/architecture-studio --no-daemon
 corepack pnpm guard
 corepack pnpm --filter @open-design/plugin-runtime typecheck
 ```

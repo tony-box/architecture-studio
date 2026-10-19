@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://open-design.ai/schemas/concept-building.v1.json",
-  "title": "Concept Architecture Building Model",
+  "title": "Architecture Building Model",
   "type": "object",
   "additionalProperties": false,
   "required": [
