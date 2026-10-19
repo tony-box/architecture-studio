@@ -1349,11 +1349,14 @@
   function bind3DControls(gls) {
     canvas.addEventListener('pointerdown',event=>{gls.dragging=true;gls.lastX=event.clientX;gls.lastY=event.clientY;canvas.setPointerCapture(event.pointerId);});
     canvas.addEventListener('pointerup',()=>gls.dragging=false);
-    canvas.addEventListener('pointermove',event=>{if(!gls.dragging)return;gls.yaw+=(event.clientX-gls.lastX)*.006;gls.pitch=Math.max(-1.2,Math.min(1.2,gls.pitch-(event.clientY-gls.lastY)*.006));gls.lastX=event.clientX;gls.lastY=event.clientY;renderWebGL();});
+    // Orbit drags the model itself (drag right turns it right, drag down tips its top toward you);
+    // walk drags the view, first-person style.
+    canvas.addEventListener('pointermove',event=>{if(!gls.dragging)return;const sign=state.cameraMode==='orbit'?-1:1;gls.yaw+=sign*(event.clientX-gls.lastX)*.006;gls.pitch=Math.max(-1.2,Math.min(1.2,gls.pitch-sign*(event.clientY-gls.lastY)*.006));gls.lastX=event.clientX;gls.lastY=event.clientY;renderWebGL();});
     canvas.addEventListener('wheel',event=>{event.preventDefault();gls.radius=Math.max(7,Math.min(60,gls.radius+event.deltaY*.02));renderWebGL();},{passive:false});
     canvas.addEventListener('keydown', event => {
       const turns = { ArrowLeft: [-0.08, 0], ArrowRight: [0.08, 0], ArrowUp: [0, 0.06], ArrowDown: [0, -0.06] };
-      if (turns[event.key]) { gls.yaw += turns[event.key][0]; gls.pitch = Math.max(-1.2, Math.min(1.2, gls.pitch + turns[event.key][1])); }
+      const sign = state.cameraMode === 'orbit' ? -1 : 1;
+      if (turns[event.key]) { gls.yaw += sign * turns[event.key][0]; gls.pitch = Math.max(-1.2, Math.min(1.2, gls.pitch + sign * turns[event.key][1])); }
       else if (event.key === '+' || event.key === '=') gls.radius = Math.max(7, gls.radius - 1.5);
       else if (event.key === '-' || event.key === '_') gls.radius = Math.min(60, gls.radius + 1.5);
       else return;
