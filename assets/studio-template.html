@@ -121,6 +121,26 @@
   .queue-item__body { color: var(--muted); font-size: 12px; }
   .queue-notes { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
   .fineprint { margin: 22px 0 0; color: var(--muted); font-size: 12px; }
+  /* Selected element: a detail callout with the measurements a reviewer looks for. */
+  .entity-type { margin: 0 0 2px; color: var(--muted); font-size: 12px; }
+  .entity-context { margin: 0; color: var(--muted); }
+  .entity-detail { margin: 12px 0; padding: 10px; border: 1px solid var(--line); background: #fff; }
+  .entity-detail svg { display: block; width: 100%; height: auto; }
+  .entity-detail figcaption { margin-top: 6px; color: var(--muted); font-size: 12px; }
+  .key-dims { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; margin: 14px 0 0; }
+  .key-dims div { min-width: 0; }
+  .key-dims dt { color: var(--muted); font-size: 12px; }
+  .key-dims dd { margin: 0; font: 600 14px/1.3 var(--mono); overflow-wrap: anywhere; }
+  .entity-subhead { margin: 18px 0 6px; font-size: 14px; }
+  .open-items { margin: 0; padding-left: 18px; }
+  .open-items li + li { margin-top: 4px; }
+  .evidence-line { margin: 14px 0 0; color: var(--muted); font-size: 12px; }
+  .approval { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .approval .tool.primary { width: 100%; margin-left: 0; }
+  .approval__note { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+  .approval__state { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-weight: 600; }
+  .approval__state span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: var(--sheet); background: var(--ink); font-size: 13px; }
+  .entity-actions { margin: 14px 0 0; }
   .diagnostics { display: grid; gap: 6px; }
   .finding { display: block; width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--sheet); text-align: left; }
   button.finding:hover { border-color: var(--ink); }
@@ -226,7 +246,8 @@
     findings: [],
     renderWarnings: [],
     selected: null,
-    cameraMode: 'orbit'
+    cameraMode: 'orbit',
+    approvals: {}
   };
   const SHEET_VIEWS = ['plan', 'elevation', 'section', 'systems'];
   const DOCUMENT_VIEWS = ['code', 'assumptions'];
@@ -1280,6 +1301,181 @@
     return allEntityIds(state.model).find(entity => entity.id === state.selected) ?? null;
   }
 
+  // ---------------------------------------------------------------------------
+  // Selected-element details: measurements a reviewer wants that would clutter the sheets.
+  // ---------------------------------------------------------------------------
+  const ENTITY_GROUPS = [['levels', 'Level'], ['spaces', 'Room'], ['walls', 'Wall'], ['openings', 'Opening'], ['slabs', 'Slab'], ['roofs', 'Roof'], ['stairs', 'Stair'], ['fixtures', 'Fixture'], ['equipment', 'Equipment'], ['systems', 'System'], ['dimensions', 'Dimension'], ['sections', 'Section'], ['assumptions', 'Assumption']];
+  // Decisions the concept model never makes; listed so nobody mistakes their absence for an answer.
+  const OPEN_ITEMS = {
+    Stair: ['Landing and headroom', 'Guards and handrails', 'Code geometry (riser and tread limits)'],
+    Opening: ['Header size and framing', 'Rough opening and unit size', 'Hardware, glazing, and egress requirements'],
+    Wall: ['Assembly, insulation, and finishes', 'Structural role and bracing'],
+    Room: ['Finishes and fixtures', 'Occupancy and egress review'],
+    Slab: ['Structure, reinforcement, and insulation'],
+    Roof: ['Framing, snow, and wind loads', 'Roofing assembly and drainage'],
+    Fixture: ['Make, model, and rough-in'],
+    Equipment: ['Make, model, capacity, and clearances'],
+    'System route': ['Sizing, slope, and supports'],
+    System: ['Engineering design and load calculations']
+  };
+  const capitalize = text => text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+  function locateEntity(model, id) {
+    for (const [group, type] of ENTITY_GROUPS) {
+      const entity = (model[group] ?? []).find(item => item.id === id);
+      if (entity) return { entity, type };
+    }
+    for (const system of model.systems ?? []) {
+      const node = system.nodes.find(item => item.id === id); if (node) return { entity: node, type: 'System point', system };
+      const edge = system.edges.find(item => item.id === id); if (edge) return { entity: edge, type: 'System route', system };
+    }
+    return model.project?.id === id ? { entity: model.project, type: 'Project' } : null;
+  }
+  function entityTitle(entity, type) {
+    if (entity.name) return entity.name;
+    const prefixes = ['level', 'space', 'wall', 'opening', 'slab', 'roof', 'stair', 'fixture', 'equipment', 'system', 'dimension', 'section', 'assumption', 'plumbing', 'electrical', 'mechanical'];
+    const words = entity.id.split('-');
+    const rest = (prefixes.includes(words[0]) ? words.slice(1) : words).filter(word => word.length > 1);
+    const noun = type.split(' ').at(-1).toLowerCase();
+    const label = capitalize(rest.join(' ')) || type;
+    return type === 'Opening' || label.toLowerCase().endsWith(noun) || label === type ? label : `${label} ${noun}`;
+  }
+  const pathLength = path => path.slice(1).reduce((sum, point, i) => sum + Math.hypot(point.x - path[i].x, point.y - path[i].y, point.z - path[i].z), 0);
+
+  function detailSvg(label, body) {
+    return `<svg viewBox="0 0 280 150" role="img" aria-label="${escapeHtml(label)}" font-family='${DRAFT.font}'>${body}</svg>`;
+  }
+  const tickAt = (x, y) => `<line x1="${num(x - 4)}" y1="${num(y + 4)}" x2="${num(x + 4)}" y2="${num(y - 4)}" stroke="${DRAFT.ink}" stroke-width="1"/>`;
+  const svgLabel = (x, y, value, anchor = 'start') => `<text x="${num(x)}" y="${num(y)}" font-size="9" text-anchor="${anchor}" fill="${DRAFT.ink}">${escapeHtml(value)}</text>`;
+  function stairDetail(risers, riserLabel, treadLabel, totalLabel) {
+    const steps = Math.min(risers, 8), w = 170 / steps, h = 112 / steps, x0 = 40, y0 = 130;
+    const pts = [[x0, y0]];
+    for (let i = 0; i < steps; i += 1) pts.push([x0 + i * w, y0 - (i + 1) * h], [x0 + (i + 1) * w, y0 - (i + 1) * h]);
+    const top = y0 - steps * h;
+    return detailSvg(`Stair profile: ${risers} risers at ${riserLabel}, ${treadLabel} treads, ${totalLabel} total rise`, [
+      `<polyline points="${pts.map(([x, y]) => `${num(x)},${num(y)}`).join(' ')}" fill="none" stroke="${DRAFT.ink}" stroke-width="1.6"/>`,
+      `<line x1="${x0}" y1="${y0}" x2="${num(x0 + steps * w)}" y2="${num(top)}" stroke="${DRAFT.ink}" stroke-width="0.8" stroke-dasharray="4 3"/>`,
+      `<line x1="20" y1="${y0}" x2="250" y2="${y0}" stroke="${DRAFT.ink}" stroke-width="2"/>`,
+      `<line x1="228" y1="${num(top)}" x2="228" y2="${y0}" stroke="${DRAFT.ink}" stroke-width="0.6"/>`, tickAt(228, top), tickAt(228, y0),
+      svgLabel(234, (top + y0) / 2 + 3, totalLabel),
+      svgLabel(x0 + w + 4, y0 - 1.5 * h + 3, riserLabel),
+      svgLabel(x0 + w * 1.5, y0 - 2 * h - 6, treadLabel, 'middle')
+    ].join(''));
+  }
+  function openingDetail(opening, wallHeight, labels) {
+    const scale = Math.min(170 / Math.max(opening.widthMm * 1.6, 1), 110 / Math.max(wallHeight, 1));
+    const ww = opening.widthMm * 1.6 * scale, wh = wallHeight * scale, x0 = 140 - ww / 2, y0 = 132;
+    const ow = opening.widthMm * scale, oh = opening.heightMm * scale, ox = 140 - ow / 2, oy = y0 - (opening.sillMm + opening.heightMm) * scale;
+    const sill = opening.sillMm > 0
+      ? `<line x1="${num(ox - 8)}" y1="${num(oy + oh)}" x2="${num(ox - 8)}" y2="${y0}" stroke="${DRAFT.ink}" stroke-width="0.6"/>${tickAt(ox - 8, oy + oh)}${tickAt(ox - 8, y0)}${svgLabel(ox - 12, (oy + oh + y0) / 2 + 3, labels.sill, 'end')}`
+      : '';
+    return detailSvg(`Opening elevation: ${labels.width} wide by ${labels.height} high, sill at ${labels.sill}`, [
+      `<rect x="${num(x0)}" y="${num(y0 - wh)}" width="${num(ww)}" height="${num(wh)}" fill="#f1f1ef" stroke="${DRAFT.ink}" stroke-width="0.8"/>`,
+      `<rect x="${num(ox)}" y="${num(oy)}" width="${num(ow)}" height="${num(oh)}" fill="#fff" stroke="${DRAFT.ink}" stroke-width="1.6"/>`,
+      `<line x1="${num(x0 - 14)}" y1="${y0}" x2="${num(x0 + ww + 14)}" y2="${y0}" stroke="${DRAFT.ink}" stroke-width="2"/>`,
+      `<line x1="${num(ox)}" y1="${num(oy - 8)}" x2="${num(ox + ow)}" y2="${num(oy - 8)}" stroke="${DRAFT.ink}" stroke-width="0.6"/>`, tickAt(ox, oy - 8), tickAt(ox + ow, oy - 8),
+      svgLabel(140, oy - 11, labels.width, 'middle'),
+      `<line x1="${num(ox + ow + 8)}" y1="${num(oy)}" x2="${num(ox + ow + 8)}" y2="${num(oy + oh)}" stroke="${DRAFT.ink}" stroke-width="0.6"/>`, tickAt(ox + ow + 8, oy), tickAt(ox + ow + 8, oy + oh),
+      svgLabel(ox + ow + 12, oy + oh / 2 + 3, labels.height),
+      sill
+    ].join(''));
+  }
+  function roofDetail(labels) {
+    return detailSvg(`Roof profile: eave ${labels.eave}, ridge ${labels.ridge}, overhang ${labels.overhang}`, [
+      `<polyline points="30,100 140,30 250,100" fill="none" stroke="${DRAFT.ink}" stroke-width="1.6"/>`,
+      `<line x1="52" y1="100" x2="52" y2="135" stroke="${DRAFT.ink}" stroke-width="1"/><line x1="228" y1="100" x2="228" y2="135" stroke="${DRAFT.ink}" stroke-width="1"/>`,
+      `<line x1="20" y1="135" x2="260" y2="135" stroke="${DRAFT.ink}" stroke-width="2"/>`,
+      `<line x1="40" y1="100" x2="240" y2="100" stroke="${DRAFT.ink}" stroke-width="0.6" stroke-dasharray="6 2 1.5 2"/>`,
+      svgLabel(244, 96, 'Eave ' + labels.eave, 'end'), svgLabel(146, 26, 'Ridge ' + labels.ridge), svgLabel(30, 116, 'Overhang ' + labels.overhang)
+    ].join(''));
+  }
+
+  function entityDetails(model, id) {
+    const found = locateEntity(model, id);
+    if (!found) return null;
+    // Under a foot reads as inches alone in the panel (6 5/8" rather than 0'-6 5/8").
+    const { entity, type } = found, units = model.project.coordinates.displayUnits, L = mm => formatLength(mm, units).replace(/^0'-/, '');
+    const levelName = levelId => model.levels.find(level => level.id === levelId)?.name ?? levelId;
+    const dims = []; let context = ''; let diagram = null; let caption = '';
+    if (type === 'Stair') {
+      const from = model.levels.find(level => level.id === entity.fromLevelId), to = model.levels.find(level => level.id === entity.toLevelId);
+      const totalRise = (to?.elevationMm ?? 0) - (from?.elevationMm ?? 0), riser = totalRise / entity.riserCount;
+      const run = Math.hypot(entity.end.x - entity.start.x, entity.end.y - entity.start.y);
+      context = `${from?.name ?? entity.fromLevelId} to ${to?.name ?? entity.toLevelId}`;
+      dims.push(['Width', L(entity.widthMm)], ['Run', L(run)], ['Riser', L(riser)], ['Tread', L(entity.treadDepthMm)], ['Risers', String(entity.riserCount)], ['Total rise', L(totalRise)]);
+      diagram = stairDetail(entity.riserCount, L(riser), L(entity.treadDepthMm), L(totalRise));
+      caption = `Profile, not to scale. ${entity.riserCount} risers.`;
+    } else if (type === 'Opening') {
+      const wall = model.walls.find(item => item.id === entity.wallId);
+      context = `${capitalize(entity.kind.replace('-', ' '))} in ${wall ? entityTitle(wall, 'Wall').toLowerCase() : entity.wallId}${wall ? `, ${levelName(wall.levelId)}` : ''}`;
+      dims.push(['Width', L(entity.widthMm)], ['Height', L(entity.heightMm)], ['Sill', L(entity.sillMm)], ['Head height', L(entity.sillMm + entity.heightMm)]);
+      if (wall) dims.push(['Wall thickness', L(wall.thicknessMm)]);
+      if (entity.swing && entity.swing !== 'none') dims.push(['Operation', capitalize(entity.swing)]);
+      if (wall) { diagram = openingDetail(entity, wall.heightMm, { width: L(entity.widthMm), height: L(entity.heightMm), sill: L(entity.sillMm) }); caption = 'Elevation in its wall, not to scale.'; }
+    } else if (type === 'Wall') {
+      context = `${capitalize(entity.kind)} wall, ${levelName(entity.levelId)}`;
+      dims.push(['Length', L(Math.hypot(entity.end.x - entity.start.x, entity.end.y - entity.start.y))], ['Thickness', L(entity.thicknessMm)], ['Height', L(entity.heightMm)], ['Openings', String(model.openings.filter(item => item.wallId === entity.id).length)]);
+      if (entity.baseOffsetMm) dims.push(['Base offset', L(entity.baseOffsetMm)]);
+    } else if (type === 'Room') {
+      const box = boundsOf(entity.boundary);
+      const perimeter = entity.boundary.reduce((sum, point, i) => { const next = entity.boundary[(i + 1) % entity.boundary.length]; return sum + Math.hypot(next.x - point.x, next.y - point.y); }, 0);
+      context = `${capitalize(entity.use)}, ${levelName(entity.levelId)}`;
+      dims.push(['Area', profileFor(model).area(polygonArea(entity.boundary))], ['Perimeter', L(perimeter)], ['Overall width', L(box.x1 - box.x0)], ['Overall depth', L(box.y1 - box.y0)]);
+      if (entity.occupancy != null) dims.push(['Occupancy', String(entity.occupancy)]);
+    } else if (type === 'Slab') {
+      context = levelName(entity.levelId);
+      dims.push(['Thickness', L(entity.thicknessMm)], ['Area', profileFor(model).area(polygonArea(entity.boundary))]);
+    } else if (type === 'Roof') {
+      const box = boundsOf(entity.footprint), half = (entity.ridgeAxis === 'y' ? box.x1 - box.x0 : box.y1 - box.y0) / 2, rise = entity.ridgeElevationMm - entity.eaveElevationMm;
+      const pitch = units === 'metric' ? `${(Math.atan2(rise, half) * 180 / Math.PI).toFixed(1)}°` : `${(rise / half * 12).toFixed(1)}:12`;
+      context = `${capitalize(entity.kind)} roof`;
+      dims.push(['Eave', L(entity.eaveElevationMm)], ['Ridge', L(entity.ridgeElevationMm)], ['Pitch', pitch], ['Overhang', L(entity.overhangMm ?? 0)]);
+      diagram = roofDetail({ eave: L(entity.eaveElevationMm), ridge: L(entity.ridgeElevationMm), overhang: L(entity.overhangMm ?? 0) });
+      caption = 'Profile, not to scale.';
+    } else if (type === 'Fixture' || type === 'Equipment') {
+      context = `${capitalize(entity.kind.replace(/-/g, ' '))}, ${levelName(entity.levelId)}`;
+      dims.push(['Width', L(entity.size.x)], ['Depth', L(entity.size.y)], ['Height', L(entity.size.z)], ['Mounted at', L(entity.position.z)], ['Connections', String((entity.connections ?? []).length)]);
+    } else if (type === 'System route') {
+      const endpoint = id => entityTitle(locateEntity(model, id)?.entity ?? { id }, 'System point');
+      context = `${capitalize(found.system.discipline)} route`;
+      dims.push(['Length', L(pathLength(entity.path))], ['Nominal size', entity.nominalSize ?? 'Not set'], ['From', endpoint(entity.from)], ['To', endpoint(entity.to)]);
+    } else if (type === 'System point') {
+      context = found.system.name;
+      dims.push(['Kind', capitalize(entity.kind.replace(/-/g, ' '))], ['Elevation', L(entity.position.z)]);
+    } else if (type === 'System') {
+      context = `${capitalize(entity.discipline)}, ${entity.status}`;
+      dims.push(['Routes', String(entity.edges.length)], ['Points', String(entity.nodes.length)], ['Total length', L(entity.edges.reduce((sum, edge) => sum + pathLength(edge.path), 0))]);
+    } else if (type === 'Level') {
+      dims.push(['Elevation', L(entity.elevationMm)], ['Floor to floor', entity.floorToFloorMm ? L(entity.floorToFloorMm) : 'Not set']);
+    } else if (type === 'Section') {
+      dims.push(['Cut length', L(Math.hypot(entity.end.x - entity.start.x, entity.end.y - entity.start.y))], ['Looking', capitalize(entity.lookDirection)]);
+    } else if (type === 'Dimension') {
+      dims.push(['Measured', L(Math.hypot(entity.to.x - entity.from.x, entity.to.y - entity.from.y, entity.to.z - entity.from.z))]);
+    } else if (type === 'Assumption') {
+      context = entity.statement;
+      dims.push(['Topic', capitalize(entity.topic)], ['Impact', capitalize(entity.impact)]);
+    }
+    return { id, type, title: entityTitle(entity, type), context, dims, diagram, caption, openItems: OPEN_ITEMS[type] ?? [], evidence: entity.evidence ?? null };
+  }
+
+  // Approvals are the user's sign-off on a concept element. The page is static, so they are
+  // kept in this browser and exported with the drawing set as reviews/approvals.json.
+  const approvalsKey = () => `od-architecture-studio:approvals:${state.model?.project.id}`;
+  function loadApprovals() {
+    try { return typeof localStorage === 'undefined' ? {} : JSON.parse(localStorage.getItem(approvalsKey()) ?? '{}') ?? {}; } catch { return {}; }
+  }
+  function saveApprovals() {
+    try { if (typeof localStorage === 'undefined') return false; localStorage.setItem(approvalsKey(), JSON.stringify(state.approvals)); return true; } catch { return false; }
+  }
+  function approvalsExport(model, approvals) {
+    return {
+      schemaVersion: '1.0.0', projectId: model.project.id, modelFingerprint: modelFingerprint(model),
+      approvals: Object.entries(approvals).filter(([id]) => locateEntity(model, id)).map(([entityId, record]) => {
+        const details = entityDetails(model, entityId);
+        return { entityId, type: details.type, title: details.title, approvedAt: record.approvedAt };
+      })
+    };
+  }
+
   const FINDING_TOPICS = {
     'evidence.review': 'Evidence to confirm', 'stair.code': 'Stair', 'code.status': 'Code research', 'system.review': 'Systems',
     'label.placement': 'Drawing label', 'section.empty': 'Section', 'webgl.unavailable': '3D view'
@@ -1311,9 +1507,29 @@
     const findings = [...state.findings, ...state.renderWarnings];
     const errors = findings.filter(item => item.severity === 'error');
     if (entity) {
-      const ev = entity.evidence ?? evidence('Derived output without authored evidence.');
-      inspector.innerHTML = `<h2>${escapeHtml(entity.name ?? entity.id)}</h2><p class="lede">${escapeHtml(entity.use ?? entity.kind ?? entity.discipline ?? entity.statement ?? 'Model entity')}</p><dl class="metric"><dt>ID</dt><dd>${escapeHtml(entity.id)}</dd><dt>Source</dt><dd>${escapeHtml(ev.source)}</dd><dt>Confidence</dt><dd>${Math.round((ev.confidence ?? 0) * 100)}%</dd><dt>Status</dt><dd>${escapeHtml(ev.status)}</dd></dl><h3>Evidence</h3><p class="lede">${escapeHtml(ev.note)}</p><p><button type="button" class="tool" id="clear-selection">Clear selection</button></p><div class="disclaimer">Concept only. Selected geometry and systems require professional verification.</div>`;
+      const details = entityDetails(state.model, entity.id);
+      const ev = details.evidence ?? evidence('Derived output without authored evidence.');
+      const approved = state.approvals[entity.id];
+      const approval = ev.status === 'accepted'
+        ? '<div class="approval"><p class="approval__state"><span aria-hidden="true">&#10003;</span> Accepted in the model</p></div>'
+        : approved
+          ? '<div class="approval" role="status"><p class="approval__state"><span aria-hidden="true">&#10003;</span> Approved by you for this concept</p><button type="button" class="tool" id="undo-approval">Undo approval</button></div>'
+          : `<div class="approval"><button type="button" class="tool primary" id="approve-entity">Approve this ${escapeHtml(details.type.toLowerCase())}</button><p class="approval__note">Records your approval for this concept and includes it in the downloaded drawing set. It is not a professional sign-off.</p></div>`;
+      const dims = details.dims.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('');
+      const openItems = details.openItems.map(item => `<li>${escapeHtml(item)}</li>`).join('');
+      inspector.innerHTML = [
+        `<p class="entity-type">${escapeHtml(details.type)}</p><h2>${escapeHtml(details.title)}</h2>`,
+        details.context ? `<p class="entity-context">${escapeHtml(details.context)}</p>` : '',
+        details.diagram ? `<figure class="entity-detail">${details.diagram}<figcaption>${escapeHtml(details.caption)}</figcaption></figure>` : '',
+        dims ? `<dl class="key-dims">${dims}</dl>` : '',
+        openItems ? `<h3 class="entity-subhead">Open items</h3><ul class="open-items">${openItems}</ul>` : '',
+        `<p class="evidence-line">${escapeHtml(capitalize(ev.source))} · ${Math.round((ev.confidence ?? 0) * 100)}% confidence · ${escapeHtml(ev.status.replace('-', ' '))}. ${escapeHtml(ev.note)}</p>`,
+        approval,
+        '<p class="entity-actions"><button type="button" class="tool" id="clear-selection">Clear selection</button></p>'
+      ].join('');
       $('#clear-selection')?.addEventListener('click', () => select(null));
+      $('#approve-entity')?.addEventListener('click', () => setApproval(entity.id, true));
+      $('#undo-approval')?.addEventListener('click', () => setApproval(entity.id, false));
       return;
     }
     const { checks, notes } = reviewQueue(findings);
@@ -1498,13 +1714,16 @@
   }
   async function downloadDrawingSet() {
     const m = state.manifest;
-    if (m.status !== 'loaded') {
+    const approvalCount = Object.keys(state.approvals).length;
+    if (m.status !== 'loaded' && !approvalCount) {
       downloadStatus.textContent = m.status === 'invalid' ? m.message : 'No drawing set has been exported yet. Run scripts/export-drawings.ts to write exports/, then reload this page.';
       return;
     }
     downloadStatus.textContent = 'Packaging the drawing set...';
-    const encoder = new TextEncoder(), files = [{ name: 'exports/manifest.json', bytes: encoder.encode(JSON.stringify(m.data, null, 2)) }], missing = [];
-    for (const entry of [...m.data.files, ...(m.data.artifacts ?? [])]) {
+    const encoder = new TextEncoder(), files = [], missing = [];
+    if (m.status === 'loaded') files.push({ name: 'exports/manifest.json', bytes: encoder.encode(JSON.stringify(m.data, null, 2)) });
+    if (approvalCount) files.push({ name: 'reviews/approvals.json', bytes: encoder.encode(JSON.stringify(approvalsExport(state.model, state.approvals), null, 2)) });
+    for (const entry of m.status === 'loaded' ? [...m.data.files, ...(m.data.artifacts ?? [])] : []) {
       try {
         const response = await fetch(`./${entry.path}`, { cache: 'no-store' });
         if (!response.ok) throw new Error(String(response.status));
@@ -1514,12 +1733,13 @@
     const blob = new Blob([zipFiles(files)], { type: 'application/zip' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${state.model.project.id}-drawing-set.zip`;
+    link.download = `${state.model.project.id}-${m.status === 'loaded' ? 'drawing-set' : 'approvals'}.zip`;
     document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(link.href), 4000);
     downloadStatus.textContent = [
       `Downloaded ${files.length} files as ${link.download}.`,
       m.stale ? 'The exported drawings predate the current model. Rerun scripts/export-drawings.ts to refresh them.' : '',
+      m.status !== 'loaded' ? 'Only your approvals were included; no drawing set has been exported yet.' : '',
       missing.length ? `Not found: ${missing.join(', ')}.` : ''
     ].filter(Boolean).join(' ');
   }
@@ -1596,6 +1816,14 @@
   function showStageStatus(title, detail) {
     stageStatus.classList.toggle('hidden-view', !title);
     if (title) stageStatus.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail ?? '')}</span>`;
+  }
+  function setApproval(id, approved) {
+    if (approved) state.approvals[id] = { approvedAt: new Date().toISOString().slice(0, 10) };
+    else delete state.approvals[id];
+    const saved = saveApprovals();
+    downloadStatus.textContent = saved ? '' : 'This browser could not save the approval. It will be lost when the page reloads; download the drawing set to keep it.';
+    renderInspector();
+    $(approved ? '#undo-approval' : '#approve-entity')?.focus();
   }
   function select(id) {
     state.selected = id && entityExists(id) ? id : null;
@@ -1745,6 +1973,7 @@
       const requestedLevel = params.get('level'); state.levelId = state.model.levels.some(level => level.id === requestedLevel) ? requestedLevel : (sortedLevels(state.model)[0]?.id ?? null);
       const requestedSection = params.get('section'); state.sectionId = (state.model.sections ?? []).some(item => item.id === requestedSection) ? requestedSection : (state.model.sections?.[0]?.id ?? null);
       state.findings = validateModel(state.model);
+      state.approvals = loadApprovals();
       const codePath = params.get('code') || './reviews/code-findings.json';
       try {
         const codeResponse = await fetch(codePath, { cache: 'no-store' });
@@ -1778,7 +2007,7 @@
   const studioApi = {
     state, PROFILES, DISCIPLINES, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
     renderPlanSheet, renderElevationSheet, renderSectionSheet, sectionGeometry, renderDrawingSet, modelFingerprint,
-    planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength
+    planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport
   };
   if (typeof globalThis.__OD_STUDIO_TEST__ === 'function') globalThis.__OD_STUDIO_TEST__(studioApi);
   else start();

@@ -289,3 +289,37 @@ test('plugin copy contains no em dashes', () => {
   const files = ['SKILL.md', 'README.md', 'open-design.json', 'assets/studio-template.html', ...fs.readdirSync(path.join(pluginRoot, 'references')).map(file => `references/${file}`)];
   for (const file of files) assert.doesNotMatch(fs.readFileSync(path.join(pluginRoot, file), 'utf8'), /\u2014/, file);
 });
+test('selected elements expose review details without inventing undefined values', () => {
+  const { api } = loadStudio();
+  const model = cloneFixture();
+  const stair = api.entityDetails(model, 'stair-main');
+  assert.equal(stair.type, 'Stair');
+  assert.equal(stair.title, 'Main stair');
+  const stairDims = Object.fromEntries(stair.dims);
+  assert.equal(stairDims.Riser, '6 5/8"');
+  assert.equal(stairDims['Total rise'], `12'-9 1/2"`);
+  assert.match(stair.diagram, /^<svg[^>]*role="img"/);
+  assert.ok(stair.openItems.includes('Guards and handrails'));
+
+  const opening = Object.fromEntries(api.entityDetails(model, 'opening-bedroom-window').dims);
+  assert.equal(opening['Head height'], `7'-4 5/8"`);
+  assert.ok(!('Header' in opening), 'header size is an open item, not a value');
+  assert.ok(api.entityDetails(model, 'opening-bedroom-window').openItems.includes('Header size and framing'));
+
+  const room = Object.fromEntries(api.entityDetails(model, 'space-workshop').dims);
+  assert.equal(room.Area, '930 SF');
+  const metricRoom = Object.fromEntries(api.entityDetails(structuredClone(metricFixture), 'space-bath-ground').dims);
+  assert.equal(metricRoom.Area, '11.5 m²');
+  assert.equal(api.entityDetails(model, 'not-an-entity'), null);
+});
+
+test('approvals export references only real entities and the model fingerprint', () => {
+  const { api } = loadStudio();
+  const model = cloneFixture();
+  const exported = api.approvalsExport(model, { 'stair-main': { approvedAt: '2026-10-19' }, 'deleted-thing': { approvedAt: '2026-10-19' } });
+  assert.equal(exported.projectId, model.project.id);
+  assert.equal(exported.modelFingerprint, api.modelFingerprint(model));
+  assert.equal(exported.approvals.length, 1);
+  assert.equal(exported.approvals[0].entityId, 'stair-main');
+  assert.equal(exported.approvals[0].type, 'Stair');
+});

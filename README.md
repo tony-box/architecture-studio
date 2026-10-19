@@ -50,6 +50,7 @@ exports/sections/*.svg
 exports/systems/*.svg
 reviews/code-findings.json
 reviews/code-review.md
+reviews/approvals.json
 ASSUMPTIONS.md
 HANDOFF.md
 ```
@@ -97,6 +98,13 @@ The manifest records a model fingerprint, so the viewer can tell when the
 exported drawings are older than the model. The viewer's **Download drawing
 set** button packages the files listed in the manifest into one ZIP; it does
 not render anything itself.
+
+Selecting an element in any drawing opens its review details: key dimensions,
+a small detail drawing for stairs, openings, and roofs, the decisions the
+concept leaves open (header sizes, framing, guards), and its evidence. The
+owner can approve an element there. Approvals are kept in the browser and
+exported as `reviews/approvals.json` with the drawing set; they record the
+owner's sign-off on the concept, not a professional approval.
 
 ## Included Fixture
 

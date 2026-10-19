@@ -151,6 +151,13 @@ table".
   and repeated findings merge. No model statistics. An entry that points at a
   model entity is a button that selects it; one that does not is not styled as
   clickable. The concept-only notice closes the panel as fine print.
+- **Inspector (selected element)**: a detail callout. Type and title, a
+  plain-language context line, a small not-to-scale detail drawing for
+  stairs, openings, and roofs, a two-column grid of key dimensions in the
+  model's units, the open items the concept does not decide (shown as a list,
+  never as invented values), and a one-line evidence summary. An Approve
+  button records the owner's sign-off (approved state shows a check and Undo);
+  entities already accepted in the model say so instead.
 - **Findings on the Code review page**: a card with a coloured severity word
   and topic, same clickable rule.
 - **Sheet entities** are focusable; Enter or Space inspects, Escape clears.

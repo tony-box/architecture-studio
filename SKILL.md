@@ -50,7 +50,13 @@ survey accurate, or professionally engineered.
    change; never hand-write or edit the SVG files. If the script cannot run
    (no Node 24), say so in `HANDOFF.md` instead of producing drawings another
    way. The viewer's Download drawing set button packages these files.
-9. Run the cross-view checklist in `references/checklist.md`, then write
+9. If the user returns a `reviews/approvals.json` (the viewer's Approve button
+   exports it with the drawing set), set each listed entity's evidence to
+   `source: "user"` and `status: "accepted"`, keep its confidence, and note the
+   approval date. Ignore entries whose `modelFingerprint` predates edits to
+   that entity and ask the user to re-approve. An approval is the owner's
+   sign-off on the concept, never a professional or code approval.
+10. Run the cross-view checklist in `references/checklist.md`, then write
    `ASSUMPTIONS.md` and `HANDOFF.md` for the architect and engineering team.
    Rerun the export last so the manifest lists both handoff files.
 
@@ -67,6 +73,7 @@ exports/sections/*.svg            # A-3xx building sections
 exports/systems/*.svg             # M-1xx systems coordination plans
 reviews/code-findings.json
 reviews/code-review.md
+reviews/approvals.json            # optional, exported by the viewer
 ASSUMPTIONS.md
 HANDOFF.md
 ```
