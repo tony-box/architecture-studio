@@ -1,6 +1,6 @@
 # Architecture Acceptance Checklist
 
-## P0 — Required Before Handoff
+## P0: Required Before Handoff
 
 - [ ] `models/building.json` parses and all stable IDs/references resolve.
 - [ ] No `error` findings remain in studio diagnostics.
@@ -17,8 +17,11 @@
 - [ ] Code findings cite sources or explicitly report research as unavailable.
 - [ ] Diagnostics, Code, Assumptions, and Handoff surfaces all state that the
       work is conceptual and requires professional verification.
+- [ ] `exports/` was written by `export-drawings.ts` after the last model
+      change: `exports/manifest.json` lists every sheet and its model fingerprint
+      matches the active model. No SVG was hand-written or edited.
 
-## P1 — Interaction and Legibility
+## P1: Interaction and Legibility
 
 - [ ] Plan and system layers remain legible at laptop and mobile widths.
 - [ ] Rooms, openings, fixtures, equipment, routes, and diagnostics are
@@ -27,6 +30,11 @@
 - [ ] Orbit and walk modes render a nonblank model without WebGL errors.
 - [ ] Variant selection, when present, swaps the complete model in every view.
 - [ ] Labels may move for legibility, but leaders retain the true model anchor.
+- [ ] Sheets follow `drafting-standard.md` for the model's display units:
+      standard scale, pen hierarchy, dimension terminators, title block, and
+      no `label.placement` warnings left unresolved.
+- [ ] Every section definition renders a section sheet with cut elements in
+      poché, and its section marks appear on the plans.
 
 ## Professional Handoff
 

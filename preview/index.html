@@ -3,37 +3,1713 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Architecture Studio Preview</title>
+<title>Architecture Studio</title>
 <style>
-  :root { --paper:#f2eee4;--sheet:#fbfaf6;--ink:#202622;--muted:#69706a;--line:#c8c6bc;--accent:#b64b34;--blue:#315fa3;--teal:#187773;--serif:"Iowan Old Style",Georgia,serif;--mono:"Cascadia Mono",Consolas,monospace; }
-  *{box-sizing:border-box}html,body{height:100%;margin:0}body{background:var(--paper);color:var(--ink);font:14px/1.4 "Segoe UI",sans-serif;overflow:hidden}
-  .app{display:grid;grid-template-columns:minmax(0,1fr) 280px;height:100%}.main{display:grid;grid-template-rows:52px minmax(0,1fr);min-width:0}
-  header{display:flex;align-items:center;padding:0 20px;border-bottom:1px solid var(--line);background:var(--sheet)}header strong{font:600 17px/1 var(--serif)}header span{margin-left:auto;color:var(--muted);font:9px/1.4 var(--mono);text-transform:uppercase}
-  .stage{position:relative;background:var(--sheet);overflow:hidden}.stage:before{content:"";position:absolute;inset:0;background-image:linear-gradient(#e3e0d7 1px,transparent 1px),linear-gradient(90deg,#e3e0d7 1px,transparent 1px);background-size:24px 24px;opacity:.55}
-  svg{position:absolute;inset:7% 8%;width:84%;height:86%}.room{fill:#ece8dd;stroke:#b7b7ad;stroke-width:18}.room.wet{fill:#dfeae5}.wall{fill:none;stroke:var(--ink);stroke-width:110;stroke-linejoin:miter}.opening{fill:none;stroke:var(--accent);stroke-width:22}.pipe{fill:none;stroke:var(--blue);stroke-width:34;stroke-linejoin:round}.duct{fill:none;stroke:var(--teal);stroke-width:34;stroke-linejoin:round;stroke-dasharray:110 45}.node{stroke:var(--sheet);stroke-width:16}.label{font:600 230px/1 var(--mono);fill:var(--ink);text-anchor:middle}.sub{font:180px/1 var(--mono);fill:var(--muted);text-anchor:middle}
-  aside{min-width:0;border-left:1px solid var(--line);background:#e7e3d8;padding:22px;overflow:auto}.k{color:var(--accent);font:600 9px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase}h1{overflow-wrap:anywhere;font:600 29px/1 var(--serif);margin:10px 0 12px}p{color:#565c57;font-size:12px}.metrics{display:grid;grid-template-columns:1fr auto;gap:8px;margin:20px 0;padding:16px 0;border-block:1px solid var(--line);font:10px/1.2 var(--mono);text-transform:uppercase}.metrics b{text-align:right}.finding{margin-top:9px;padding:9px;border-left:3px solid #a86c18;background:rgba(255,255,255,.48);font-size:11px}.notice{margin-top:18px;padding:11px;border:1px solid #c5a575;background:#f8edd8;color:#654c25;font-size:11px}
-  .tabs{position:absolute;left:18px;top:16px;display:flex;gap:1px}.tabs span{padding:7px 10px;background:var(--sheet);border:1px solid var(--line);font:9px/1 var(--mono);text-transform:uppercase}.tabs .on{background:var(--ink);color:var(--sheet)}
-  @media(max-width:720px){body{overflow:auto}.app{display:block;width:100%;height:auto;min-height:100%;overflow-x:hidden}.main{height:58vh}header span{display:none}aside{width:100%;max-width:100%;overflow-x:hidden;border-left:0;border-top:1px solid var(--line);padding:16px}aside>*{max-width:100%}aside h1{font-size:25px;word-break:normal}aside p{overflow-wrap:anywhere}.metrics{margin:12px 0}.notice{margin-top:10px}}
+  /* Viewer chrome tokens. See references/viewer-chrome.md. Drawing sheets carry their own
+     drafting styles inline (references/drafting-standard.md) and never read these. */
+  :root {
+    --paper: #f3f0e8;
+    --sheet: #fbfaf6;
+    --panel: #ebe7dd;
+    --ink: #1f2420;
+    --muted: #4f5650;
+    --line: #d3d0c6;
+    --control-line: #767b75;
+    --accent: #b64b34;
+    --canvas: #dcdad3;
+    --error: #a22e2e;
+    --warning: #7d5208;
+    --advisory: #3f5660;
+    --sans: "Aptos", "Segoe UI", system-ui, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --mono: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+    --control-h: 36px;
+    --ease: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  @media (pointer: coarse), (max-width: 900px) { :root { --control-h: 44px; } }
+  * { box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; margin: 0; }
+  body { overflow: hidden; background: var(--paper); color: var(--ink); font: 14px/1.45 var(--sans); }
+  button, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .hidden-view { display: none !important; }
+
+  .app { display: grid; grid-template-rows: auto minmax(0, 1fr); width: 100%; height: 100%; min-width: 0; }
+  .masthead { display: flex; align-items: stretch; min-width: 0; border-bottom: 1px solid var(--line); background: var(--sheet); }
+  .brand { display: flex; flex-direction: column; justify-content: center; gap: 2px; width: 280px; flex: none; padding: 8px 18px; border-right: 1px solid var(--line); min-width: 0; }
+  .brand strong { overflow: hidden; font: 600 18px/1.2 var(--serif); text-overflow: ellipsis; white-space: nowrap; }
+  .brand span { color: var(--muted); font-size: 12px; }
+  .tabs { display: flex; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+  .tab {
+    position: relative; flex: none; min-height: 52px; padding: 0 16px; border: 0; border-right: 1px solid var(--line);
+    background: transparent; color: var(--muted); font-weight: 600; font-size: 14px;
+    transition: background-color 160ms var(--ease), color 160ms var(--ease);
+  }
+  .tab:hover { color: var(--ink); background: #f1eee6; }
+  .tab[aria-selected="true"] { color: var(--ink); background: var(--paper); }
+  .tab[aria-selected="true"]::after { content: ""; position: absolute; inset: auto 0 -1px; height: 3px; background: var(--accent); }
+  .tab:focus-visible { outline-offset: -3px; }
+
+  .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: 0; }
+  .stage { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--paper); }
+  .field { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+  .group { display: flex; align-items: center; gap: 4px; }
+  select, .tool {
+    min-height: var(--control-h); border: 1px solid var(--control-line); border-radius: 4px;
+    background: var(--sheet); padding: 0 12px; font-size: 14px;
+    transition: background-color 160ms var(--ease), border-color 160ms var(--ease);
+  }
+  .tool.icon { min-width: var(--control-h); padding: 0; font-size: 18px; line-height: 1; }
+  .tool:hover, select:hover { border-color: var(--ink); }
+  .tool[aria-pressed="true"] { color: var(--sheet); background: var(--ink); border-color: var(--ink); }
+  .tool[aria-pressed="false"] { color: var(--muted); }
+  .tool.primary { margin-left: auto; color: var(--sheet); background: var(--ink); border-color: var(--ink); }
+  .tool.primary:hover { background: #343b36; }
+  .swatch { display: inline-block; width: 16px; height: 0; margin-right: 6px; border-top: 3px solid; vertical-align: middle; }
+
+  .canvas-wrap { position: relative; min-height: 0; overflow: hidden; background: var(--canvas); }
+  .sheet-viewport { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; }
+  .sheet-viewport.dragging { cursor: grabbing; }
+  .sheet-viewport:focus-visible { outline-offset: -3px; }
+  .sheet-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .sheet-stage svg { display: block; box-shadow: 0 2px 10px rgba(31, 36, 32, .18); }
+  .sheet [data-entity] { cursor: pointer; outline: none; }
+  .sheet [data-entity]:hover > :not(text), .sheet [data-entity]:hover:not(g) { stroke: var(--accent) !important; }
+  .sheet [data-entity].is-selected > :not(text), .sheet [data-entity].is-selected:not(g),
+  .sheet [data-entity]:focus-visible > :not(text), .sheet [data-entity]:focus-visible:not(g) { stroke: var(--accent) !important; stroke-width: 0.9px; }
+  #model3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: #dfe6e2; }
+  #model3d:focus-visible { outline-offset: -3px; }
+  #content { position: absolute; inset: 0; overflow: auto; padding: 32px clamp(20px, 5vw, 64px); background: var(--sheet); }
+  .stage-status { position: absolute; inset: 0; display: grid; place-content: center; gap: 6px; padding: 24px; text-align: center; color: var(--muted); background: var(--canvas); }
+  .stage-status strong { color: var(--ink); font: 600 20px/1.2 var(--serif); }
+  .model-help { position: absolute; right: 14px; bottom: 14px; padding: 8px 10px; border: 1px solid var(--line); background: rgba(251, 250, 246, .94); color: var(--muted); font-size: 12px; }
+  .toast { position: absolute; left: 14px; bottom: 14px; max-width: min(520px, calc(100% - 28px)); margin: 0; padding: 10px 12px; border: 1px solid var(--control-line); background: var(--sheet); color: var(--ink); font-size: 14px; }
+  .toast:empty { display: none; }
+
+  aside { min-width: 0; min-height: 0; overflow-y: auto; border-left: 1px solid var(--line); background: var(--panel); }
+  .inspector { min-width: 0; padding: 20px; overflow-wrap: anywhere; }
+  .inspector h2 { margin: 0 0 8px; font: 600 22px/1.15 var(--serif); }
+  .inspector h3 { margin: 22px 0 8px; font-size: 14px; }
+  .lede { margin: 0; color: var(--muted); font-size: 14px; }
+  .metric { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; margin: 16px 0 0; }
+  .metric dt { color: var(--muted); font-size: 14px; }
+  .metric dd { margin: 0; font: 600 14px/1.45 var(--mono); text-align: right; }
+  .diagnostics { display: grid; gap: 6px; }
+  .finding { display: block; width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--sheet); text-align: left; }
+  button.finding:hover { border-color: var(--ink); }
+  .finding b { display: block; font-size: 12px; }
+  .finding .severity { font-weight: 700; }
+  .finding.error .severity { color: var(--error); }
+  .finding.warning .severity { color: var(--warning); }
+  .finding.advisory .severity { color: var(--advisory); }
+  .finding > span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+  .disclaimer { margin-top: 18px; border: 1px solid #c8a97a; background: #f7edda; padding: 10px 11px; color: #5a4420; font-size: 12px; }
+  .page { max-width: 880px; margin: 0 auto; }
+  .page h1 { margin: 0 0 12px; font: 600 clamp(28px, 4vw, 44px)/1.05 var(--serif); max-width: 18ch; }
+  .page h2 { margin: 30px 0 10px; font: 600 20px/1.15 var(--serif); }
+  .page p { color: var(--muted); max-width: 70ch; }
+  .page table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+  .page th, .page td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }
+  .page th { color: var(--muted); font-size: 14px; }
+  .page tr[data-entity] { cursor: pointer; }
+  .page tr[data-entity]:hover { background: #f1eee6; }
+  .page .finding { margin-top: 8px; }
+  .empty { border: 1px dashed var(--control-line); padding: 18px; color: var(--muted); }
+
+  @media (max-width: 900px) {
+    body { overflow: auto; }
+    .app { height: auto; min-height: 100%; }
+    .masthead { flex-wrap: wrap; }
+    .brand { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); }
+    .tabs { width: 100%; }
+    .workspace { grid-template-columns: 1fr; }
+    .stage { grid-template-rows: auto 62vh; }
+    aside { border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+    .tool.primary { margin-left: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
 <div class="app">
-  <section class="main">
-    <header><strong>Architecture Studio</strong><span>One model · every view</span></header>
-    <div class="stage">
-      <div class="tabs"><span class="on">Plan</span><span>Elevations</span><span>3D</span><span>Systems</span></div>
-      <svg viewBox="-900 -900 11400 15000" aria-label="Synthetic barn residence concept plan with system routes">
-        <rect class="room" x="0" y="0" width="9600" height="9000"/><rect class="room wet" x="0" y="9000" width="3600" height="4200"/><rect class="room" x="3600" y="9000" width="6000" height="4200"/>
-        <path class="wall" d="M0 0H9600V13200H0ZM0 9000H9600M3600 9000V13200"/>
-        <path class="opening" d="M700 0H3900M5000 0H8200M9600 10300V11300M4100 9000H5100"/>
-        <polyline class="pipe" points="0,10800 3300,10800 3300,10100 900,10100 900,9800"/><polyline class="duct" points="0,10800 1800,10800 1800,4500 4800,4500"/>
-        <circle class="node" cx="3300" cy="10100" r="120" fill="var(--blue)"/><circle class="node" cx="1800" cy="10800" r="120" fill="var(--teal)"/>
-        <text class="label" x="4800" y="4300">WORKSHOP</text><text class="sub" x="4800" y="4680">9.6 × 9.0 m</text><text class="label" x="1800" y="11000">UTILITY</text><text class="sub" x="1800" y="11380">wet + service core</text><text class="label" x="6600" y="11000">ENTRY + STAIR</text>
-        <path d="M0 13850H9600M0 13680V14020M9600 13680V14020" stroke="var(--muted)" stroke-width="18"/><text class="sub" x="4800" y="14300">31′-06″</text>
-      </svg>
+  <header class="masthead">
+    <div class="brand"><strong id="project-name">Architecture Studio</strong><span id="project-meta">Loading the building model</span></div>
+    <div class="tabs" role="tablist" aria-label="Studio views">
+      <button class="tab" role="tab" id="tab-plan" data-view="plan" aria-selected="true" aria-controls="stage" tabindex="0">Plans</button>
+      <button class="tab" role="tab" id="tab-elevation" data-view="elevation" aria-selected="false" aria-controls="stage" tabindex="-1">Elevations</button>
+      <button class="tab" role="tab" id="tab-section" data-view="section" aria-selected="false" aria-controls="stage" tabindex="-1">Sections</button>
+      <button class="tab" role="tab" id="tab-systems" data-view="systems" aria-selected="false" aria-controls="stage" tabindex="-1">Systems</button>
+      <button class="tab" role="tab" id="tab-model" data-view="model" aria-selected="false" aria-controls="stage" tabindex="-1">3D model</button>
+      <button class="tab" role="tab" id="tab-code" data-view="code" aria-selected="false" aria-controls="stage" tabindex="-1">Code review</button>
+      <button class="tab" role="tab" id="tab-assumptions" data-view="assumptions" aria-selected="false" aria-controls="stage" tabindex="-1">Assumptions</button>
     </div>
-  </section>
-  <aside><span class="k">Model diagnostics</span><h1>Internally consistent concept</h1><p>Plans, elevations, system routes, dimensions, and the walkthrough resolve the same stable coordinates.</p><div class="metrics"><span>Levels</span><b>2</b><span>Spaces</span><b>6</b><span>Systems</span><b>3</b><span>Code review</span><b>Needs review</b></div><span class="k">Priority findings</span><div class="finding"><b>Stair geometry</b><br>Headroom, guards, and adopted-code parameters remain unresolved.</div><div class="finding"><b>MEP sizing</b><br>Routes coordinate space only; loads, slopes, and capacities require engineering.</div><div class="notice">Concept only. Not a survey, permit set, engineering design, or construction document.</div></aside>
+  </header>
+  <div class="workspace">
+    <section class="stage" id="stage" role="tabpanel" aria-labelledby="tab-plan">
+      <div class="toolbar">
+        <label class="field" id="level-control"><span>Level</span><select id="level"></select></label>
+        <label class="field hidden-view" id="elevation-control"><span>Face</span><select id="elevation"><option value="north">North</option><option value="east">East</option><option value="south">South</option><option value="west">West</option></select></label>
+        <label class="field hidden-view" id="section-control"><span>Section</span><select id="section"></select></label>
+        <div class="group" id="zoom-controls" role="group" aria-label="Sheet zoom">
+          <button class="tool icon" id="zoom-out" aria-label="Zoom out">&minus;</button>
+          <button class="tool" id="zoom-fit">Fit sheet</button>
+          <button class="tool icon" id="zoom-in" aria-label="Zoom in">+</button>
+        </div>
+        <div class="group hidden-view" id="camera-controls" role="group" aria-label="Camera">
+          <button class="tool" id="mode-orbit" aria-pressed="true">Orbit</button>
+          <button class="tool" id="mode-walk" aria-pressed="false">Walk</button>
+        </div>
+        <div class="group hidden-view" id="system-controls" role="group" aria-label="Systems shown">
+          <button class="tool system-toggle" data-system="plumbing" aria-pressed="true"><span class="swatch" style="color:#1d5fa8"></span>Plumbing</button>
+          <button class="tool system-toggle" data-system="electrical" aria-pressed="true"><span class="swatch" style="color:#9c2f8f"></span>Electrical</button>
+          <button class="tool system-toggle" data-system="mechanical" aria-pressed="true"><span class="swatch" style="color:#1f7a4d"></span>Mechanical</button>
+        </div>
+        <button class="tool primary" id="download-set" aria-describedby="download-status">Download drawing set</button>
+      </div>
+      <div class="canvas-wrap">
+        <div id="sheet-viewport" class="sheet-viewport" tabindex="0" role="region" aria-label="Drawing sheet. Arrow keys pan, plus and minus zoom, 0 fits the sheet."><div id="sheet-stage" class="sheet-stage sheet"></div></div>
+        <canvas id="model3d" class="hidden-view" tabindex="0" aria-label="Interactive three-dimensional concept model. Arrow keys orbit, plus and minus zoom."></canvas>
+        <article id="content" class="hidden-view"></article>
+        <div id="model-help" class="model-help hidden-view">Drag or use arrow keys to look. Scroll or press plus and minus to zoom.<br>Walk mode: W A S D to move, Q and E to change height.</div>
+        <div id="stage-status" class="stage-status"><strong>Loading the building model</strong><span>Reading models/building.json.</span></div>
+        <p id="download-status" class="toast" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+    <aside aria-label="Inspector"><div class="inspector" id="inspector"><h2>Loading</h2><p class="lede">Reading the canonical building model.</p></div></aside>
+  </div>
 </div>
+<script type="application/json" id="embedded-model">{"schemaVersion":"1.0.0","project":{"id":"lakeside-barn-residence","name":"Lakeside Barn Residence Study","status":"selected-concept","description":"Synthetic two-level workshop and residence used to test cross-view concept consistency.","coordinates":{"unit":"mm","origin":{"x":0,"y":0,"z":0},"siteDatumMm":0,"trueNorthDeg":18,"toleranceMm":3,"displayUnits":"feet-inches"},"jurisdiction":{"country":"US","stateOrRegion":"New York","county":"Example County","locality":"Example Township","codeReviewStatus":"needs-review"}},"levels":[{"id":"level-ground","name":"Ground Floor","elevationMm":0,"floorToFloorMm":3900,"evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic fixture datum."}},{"id":"level-upper","name":"Upper Floor","elevationMm":3900,"floorToFloorMm":3100,"evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic fixture datum."}}],"spaces":[{"id":"space-workshop","name":"Workshop","levelId":"level-ground","use":"vehicle and fabrication workshop","occupancy":4,"boundary":[{"x":0,"y":0},{"x":9600,"y":0},{"x":9600,"y":9000},{"x":0,"y":9000}],"evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic regression room."}},{"id":"space-utility","name":"Utility Core","levelId":"level-ground","use":"utility, washroom, and vertical services","occupancy":1,"boundary":[{"x":0,"y":9000},{"x":3600,"y":9000},{"x":3600,"y":13200},{"x":0,"y":13200}],"evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic wet and equipment core."}},{"id":"space-entry-stair","name":"Entry and Stair","levelId":"level-ground","use":"entry, storage, and vertical circulation","occupancy":3,"boundary":[{"x":3600,"y":9000},{"x":9600,"y":9000},{"x":9600,"y":13200},{"x":3600,"y":13200}],"evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic circulation zone."}},{"id":"space-great-room","name":"Great Room and Kitchen","levelId":"level-upper","use":"living, dining, and kitchen","occupancy":8,"boundary":[{"x":0,"y":0},{"x":9600,"y":0},{"x":9600,"y":7600},{"x":0,"y":7600}],"evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic open living zone."}},{"id":"space-bedroom","name":"Bedroom","levelId":"level-upper","use":"sleeping","occupancy":2,"boundary":[{"x":0,"y":7600},{"x":4800,"y":7600},{"x":4800,"y":13200},{"x":0,"y":13200}],"evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic sleeping zone."}},{"id":"space-bath","name":"Bath and Laundry","levelId":"level-upper","use":"bathroom and laundry","occupancy":2,"boundary":[{"x":4800,"y":7600},{"x":9600,"y":7600},{"x":9600,"y":13200},{"x":4800,"y":13200}],"evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic upper wet zone aligned near the utility core."}}],"walls":[{"id":"wall-g-north","levelId":"level-ground","start":{"x":0,"y":0},"end":{"x":9600,"y":0},"thicknessMm":200,"heightMm":3700,"kind":"exterior","material":"insulated post-frame wall","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic exterior wall."}},{"id":"wall-g-east","levelId":"level-ground","start":{"x":9600,"y":0},"end":{"x":9600,"y":13200},"thicknessMm":200,"heightMm":3700,"kind":"exterior","material":"insulated post-frame wall","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic exterior wall."}},{"id":"wall-g-south","levelId":"level-ground","start":{"x":9600,"y":13200},"end":{"x":0,"y":13200},"thicknessMm":200,"heightMm":3700,"kind":"exterior","material":"insulated post-frame wall","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic exterior wall."}},{"id":"wall-g-west","levelId":"level-ground","start":{"x":0,"y":13200},"end":{"x":0,"y":0},"thicknessMm":200,"heightMm":3700,"kind":"exterior","material":"insulated post-frame wall","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic exterior wall."}},{"id":"wall-g-core","levelId":"level-ground","start":{"x":0,"y":9000},"end":{"x":9600,"y":9000},"thicknessMm":140,"heightMm":3000,"kind":"interior","material":"wood stud partition","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic service-core partition."}},{"id":"wall-g-entry","levelId":"level-ground","start":{"x":3600,"y":9000},"end":{"x":3600,"y":13200},"thicknessMm":140,"heightMm":3000,"kind":"interior","material":"wood stud partition","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic utility partition."}},{"id":"wall-u-north","levelId":"level-upper","start":{"x":0,"y":0},"end":{"x":9600,"y":0},"thicknessMm":200,"heightMm":3000,"kind":"exterior","material":"insulated framed wall","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic upper exterior wall."}},{"id":"wall-u-east","levelId":"level-upper","start":{"x":9600,"y":0},"end":{"x":9600,"y":13200},"thicknessMm":200,"heightMm":3000,"kind":"exterior","material":"insulated framed wall","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic upper exterior wall."}},{"id":"wall-u-south","levelId":"level-upper","start":{"x":9600,"y":13200},"end":{"x":0,"y":13200},"thicknessMm":200,"heightMm":3000,"kind":"exterior","material":"insulated framed wall","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic upper exterior wall."}},{"id":"wall-u-west","levelId":"level-upper","start":{"x":0,"y":13200},"end":{"x":0,"y":0},"thicknessMm":200,"heightMm":3000,"kind":"exterior","material":"insulated framed wall","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic upper exterior wall."}},{"id":"wall-u-bedrooms","levelId":"level-upper","start":{"x":0,"y":7600},"end":{"x":9600,"y":7600},"thicknessMm":140,"heightMm":2800,"kind":"interior","material":"wood stud partition","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic private-zone partition."}},{"id":"wall-u-bath","levelId":"level-upper","start":{"x":4800,"y":7600},"end":{"x":4800,"y":13200},"thicknessMm":140,"heightMm":2800,"kind":"interior","material":"wood stud partition","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic bath partition."}}],"openings":[{"id":"opening-overhead-west","wallId":"wall-g-north","kind":"overhead-door","offsetMm":700,"widthMm":3200,"heightMm":3000,"sillMm":0,"swing":"none","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic workshop opening."}},{"id":"opening-overhead-east","wallId":"wall-g-north","kind":"overhead-door","offsetMm":5000,"widthMm":3200,"heightMm":3000,"sillMm":0,"swing":"none","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic workshop opening."}},{"id":"opening-entry","wallId":"wall-g-east","kind":"door","offsetMm":10300,"widthMm":1000,"heightMm":2100,"sillMm":0,"swing":"left","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic entry door."}},{"id":"opening-core-door","wallId":"wall-g-core","kind":"door","offsetMm":4100,"widthMm":1000,"heightMm":2100,"sillMm":0,"swing":"right","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic interior door."}},{"id":"opening-upper-north","wallId":"wall-u-north","kind":"window","offsetMm":3500,"widthMm":2600,"heightMm":1600,"sillMm":800,"swing":"none","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic great-room window."}},{"id":"opening-bedroom-window","wallId":"wall-u-south","kind":"window","offsetMm":5600,"widthMm":1800,"heightMm":1400,"sillMm":850,"swing":"none","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic bedroom window; egress properties remain unverified."}},{"id":"opening-bath-door","wallId":"wall-u-bedrooms","kind":"door","offsetMm":6500,"widthMm":900,"heightMm":2100,"sillMm":0,"swing":"right","evidence":{"source":"generated","confidence":1,"status":"accepted","note":"Synthetic bathroom door."}}],"slabs":[{"id":"slab-ground","levelId":"level-ground","boundary":[{"x":0,"y":0},{"x":9600,"y":0},{"x":9600,"y":13200},{"x":0,"y":13200}],"thicknessMm":150,"evidence":{"source":"generated","confidence":0.7,"status":"needs-review","note":"Concept slab only; foundation design excluded."}},{"id":"slab-upper","levelId":"level-upper","boundary":[{"x":0,"y":0},{"x":9600,"y":0},{"x":9600,"y":13200},{"x":0,"y":13200}],"thicknessMm":300,"evidence":{"source":"generated","confidence":0.65,"status":"needs-review","note":"Depth is a visual allowance, not a structural assembly."}}],"roofs":[{"id":"roof-main","levelId":"level-upper","kind":"gable","footprint":[{"x":0,"y":0},{"x":9600,"y":0},{"x":9600,"y":13200},{"x":0,"y":13200}],"eaveElevationMm":6900,"ridgeElevationMm":9000,"ridgeAxis":"y","overhangMm":450,"evidence":{"source":"generated","confidence":0.8,"status":"needs-review","note":"Concept gable envelope; framing and snow loads excluded."}}],"stairs":[{"id":"stair-main","fromLevelId":"level-ground","toLevelId":"level-upper","start":{"x":4700,"y":12200},"end":{"x":4700,"y":6220},"widthMm":1100,"riserCount":23,"treadDepthMm":260,"evidence":{"source":"generated","confidence":0.75,"status":"needs-review","note":"Concept stair; landing, headroom, guards, and code geometry require verification."}}],"fixtures":[{"id":"fixture-shop-sink","name":"Workshop Sink","kind":"sink","levelId":"level-ground","position":{"x":900,"y":9800,"z":0},"rotationDeg":90,"size":{"x":700,"y":600,"z":900},"connections":["plumbing-sink"],"evidence":{"source":"generated","confidence":0.8,"status":"needs-review","note":"Concept fixture position near service core."}},{"id":"fixture-upper-bath","name":"Upper Bath Group","kind":"bath-group","levelId":"level-upper","position":{"x":6900,"y":10300,"z":3900},"rotationDeg":0,"size":{"x":2200,"y":1800,"z":1200},"connections":["plumbing-bath"],"evidence":{"source":"generated","confidence":0.75,"status":"needs-review","note":"Grouped placeholder; fixture clearances need individual review."}},{"id":"fixture-kitchen-sink","name":"Kitchen Sink","kind":"sink","levelId":"level-upper","position":{"x":7200,"y":6200,"z":3900},"rotationDeg":0,"size":{"x":800,"y":600,"z":900},"connections":["plumbing-kitchen"],"evidence":{"source":"generated","confidence":0.8,"status":"needs-review","note":"Concept kitchen fixture aligned toward service core."}}],"equipment":[{"id":"equipment-panel","name":"Electrical Panel","kind":"electrical-panel","levelId":"level-ground","position":{"x":700,"y":11400,"z":1000},"rotationDeg":90,"size":{"x":200,"y":800,"z":1100},"connections":["electrical-panel"],"evidence":{"source":"generated","confidence":0.7,"status":"needs-review","note":"Concept only; service and working clearances require code and utility review."}},{"id":"equipment-heat-pump","name":"Air-source Heat Pump","kind":"heat-pump","levelId":"level-ground","position":{"x":-900,"y":10800,"z":0},"rotationDeg":90,"size":{"x":800,"y":450,"z":1100},"connections":["mechanical-heat-pump"],"evidence":{"source":"generated","confidence":0.65,"status":"needs-review","note":"Concept location; capacity, clearances, condensate, and snow exposure unresolved."}}],"systems":[{"id":"system-plumbing","discipline":"plumbing","name":"Concept Plumbing","status":"needs-review","nodes":[{"id":"plumbing-entry","kind":"water-and-waste-entry","position":{"x":0,"y":10800,"z":0},"levelId":"level-ground","evidence":{"source":"generated","confidence":0.6,"status":"needs-review","note":"Concept service entry."}},{"id":"plumbing-stack","kind":"vertical-stack","position":{"x":3300,"y":10100,"z":0},"levelId":"level-ground","evidence":{"source":"generated","confidence":0.75,"status":"needs-review","note":"Concept stack aligning wet areas."}},{"id":"plumbing-sink","kind":"fixture-connection","position":{"x":900,"y":9800,"z":450},"levelId":"level-ground","evidence":{"source":"generated","confidence":0.8,"status":"needs-review","note":"Workshop sink connection."}},{"id":"plumbing-bath","kind":"fixture-connection","position":{"x":6900,"y":10300,"z":4350},"levelId":"level-upper","evidence":{"source":"generated","confidence":0.7,"status":"needs-review","note":"Upper bath group connection."}},{"id":"plumbing-kitchen","kind":"fixture-connection","position":{"x":7200,"y":6200,"z":4350},"levelId":"level-upper","evidence":{"source":"generated","confidence":0.7,"status":"needs-review","note":"Kitchen connection."}}],"edges":[{"id":"plumbing-edge-entry-stack","from":"plumbing-entry","to":"plumbing-stack","path":[{"x":0,"y":10800,"z":0},{"x":3300,"y":10800,"z":0},{"x":3300,"y":10100,"z":0}],"nominalSize":"unverified","evidence":{"source":"generated","confidence":0.55,"status":"needs-review","note":"Concept route; slope and sizing unresolved."}},{"id":"plumbing-edge-sink","from":"plumbing-stack","to":"plumbing-sink","path":[{"x":3300,"y":10100,"z":0},{"x":900,"y":10100,"z":400},{"x":900,"y":9800,"z":450}],"nominalSize":"unverified","evidence":{"source":"generated","confidence":0.6,"status":"needs-review","note":"Concept branch."}},{"id":"plumbing-edge-bath","from":"plumbing-stack","to":"plumbing-bath","path":[{"x":3300,"y":10100,"z":0},{"x":3300,"y":10100,"z":4350},{"x":6900,"y":10100,"z":4350},{"x":6900,"y":10300,"z":4350}],"nominalSize":"unverified","evidence":{"source":"generated","confidence":0.6,"status":"needs-review","note":"Concept vertical and horizontal route."}},{"id":"plumbing-edge-kitchen","from":"plumbing-bath","to":"plumbing-kitchen","path":[{"x":6900,"y":10300,"z":4350},{"x":6900,"y":6200,"z":4350},{"x":7200,"y":6200,"z":4350}],"nominalSize":"unverified","evidence":{"source":"generated","confidence":0.55,"status":"needs-review","note":"Concept branch; routing strategy requires plumbing review."}}],"evidence":{"source":"generated","confidence":0.6,"status":"needs-review","note":"Concept plumbing network only."}},{"id":"system-electrical","discipline":"electrical","name":"Concept Electrical","status":"needs-review","nodes":[{"id":"electrical-panel","kind":"panel","position":{"x":700,"y":11400,"z":1500},"levelId":"level-ground","evidence":{"source":"generated","confidence":0.7,"status":"needs-review","note":"Concept panel."}},{"id":"electrical-shop","kind":"shop-distribution","position":{"x":4800,"y":4500,"z":2800},"levelId":"level-ground","evidence":{"source":"generated","confidence":0.6,"status":"needs-review","note":"Concept shop distribution point."}},{"id":"electrical-upper","kind":"upper-distribution","position":{"x":4800,"y":7600,"z":6200},"levelId":"level-upper","evidence":{"source":"generated","confidence":0.6,"status":"needs-review","note":"Concept upper distribution point."}}],"edges":[{"id":"electrical-edge-shop","from":"electrical-panel","to":"electrical-shop","path":[{"x":700,"y":11400,"z":1500},{"x":4800,"y":11400,"z":2800},{"x":4800,"y":4500,"z":2800}],"nominalSize":"unverified","evidence":{"source":"generated","confidence":0.55,"status":"needs-review","note":"Concept route; loads, conductor, and protection unresolved."}},{"id":"electrical-edge-upper","from":"electrical-panel","to":"electrical-upper","path":[{"x":700,"y":11400,"z":1500},{"x":700,"y":7600,"z":6200},{"x":4800,"y":7600,"z":6200}],"nominalSize":"unverified","evidence":{"source":"generated","confidence":0.55,"status":"needs-review","note":"Concept riser and distribution path."}}],"evidence":{"source":"generated","confidence":0.6,"status":"needs-review","note":"Concept electrical network only."}},{"id":"system-mechanical","discipline":"mechanical","name":"Concept Mechanical","status":"needs-review","nodes":[{"id":"mechanical-heat-pump","kind":"outdoor-unit","position":{"x":-900,"y":10800,"z":500},"levelId":"level-ground","evidence":{"source":"generated","confidence":0.65,"status":"needs-review","note":"Concept outdoor unit."}},{"id":"mechanical-air-handler","kind":"air-handler","position":{"x":1800,"y":11100,"z":2400},"levelId":"level-ground","evidence":{"source":"generated","confidence":0.6,"status":"needs-review","note":"Concept indoor equipment."}},{"id":"mechanical-shop","kind":"shop-zone","position":{"x":4800,"y":4500,"z":3200},"levelId":"level-ground","evidence":{"source":"generated","confidence":0.55,"status":"needs-review","note":"Concept shop terminal."}},{"id":"mechanical-upper","kind":"residential-zone","position":{"x":4800,"y":6000,"z":6500},"levelId":"level-upper","evidence":{"source":"generated","confidence":0.55,"status":"needs-review","note":"Concept upper terminal."}}],"edges":[{"id":"mechanical-edge-refrigerant","from":"mechanical-heat-pump","to":"mechanical-air-handler","path":[{"x":-900,"y":10800,"z":500},{"x":1800,"y":10800,"z":2400},{"x":1800,"y":11100,"z":2400}],"nominalSize":"unverified","evidence":{"source":"generated","confidence":0.5,"status":"needs-review","note":"Concept line-set path."}},{"id":"mechanical-edge-shop","from":"mechanical-air-handler","to":"mechanical-shop","path":[{"x":1800,"y":11100,"z":2400},{"x":4800,"y":11100,"z":3200},{"x":4800,"y":4500,"z":3200}],"nominalSize":"unverified","evidence":{"source":"generated","confidence":0.5,"status":"needs-review","note":"Concept shop supply path."}},{"id":"mechanical-edge-upper","from":"mechanical-air-handler","to":"mechanical-upper","path":[{"x":1800,"y":11100,"z":2400},{"x":1800,"y":6000,"z":6500},{"x":4800,"y":6000,"z":6500}],"nominalSize":"unverified","evidence":{"source":"generated","confidence":0.5,"status":"needs-review","note":"Concept upper supply path; return path unresolved."}}],"evidence":{"source":"generated","confidence":0.55,"status":"needs-review","note":"Concept mechanical network only; loads and equipment selection excluded."}}],"dimensions":[{"id":"dimension-width","kind":"horizontal","from":{"x":0,"y":0,"z":0},"to":{"x":9600,"y":0,"z":0},"offsetMm":-900},{"id":"dimension-depth","kind":"vertical","from":{"x":9600,"y":0,"z":0},"to":{"x":9600,"y":13200,"z":0},"offsetMm":900},{"id":"dimension-ridge","kind":"elevation","from":{"x":0,"y":0,"z":0},"to":{"x":0,"y":0,"z":9000},"offsetMm":-1000}],"sections":[{"id":"section-aa","name":"Transverse Section A-A","start":{"x":0,"y":6600},"end":{"x":9600,"y":6600},"lookDirection":"left"}],"viewpoints":[{"id":"view-workshop","name":"Workshop","position":{"x":4800,"y":6500,"z":1700},"target":{"x":4800,"y":0,"z":1700}},{"id":"view-great-room","name":"Great Room","position":{"x":4800,"y":6500,"z":5500},"target":{"x":4800,"y":1000,"z":5200}},{"id":"view-exterior","name":"Exterior","position":{"x":15000,"y":-16000,"z":9000},"target":{"x":4800,"y":6600,"z":3500}}],"assumptions":[{"id":"assumption-site","topic":"site","statement":"Site geometry, setbacks, grades, utilities, soils, and legal boundaries are not based on a survey.","impact":"high","affectedEntityIds":[],"evidence":{"source":"generated","confidence":1,"status":"needs-review","note":"Fixture intentionally excludes survey data."}},{"id":"assumption-structure","topic":"structure","statement":"Wall, slab, floor, stair, and roof dimensions express a spatial envelope only; member sizes and connections are unresolved.","impact":"high","affectedEntityIds":["slab-ground","slab-upper","roof-main","stair-main"],"evidence":{"source":"generated","confidence":1,"status":"needs-review","note":"Professional structural design required."}},{"id":"assumption-code","topic":"code","statement":"The fictional jurisdiction has not been researched; all code-sensitive geometry remains advisory.","impact":"high","affectedEntityIds":["stair-main","opening-bedroom-window","equipment-panel"],"evidence":{"source":"generated","confidence":1,"status":"needs-review","note":"No official code source applies to this synthetic locality."}},{"id":"assumption-mep","topic":"mep","statement":"System paths coordinate space only; loads, sizes, slopes, capacities, protection, and penetrations are unresolved.","impact":"high","affectedEntityIds":["system-plumbing","system-electrical","system-mechanical"],"evidence":{"source":"generated","confidence":1,"status":"needs-review","note":"Licensed trade design required."}}]}</script>
+<script>
+(() => {
+  'use strict';
+
+  const state = {
+    model: null,
+    codeReport: { status: 'missing', message: 'No advisory code report was staged.' },
+    manifest: { status: 'missing' },
+    view: 'plan',
+    levelId: null,
+    elevation: 'north',
+    sectionId: null,
+    systems: new Set(['plumbing', 'electrical', 'mechanical']),
+    findings: [],
+    renderWarnings: [],
+    selected: null,
+    cameraMode: 'orbit'
+  };
+  const SHEET_VIEWS = ['plan', 'elevation', 'section', 'systems'];
+  const DOCUMENT_VIEWS = ['code', 'assumptions'];
+  const ALL_VIEWS = ['plan', 'elevation', 'section', 'systems', 'model', 'code', 'assumptions'];
+  const $ = selector => document.querySelector(selector);
+  const viewport = $('#sheet-viewport');
+  const sheetStage = $('#sheet-stage');
+  const canvas = $('#model3d');
+  const content = $('#content');
+  const inspector = $('#inspector');
+  const stageStatus = $('#stage-status');
+  const downloadStatus = $('#download-status');
+  const levelSelect = $('#level');
+  const elevationSelect = $('#elevation');
+  const sectionSelect = $('#section');
+  const modelHelp = $('#model-help');
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const evidence = (note = 'Generated concept value.') => ({ source: 'generated', confidence: 0.5, status: 'needs-review', note });
+
+  function formatLength(mm, units = state.model?.project.coordinates.displayUnits) {
+    if (units === 'metric') {
+      return Math.abs(mm) >= 10000 ? `${(mm / 1000).toFixed(2)} m` : `${Math.round(mm)} mm`;
+    }
+    const sign = mm < 0 ? '-' : '';
+    let eighths = Math.round(Math.abs(mm) / 25.4 * 8);
+    const feet = Math.floor(eighths / 96);
+    eighths -= feet * 96;
+    const inches = Math.floor(eighths / 8);
+    const fraction = eighths % 8;
+    const fractions = ['', '1/8', '1/4', '3/8', '1/2', '5/8', '3/4', '7/8'];
+    return `${sign}${feet}'-${inches}${fraction ? ` ${fractions[fraction]}` : ''}"`;
+  }
+
+  function allEntityIds(model) {
+    const groups = ['levels', 'spaces', 'walls', 'openings', 'slabs', 'roofs', 'stairs', 'fixtures', 'equipment', 'systems', 'dimensions', 'sections', 'viewpoints', 'assumptions'];
+    const entities = model?.project ? [model.project] : [];
+    for (const group of groups) entities.push(...(model[group] ?? []));
+    for (const system of model?.systems ?? []) entities.push(...(system.nodes ?? []), ...(system.edges ?? []));
+    return entities;
+  }
+
+  const isFiniteInteger = value => Number.isInteger(value) && Number.isFinite(value);
+  const samePoint = (a, b, tolerance = 0) => Math.hypot(a.x - b.x, a.y - b.y, (a.z ?? 0) - (b.z ?? 0)) <= tolerance;
+  const orientation = (a, b, c) => Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+  const onSegment = (a, b, p) => Math.min(a.x, b.x) <= p.x && p.x <= Math.max(a.x, b.x) && Math.min(a.y, b.y) <= p.y && p.y <= Math.max(a.y, b.y);
+  function segmentsIntersect(a, b, c, d) {
+    const abC = orientation(a, b, c), abD = orientation(a, b, d), cdA = orientation(c, d, a), cdB = orientation(c, d, b);
+    if (abC !== abD && cdA !== cdB) return true;
+    return (abC === 0 && onSegment(a, b, c)) || (abD === 0 && onSegment(a, b, d)) || (cdA === 0 && onSegment(c, d, a)) || (cdB === 0 && onSegment(c, d, b));
+  }
+  function polygonIssues(points) {
+    if (!Array.isArray(points) || points.length < 3) return ['fewer than three points'];
+    const distinct = new Set(points.map(point => `${point.x},${point.y}`));
+    const issues = [];
+    if (distinct.size < 3) issues.push('fewer than three distinct points');
+    const area = points.reduce((sum, point, index) => {
+      const next = points[(index + 1) % points.length];
+      return sum + point.x * next.y - next.x * point.y;
+    }, 0) / 2;
+    if (Math.abs(area) < 1) issues.push('zero area');
+    for (let i = 0; i < points.length; i += 1) {
+      const a = points[i], b = points[(i + 1) % points.length];
+      for (let j = i + 1; j < points.length; j += 1) {
+        if (j === i || j === (i + 1) % points.length || (i === 0 && j === points.length - 1)) continue;
+        const c = points[j], d = points[(j + 1) % points.length];
+        if (segmentsIntersect(a, b, c, d)) issues.push('self-intersection');
+      }
+    }
+    return [...new Set(issues)];
+  }
+  function rectangleBounds(points) {
+    if (polygonIssues(points).length || points.length !== 4) return null;
+    const xs = [...new Set(points.map(point => point.x))], ys = [...new Set(points.map(point => point.y))];
+    if (xs.length !== 2 || ys.length !== 2) return null;
+    const corners = new Set(points.map(point => `${point.x},${point.y}`));
+    if (!xs.every(x => ys.every(y => corners.has(`${x},${y}`)))) return null;
+    return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+  }
+
+  function validateModel(model) {
+    const findings = [];
+    const add = (severity, code, message, entityId) => findings.push({ severity, code, message, entityId });
+    if (model?.schemaVersion !== '1.0.0') add('error', 'schema.version', 'Expected schemaVersion 1.0.0.');
+    if (!model?.project || typeof model.project.name !== 'string' || !model.project.coordinates || !model.project.jurisdiction) add('error', 'schema.project', 'Project metadata, coordinates, and jurisdiction are required.');
+    const requiredArrays = ['levels', 'spaces', 'walls', 'openings', 'slabs', 'roofs', 'stairs', 'fixtures', 'equipment', 'systems', 'assumptions'];
+    for (const key of requiredArrays) if (!Array.isArray(model?.[key])) add('error', 'schema.array', `${key} must be an array.`);
+    if (findings.some(item => item.severity === 'error')) return findings;
+    const ids = new Set(); let reviewEvidenceCount = 0;
+    for (const entity of allEntityIds(model)) {
+      if (!entity?.id) { add('error', 'entity.id', 'An entity is missing its stable ID.'); continue; }
+      if (ids.has(entity.id)) add('error', 'entity.duplicate', `Duplicate entity ID: ${entity.id}`, entity.id);
+      ids.add(entity.id);
+      if (entity.evidence?.confidence < 0.75 || entity.evidence?.status === 'needs-review') reviewEvidenceCount += 1;
+    }
+    if (reviewEvidenceCount > 0) add('advisory', 'evidence.review', `${reviewEvidenceCount} entities carry low-confidence or needs-review evidence.`, model.project?.id);
+    const levels = new Map((model.levels ?? []).map(level => [level.id, level]));
+    const walls = new Map((model.walls ?? []).map(wall => [wall.id, wall]));
+    const tolerance = model.project.coordinates.toleranceMm ?? 3;
+    const elevations = new Set();
+    for (const level of model.levels) {
+      if (!isFiniteInteger(level.elevationMm)) add('error', 'level.elevation', 'Level elevation must be an integer millimeter value.', level.id);
+      if (elevations.has(level.elevationMm)) add('error', 'level.duplicate-elevation', `Multiple levels use elevation ${level.elevationMm} mm.`, level.id);
+      elevations.add(level.elevationMm);
+    }
+    for (const entity of [...model.spaces, ...model.walls, ...model.slabs, ...model.fixtures, ...model.equipment, ...model.roofs]) {
+      if (!levels.has(entity.levelId)) add('error', 'reference.level', `Unknown level ${entity.levelId}.`, entity.id);
+    }
+    for (const entity of [...model.spaces, ...model.slabs, ...model.roofs]) {
+      const points = entity.boundary ?? entity.footprint;
+      const issues = polygonIssues(points);
+      if (issues.length) add('error', 'polygon.geometry', `Polygon has ${issues.join(', ')}.`, entity.id);
+    }
+    for (const slab of model.slabs) if (!rectangleBounds(slab.boundary)) add('error', 'renderer.unsupported-slab', 'The studio renders only axis-aligned rectangular slabs.', slab.id);
+    if (model.roofs.length > 1) add('error', 'renderer.unsupported-roofs', 'The studio renders one roof only.');
+    for (const roof of model.roofs) {
+      if (roof.kind !== 'gable' || !rectangleBounds(roof.footprint)) add('error', 'renderer.unsupported-roof', 'The studio renders one axis-aligned rectangular gable roof only.', roof.id);
+      if (roof.ridgeElevationMm <= roof.eaveElevationMm) add('error', 'roof.geometry', 'Roof ridge must be above its eave.', roof.id);
+    }
+    for (const wall of model.walls ?? []) {
+      const length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+      if (length < 1 || !isFiniteInteger(wall.thicknessMm) || wall.thicknessMm < 1 || !isFiniteInteger(wall.heightMm) || wall.heightMm < 1) add('error', 'wall.geometry', 'Wall has invalid length, thickness, or height.', wall.id);
+    }
+    for (const opening of model.openings ?? []) {
+      const wall = walls.get(opening.wallId);
+      if (!wall) { add('error', 'reference.wall', `Unknown wall ${opening.wallId}.`, opening.id); continue; }
+      const length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+      if (![opening.offsetMm, opening.widthMm, opening.heightMm, opening.sillMm].every(isFiniteInteger) || opening.offsetMm < 0 || opening.widthMm < 1 || opening.heightMm < 1 || opening.sillMm < 0) add('error', 'opening.geometry', 'Opening offsets and dimensions must be valid non-negative integer millimeters.', opening.id);
+      else if (opening.offsetMm + opening.widthMm > length + tolerance || opening.sillMm + opening.heightMm > wall.heightMm + tolerance) add('error', 'opening.fit', 'Opening falls outside its host wall.', opening.id);
+    }
+    for (const stair of model.stairs ?? []) {
+      const from = levels.get(stair.fromLevelId); const to = levels.get(stair.toLevelId);
+      if (!from || !to) add('error', 'stair.level', 'Stair references an unknown level.', stair.id);
+      else if (stair.riserCount < 1 || stair.widthMm < 1 || stair.treadDepthMm < 1 || to.elevationMm <= from.elevationMm) add('error', 'stair.rise', 'Stair has an invalid rise, run, width, or riser count.', stair.id);
+      else if (Math.hypot(stair.end.x - stair.start.x, stair.end.y - stair.start.y) + tolerance < (stair.riserCount - 1) * stair.treadDepthMm) add('error', 'stair.run', 'Stair run is too short for its authored tread count and depth.', stair.id);
+      else add('warning', 'stair.code', `Concept riser is ${formatLength((to.elevationMm - from.elevationMm) / stair.riserCount)}; code verification remains open.`, stair.id);
+    }
+    const nodes = new Set((model.systems ?? []).flatMap(system => system.nodes.map(node => node.id)));
+    for (const system of model.systems ?? []) {
+      const local = new Map(system.nodes.map(node => [node.id, node]));
+      const connected = new Set();
+      for (const node of system.nodes) if (node.levelId && !levels.has(node.levelId)) add('error', 'reference.level', `Unknown level ${node.levelId}.`, node.id);
+      for (const edge of system.edges) {
+        const from = local.get(edge.from), to = local.get(edge.to);
+        if (!from || !to) { add('error', 'system.edge', 'System edge references a node outside its system.', edge.id); continue; }
+        connected.add(from.id); connected.add(to.id);
+        if (!Array.isArray(edge.path) || edge.path.length < 2) { add('error', 'system.path', 'System edge requires at least two path points.', edge.id); continue; }
+        if (!samePoint(edge.path[0], from.position, tolerance) || !samePoint(edge.path.at(-1), to.position, tolerance)) add('error', 'system.endpoint', 'System path endpoints must match their referenced node coordinates.', edge.id);
+      }
+      for (const node of system.nodes) if (!connected.has(node.id)) add('error', 'system.isolated-node', 'System node is not connected by any edge.', node.id);
+      if (system.status !== 'concept') add('advisory', 'system.review', `${system.name} remains conceptual.`, system.id);
+    }
+    for (const object of [...(model.fixtures ?? []), ...(model.equipment ?? [])]) {
+      for (const connection of object.connections ?? []) if (!nodes.has(connection)) add('error', 'system.connection', `Unknown system connection ${connection}.`, object.id);
+    }
+    for (const dimension of model.dimensions ?? []) if (!dimension.from || !dimension.to || samePoint(dimension.from, dimension.to)) add('error', 'dimension.geometry', 'Dimension endpoints must be distinct model points.', dimension.id);
+    if (model.project?.jurisdiction?.codeReviewStatus !== 'researched') add('warning', 'code.status', 'Jurisdiction code review is incomplete or unavailable.', model.project?.id);
+    return findings;
+  }
+
+  function modelBounds(model) {
+    const points = [
+      ...(model.spaces ?? []).flatMap(space => space.boundary),
+      ...(model.walls ?? []).flatMap(wall => [wall.start, wall.end]),
+      ...(model.roofs ?? []).flatMap(roof => roof.footprint)
+    ];
+    return {
+      minX: Math.min(...points.map(point => point.x)), maxX: Math.max(...points.map(point => point.x)),
+      minY: Math.min(...points.map(point => point.y)), maxY: Math.max(...points.map(point => point.y))
+    };
+  }
+
+  function centroid(points) {
+    return { x: points.reduce((sum, p) => sum + p.x, 0) / points.length, y: points.reduce((sum, p) => sum + p.y, 0) / points.length };
+  }
+
+  function pointAlongWall(wall, offset) {
+    const dx = wall.end.x - wall.start.x; const dy = wall.end.y - wall.start.y;
+    const length = Math.hypot(dx, dy) || 1;
+    return { x: wall.start.x + dx / length * offset, y: wall.start.y + dy / length * offset };
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // Drafting renderer. Pure functions: (model, view) -> standalone SVG sheet.
+  // Paper units are millimetres. Spec: references/drafting-standard.md.
+  // ---------------------------------------------------------------------------
+  const DRAFT = {
+    ink: '#1b1b1b', paper: '#ffffff', poche: '#4d4d4d', screen: '#9a9a9a', screenText: '#666666', screenPoche: '#e2e2e2',
+    font: '"Helvetica Neue", Helvetica, Arial, sans-serif', charWidth: 0.62,
+    border: 10, titleBlockWidth: 64, margin: 6, annotationBand: 24, viewTitleBand: 18, cutHeightMm: 1200
+  };
+  const DISCIPLINES = {
+    plumbing: { label: 'Plumbing', color: '#1d5fa8', dash: null },
+    electrical: { label: 'Electrical', color: '#9c2f8f', dash: '6 1.5 1 1.5' },
+    mechanical: { label: 'Mechanical', color: '#1f7a4d', dash: '5 2' }
+  };
+  const PROFILES = {
+    imperial: {
+      id: 'imperial', label: 'NCS-informed imperial', units: 'feet-inches', sheet: { name: 'ANSI B', w: 431.8, h: 279.4 },
+      scales: [[12, '1" = 1\'-0"'], [16, '3/4" = 1\'-0"'], [24, '1/2" = 1\'-0"'], [32, '3/8" = 1\'-0"'], [48, '1/4" = 1\'-0"'], [64, '3/16" = 1\'-0"'], [96, '1/8" = 1\'-0"'], [128, '3/32" = 1\'-0"'], [192, '1/16" = 1\'-0"'], [384, '1/32" = 1\'-0"']],
+      pens: { cut: 0.7, profile: 0.5, medium: 0.35, thin: 0.25, fine: 0.18, ground: 1 },
+      text: { note: 2.4, room: 3.2, title: 4.8, sheet: 8, label: 1.8 },
+      terminator: 'tick',
+      area: mm2 => `${Math.round(mm2 / 92903.04)} SF`,
+      steps: [1, 2, 4, 5, 8, 10, 16, 20, 25, 50, 100].map(feet => feet * 304.8),
+      stepLabel: mm => `${Math.round(mm / 304.8)}'`,
+      dimension: mm => formatLength(mm, 'feet-inches'),
+      datum: mm => `EL. ${formatLength(mm, 'feet-inches')}`
+    },
+    metric: {
+      id: 'metric', label: 'ISO-informed metric', units: 'metric', sheet: { name: 'ISO A3', w: 420, h: 297 },
+      scales: [[20, '1:20'], [25, '1:25'], [50, '1:50'], [100, '1:100'], [200, '1:200'], [500, '1:500'], [1000, '1:1000']],
+      pens: { cut: 0.7, profile: 0.5, medium: 0.35, thin: 0.25, fine: 0.13, ground: 1 },
+      text: { note: 2.5, room: 3.5, title: 5, sheet: 7, label: 1.8 },
+      terminator: 'arrow',
+      area: mm2 => `${(mm2 / 1e6).toFixed(1)} m²`,
+      steps: [500, 1000, 2000, 5000, 10000, 20000, 50000],
+      stepLabel: mm => `${+(mm / 1000).toFixed(2)} m`,
+      dimension: mm => String(Math.round(mm)),
+      datum: mm => `${mm >= 0 ? '+' : '-'}${(Math.abs(mm) / 1000).toFixed(3)}`
+    }
+  };
+  const profileFor = model => model?.project?.coordinates?.displayUnits === 'metric' ? PROFILES.metric : PROFILES.imperial;
+  const ELEVATION_SHEETS = { north: 'A-201', east: 'A-202', south: 'A-203', west: 'A-204' };
+
+  const num = value => Number.isFinite(value) ? Math.round(value * 100) / 100 : 0;
+  const pts = points => points.map(p => `${num(p.x)},${num(p.y)}`).join(' ');
+  function strokeAttrs(o) {
+    if (o.width === 0) return 'stroke="none"';
+    return `stroke="${o.stroke ?? DRAFT.ink}" stroke-width="${num(o.width ?? 0.25)}"${o.dash ? ` stroke-dasharray="${o.dash}"` : ''}${o.cap ? ` stroke-linecap="${o.cap}"` : ''}${o.join ? ` stroke-linejoin="${o.join}"` : ''}`;
+  }
+  const svgLine = (a, b, o = {}) => `<line x1="${num(a.x)}" y1="${num(a.y)}" x2="${num(b.x)}" y2="${num(b.y)}" ${strokeAttrs(o)}/>`;
+  const svgPoly = (points, o = {}) => `<${o.open ? 'polyline' : 'polygon'} points="${pts(points)}" fill="${o.fill ?? 'none'}"${o.fillOpacity != null ? ` fill-opacity="${o.fillOpacity}"` : ''}${o.inert ? ' pointer-events="none"' : ''} ${strokeAttrs(o)}/>`;
+  const svgRect = (x, y, w, h, o = {}) => svgPoly([{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }], o);
+  const svgCircle = (c, r, o = {}) => `<circle cx="${num(c.x)}" cy="${num(c.y)}" r="${num(r)}" fill="${o.fill ?? 'none'}" ${strokeAttrs(o)}/>`;
+  function svgText(x, y, value, size, o = {}) {
+    const rotate = o.rotate ? ` transform="rotate(${num(o.rotate)} ${num(x)} ${num(y)})"` : '';
+    const text = o.upper === false ? String(value) : String(value).toUpperCase();
+    return `<text x="${num(x)}" y="${num(y)}" font-size="${num(size)}" text-anchor="${o.anchor ?? 'middle'}"${o.weight ? ` font-weight="${o.weight}"` : ''} fill="${o.fill ?? DRAFT.ink}"${rotate}>${escapeHtml(text)}</text>`;
+  }
+  const textWidth = (value, size) => String(value).length * size * DRAFT.charWidth;
+  const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
+  const add = (a, b) => ({ x: a.x + b.x, y: a.y + b.y });
+  const mul = (a, k) => ({ x: a.x * k, y: a.y * k });
+  const dot2 = (a, b) => a.x * b.x + a.y * b.y;
+  const cross2 = (a, b) => a.x * b.y - a.y * b.x;
+  const unit2 = a => { const l = Math.hypot(a.x, a.y) || 1; return { x: a.x / l, y: a.y / l }; };
+  const perp = a => ({ x: -a.y, y: a.x });
+  function wrapText(value, size, width) {
+    const perLine = Math.max(4, Math.floor(width / (size * DRAFT.charWidth)));
+    const lines = []; let line = '';
+    for (const word of String(value).toUpperCase().split(/\s+/).filter(Boolean)) {
+      if (!line) line = word;
+      else if ((line + ' ' + word).length <= perLine) line += ' ' + word;
+      else { lines.push(line); line = word; }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  function polygonArea(points) {
+    return Math.abs(points.reduce((sum, p, i) => { const q = points[(i + 1) % points.length]; return sum + p.x * q.y - q.x * p.y; }, 0) / 2);
+  }
+  function pointInPolygon(p, points) {
+    let inside = false;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const a = points[i], b = points[j];
+      if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+    }
+    return inside;
+  }
+  function boundsOf(points) {
+    return { x0: Math.min(...points.map(p => p.x)), y0: Math.min(...points.map(p => p.y)), x1: Math.max(...points.map(p => p.x)), y1: Math.max(...points.map(p => p.y)) };
+  }
+
+  // Deterministic label placement: fixed font metrics, explicit obstacles, ordered candidates.
+  function createPlacer(region) {
+    const boxes = [];
+    const overlaps = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+    return {
+      boxes,
+      reserve(box) { boxes.push(box); },
+      reserveSegment(a, b, halfWidth) {
+        const length = Math.hypot(b.x - a.x, b.y - a.y), steps = Math.max(1, Math.ceil(length / 3));
+        for (let i = 0; i <= steps; i += 1) {
+          const p = add(a, mul(sub(b, a), i / steps));
+          boxes.push({ x0: p.x - halfWidth, y0: p.y - halfWidth, x1: p.x + halfWidth, y1: p.y + halfWidth });
+        }
+      },
+      fits(box) {
+        if (region && (box.x0 < region.x0 || box.x1 > region.x1 || box.y0 < region.y0 || box.y1 > region.y1)) return false;
+        return !boxes.some(other => overlaps(box, other));
+      }
+    };
+  }
+  const centeredBox = (c, w, h) => ({ x0: c.x - w / 2, y0: c.y - h / 2, x1: c.x + w / 2, y1: c.y + h / 2 });
+
+  function drawingArea(profile) {
+    const { w, h } = profile.sheet, b = DRAFT.border, m = DRAFT.margin;
+    const area = { x0: b + m, y0: b + m, x1: w - b - DRAFT.titleBlockWidth - m, y1: h - b - m - DRAFT.viewTitleBand };
+    return { ...area, w: area.x1 - area.x0, h: area.y1 - area.y0 };
+  }
+  function selectScale(profile, widthMm, heightMm, area, extra = { x: 0, y: 0 }) {
+    const band = DRAFT.annotationBand;
+    for (const [ratio, label] of profile.scales) {
+      if (widthMm / ratio + 2 * band + extra.x <= area.w && heightMm / ratio + 2 * band + extra.y <= area.h) return { ratio, label };
+    }
+    const [ratio, label] = profile.scales.at(-1);
+    return { ratio, label };
+  }
+  // Places a model extent on the sheet, centred in the space left after reserved annotation.
+  function placeExtent(area, ratio, widthMm, heightMm, extra = { x: 0, y: 0 }) {
+    const pw = widthMm / ratio, ph = heightMm / ratio;
+    return {
+      x: area.x0 + (area.w - extra.x - pw) / 2,
+      y: area.y0 + (area.h - extra.y - ph) / 2,
+      w: pw, h: ph
+    };
+  }
+
+  function scaleBar(x, y, ratio, profile) {
+    const target = 12 * ratio;
+    const step = profile.steps.reduce((best, s) => Math.abs(s - target) < Math.abs(best - target) ? s : best, profile.steps[0]);
+    const seg = step / ratio, P = profile.pens, size = profile.text.label;
+    const parts = [];
+    for (let i = 0; i < 4; i += 1) parts.push(svgRect(x + i * seg, y, seg, 1.6, { fill: i % 2 ? DRAFT.paper : DRAFT.ink, width: P.fine }));
+    for (let i = 0; i <= 4; i += 1) parts.push(svgText(x + i * seg, y - 1, i === 0 ? '0' : profile.stepLabel(step * i), size, { upper: false }));
+    return { svg: `<g data-role="scale-bar">${parts.join('')}</g>`, width: seg * 4 };
+  }
+
+  function viewTitle(area, number, title, scaleLabel, ratio, profile) {
+    const T = profile.text, P = profile.pens;
+    const x = area.x0, y = area.y1 + 7;
+    const ruleLength = Math.max(textWidth(title, T.title), 50);
+    const bar = scaleBar(x + 13 + ruleLength + 10, y + 1.4, ratio, profile);
+    return [
+      '<g data-role="view-title">',
+      svgCircle({ x: x + 5, y }, 5, { width: P.medium }),
+      svgText(x + 5, y + T.note * 0.36, String(number), T.note, { weight: 700 }),
+      svgText(x + 13, y + 1.2, title, T.title, { anchor: 'start', weight: 700 }),
+      svgLine({ x: x + 13, y: y + 2.8 }, { x: x + 13 + ruleLength, y: y + 2.8 }, { width: P.profile }),
+      svgText(x + 13, y + 3.4 + T.note + 0.8, `Scale: ${scaleLabel}`, T.note, { anchor: 'start' }),
+      bar.svg,
+      '</g>'
+    ].join('');
+  }
+
+  function northArrow(c, degrees, profile) {
+    const P = profile.pens, r = 7, a = degrees * Math.PI / 180;
+    const rot = p => ({ x: c.x + p.x * Math.cos(a) - p.y * Math.sin(a), y: c.y + p.x * Math.sin(a) + p.y * Math.cos(a) });
+    const tip = rot({ x: 0, y: -(r - 0.8) }), left = rot({ x: -2.6, y: 3.6 }), right = rot({ x: 2.6, y: 3.6 }), notch = rot({ x: 0, y: 1.6 });
+    const label = rot({ x: 0, y: -(r + 3) });
+    return `<g data-role="north-arrow">${svgCircle(c, r, { width: P.fine })}${svgPoly([tip, right, notch], { fill: DRAFT.ink, width: P.fine })}${svgPoly([tip, notch, left], { fill: DRAFT.paper, width: P.fine })}${svgText(label.x, label.y + profile.text.note * 0.36, 'N', profile.text.note, { weight: 700 })}</g>`;
+  }
+
+  function titleBlock(model, profile, meta) {
+    const { w, h } = profile.sheet, b = DRAFT.border, x0 = w - b - DRAFT.titleBlockWidth, x1 = w - b, inner = DRAFT.titleBlockWidth - 8;
+    const T = profile.text, P = profile.pens, parts = [];
+    let y = b + 6;
+    const field = (label, lines, size, weight) => {
+      parts.push(svgText(x0 + 4, y, label, T.label, { anchor: 'start' }));
+      y += T.label + 1.2;
+      for (const line of lines) { parts.push(svgText(x0 + 4, y + size * 0.8, line, size, { anchor: 'start', weight })); y += size * 1.3; }
+      y += 1.6;
+    };
+    const rule = () => { parts.push(svgLine({ x: x0, y }, { x: x1, y }, { width: P.fine })); y += 3.5; };
+    const project = model.project, jurisdiction = project.jurisdiction ?? {};
+    const location = [jurisdiction.locality, jurisdiction.county, jurisdiction.stateOrRegion, jurisdiction.country].filter(Boolean).join(', ');
+    field('Project', [...wrapText(project.name, T.room, inner), project.id.toUpperCase()].slice(0, 5), T.note, 700);
+    rule();
+    field('Location', wrapText(location || 'Not recorded', T.note, inner), T.note);
+    rule();
+    field('Status', wrapText('Concept - not for construction', T.note, inner), T.note, 700);
+    rule();
+    field('Drawing', wrapText(meta.title, T.note, inner), T.note, 700);
+    field('Scale', [meta.scaleLabel, profile.label, profile.sheet.name], T.note);
+    rule();
+    if (meta.northDeg != null) {
+      parts.push(northArrow({ x: x0 + DRAFT.titleBlockWidth / 2, y: y + 10 }, meta.northDeg, profile));
+      y += 21;
+      parts.push(svgText(x0 + DRAFT.titleBlockWidth / 2, y, `True north ${num(meta.northDeg)}°`, T.label, { upper: false }));
+      y += 3;
+      if (meta.northDeg) { parts.push(svgText(x0 + DRAFT.titleBlockWidth / 2, y, 'Project north is sheet up', T.label, { upper: false })); y += 3; }
+      y += 1;
+      rule();
+    }
+    if (meta.legend?.length) {
+      parts.push(svgText(x0 + 4, y, 'Legend', T.label, { anchor: 'start' }));
+      y += 4;
+      for (const item of meta.legend) {
+        parts.push(svgLine({ x: x0 + 4, y: y - 0.8 }, { x: x0 + 16, y: y - 0.8 }, { stroke: item.color, width: P.profile, dash: item.dash }));
+        parts.push(svgText(x0 + 19, y, item.label, T.note, { anchor: 'start' }));
+        y += 5;
+      }
+      rule();
+    }
+    field('Date', ['Undated concept'], T.note);
+    const sheetY = h - b - 6;
+    parts.push(svgLine({ x: x0, y: sheetY - T.sheet - 6 }, { x: x1, y: sheetY - T.sheet - 6 }, { width: P.medium }));
+    parts.push(svgText(x0 + 4, sheetY - T.sheet - 2, 'Sheet', T.label, { anchor: 'start' }));
+    parts.push(svgText(x0 + DRAFT.titleBlockWidth / 2, sheetY, meta.sheetId, T.sheet, { weight: 700 }));
+    return `<g data-role="title-block">${svgLine({ x: x0, y: b }, { x: x0, y: h - b }, { width: P.profile })}${parts.join('')}</g>`;
+  }
+
+  function sheetSvg(model, profile, meta, body) {
+    const { w, h } = profile.sheet, b = DRAFT.border;
+    return [
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}" font-family='${DRAFT.font}' data-sheet="${escapeHtml(meta.sheetId)}" data-view="${meta.view}" data-scale="1:${meta.ratio}">`,
+      `<title>${escapeHtml(`${meta.sheetId} ${meta.title.toUpperCase()}`)}</title>`,
+      svgRect(0, 0, w, h, { fill: DRAFT.paper, width: 0 }),
+      svgRect(b, b, w - 2 * b, h - 2 * b, { width: profile.pens.profile }),
+      titleBlock(model, profile, meta),
+      body,
+      viewTitle(meta.area, 1, meta.title, meta.scaleLabel, meta.ratio, profile),
+      '</svg>'
+    ].join('');
+  }
+
+  // Dimension string in paper space. `side` is a paper unit vector pointing away from the building.
+  function dimensionPaper(a, b, axis, side, offset, value, profile, placer) {
+    const P = profile.pens, T = profile.text;
+    const along = axis === 'horizontal' ? { x: 1, y: 0 } : axis === 'vertical' ? { x: 0, y: 1 } : unit2(sub(b, a));
+    const normal = dot2(perp(along), side) >= 0 ? perp(along) : mul(perp(along), -1);
+    const base = Math.max(dot2(a, normal), dot2(b, normal)) + offset;
+    const A = add(a, mul(normal, base - dot2(a, normal))), B = add(b, mul(normal, base - dot2(b, normal)));
+    const parts = [
+      svgLine(add(a, mul(normal, 1.5)), add(A, mul(normal, 2)), { width: P.fine }),
+      svgLine(add(b, mul(normal, 1.5)), add(B, mul(normal, 2)), { width: P.fine })
+    ];
+    const dir = unit2(sub(B, A));
+    if (profile.terminator === 'tick') {
+      parts.push(svgLine(sub(A, mul(dir, 1.5)), add(B, mul(dir, 1.5)), { width: P.fine }));
+      const tick = mul(unit2(add(dir, perp(dir))), 1.25);
+      for (const p of [A, B]) parts.push(svgLine(sub(p, tick), add(p, tick), { width: P.medium }));
+    } else {
+      parts.push(svgLine(A, B, { width: P.fine }));
+      const w = Math.tan(15 * Math.PI / 180) * 2.5;
+      parts.push(svgPoly([A, add(add(A, mul(dir, 2.5)), mul(perp(dir), w)), add(add(A, mul(dir, 2.5)), mul(perp(dir), -w))], { fill: DRAFT.ink, width: 0 }));
+      parts.push(svgPoly([B, add(sub(B, mul(dir, 2.5)), mul(perp(dir), w)), add(sub(B, mul(dir, 2.5)), mul(perp(dir), -w))], { fill: DRAFT.ink, width: 0 }));
+    }
+    const mid = mul(add(A, B), 0.5), tw = textWidth(value, T.note);
+    const vertical = Math.abs(dir.y) > Math.abs(dir.x);
+    if (vertical) {
+      parts.push(svgText(mid.x - 1, mid.y, value, T.note, { rotate: -90, upper: false }));
+      placer?.reserve({ x0: mid.x - 1 - T.note, y0: mid.y - tw / 2, x1: mid.x, y1: mid.y + tw / 2 });
+    } else {
+      parts.push(svgText(mid.x, mid.y - 1, value, T.note, { upper: false }));
+      placer?.reserve({ x0: mid.x - tw / 2, y0: mid.y - 1 - T.note, x1: mid.x + tw / 2, y1: mid.y });
+    }
+    placer?.reserveSegment(A, B, 0.6);
+    return parts.join('');
+  }
+
+  // Level datum: centre line across the drawing with a quartered symbol and labels at the right.
+  function datum(x0, x1, y, name, valueMm, profile) {
+    const P = profile.pens, T = profile.text, c = { x: x1 + 3, y }, r = 2;
+    const wedge = (a0, a1) => `<path d="M${num(c.x)},${num(c.y)} L${num(c.x + r * Math.cos(a0))},${num(c.y + r * Math.sin(a0))} A${r},${r} 0 0 1 ${num(c.x + r * Math.cos(a1))},${num(c.y + r * Math.sin(a1))} Z" fill="${DRAFT.ink}" stroke="none"/>`;
+    return `<g data-role="datum">${svgLine({ x: x0, y }, { x: x1, y }, { width: P.fine, dash: '8 1.5 1.5 1.5' })}${svgCircle(c, r, { width: P.fine, fill: DRAFT.paper })}${wedge(-Math.PI / 2, 0)}${wedge(Math.PI / 2, Math.PI)}${svgText(c.x + r + 1.5, y - 0.8, name, T.note, { anchor: 'start', weight: 700 })}${svgText(c.x + r + 1.5, y + T.note + 0.4, profile.datum(valueMm), T.note, { anchor: 'start', upper: false })}</g>`;
+  }
+
+  function levelBand(model, levelId) {
+    const ordered = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+    const index = ordered.findIndex(level => level.id === levelId), level = ordered[index];
+    return { min: level.elevationMm, max: ordered[index + 1]?.elevationMm ?? level.elevationMm + (level.floorToFloorMm ?? 3000) };
+  }
+  function clipSegmentToBand(a, b, band) {
+    const dz = b.z - a.z;
+    if (Math.abs(dz) < 1e-9) return a.z >= band.min && a.z < band.max ? [a, b] : null;
+    const at = t => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + dz * t });
+    const t0 = Math.max(0, Math.min((band.min - a.z) / dz, (band.max - a.z) / dz));
+    const t1 = Math.min(1, Math.max((band.min - a.z) / dz, (band.max - a.z) / dz));
+    return t0 <= t1 ? [at(t0), at(t1)] : null;
+  }
+  const sortedLevels = model => [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+  const sectionLetter = (model, sectionId) => String.fromCharCode(65 + Math.max(0, (model.sections ?? []).findIndex(item => item.id === sectionId)));
+  const sectionSheetId = (model, sectionId) => `A-3${String((model.sections ?? []).findIndex(item => item.id === sectionId) + 1).padStart(2, '0')}`;
+  function rotatedRect(center, sizeX, sizeY, degrees) {
+    const a = (degrees ?? 0) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => ({ x: center.x + i * sizeX / 2 * c - j * sizeY / 2 * s, y: center.y + i * sizeX / 2 * s + j * sizeY / 2 * c }));
+  }
+  function stairCorners(stair) {
+    const u = unit2(sub(stair.end, stair.start)), n = perp(u), w = stair.widthMm / 2;
+    return [add(stair.start, mul(n, w)), add(stair.end, mul(n, w)), sub(stair.end, mul(n, w)), sub(stair.start, mul(n, w))];
+  }
+  function planExtent(model) {
+    const points = [
+      ...model.spaces.flatMap(space => space.boundary),
+      ...model.walls.flatMap(wall => [wall.start, wall.end]),
+      ...model.stairs.flatMap(stairCorners),
+      ...[...model.fixtures, ...model.equipment].flatMap(object => rotatedRect(object.position, object.size.x, object.size.y, object.rotationDeg)),
+      ...(model.sections ?? []).flatMap(section => [section.start, section.end])
+    ];
+    for (const roof of model.roofs) {
+      const box = boundsOf(roof.footprint), ov = roof.overhangMm ?? 0;
+      points.push({ x: box.x0 - ov, y: box.y0 - ov }, { x: box.x1 + ov, y: box.y1 + ov });
+    }
+    const box = boundsOf(points);
+    return { minX: box.x0, minY: box.y0, maxX: box.x1, maxY: box.y1 };
+  }
+  // A wall end is joined when it lands on another wall of the same level; joined ends extend
+  // by half the thickness so cut poché closes at corners.
+  function wallEndJoined(wall, point, walls, tolerance) {
+    return walls.some(other => {
+      if (other.id === wall.id) return false;
+      const d = sub(other.end, other.start), len2 = dot2(d, d) || 1;
+      const t = Math.max(0, Math.min(1, dot2(sub(point, other.start), d) / len2));
+      return Math.hypot(...Object.values(sub(point, add(other.start, mul(d, t))))) <= other.thicknessMm / 2 + tolerance;
+    });
+  }
+
+  function renderPlanSheet(model, levelId, options = {}) {
+    const profile = profileFor(model), P = profile.pens, T = profile.text;
+    const screened = Boolean(options.systems);
+    const ink = screened ? DRAFT.screen : DRAFT.ink, poche = screened ? DRAFT.screenPoche : DRAFT.poche;
+    // Screened lettering stays darker than screened linework so it keeps 4.5:1 on white paper.
+    const textInk = screened ? DRAFT.screenText : DRAFT.ink;
+    const levels = sortedLevels(model);
+    const level = levels.find(item => item.id === levelId) ?? levels[0];
+    const levelIndex = levels.indexOf(level);
+    const tolerance = model.project.coordinates.toleranceMm ?? 3;
+    const ext = planExtent(model), area = drawingArea(profile);
+    const { ratio, label: scaleLabel } = selectScale(profile, ext.maxX - ext.minX, ext.maxY - ext.minY, area);
+    const place = placeExtent(area, ratio, ext.maxX - ext.minX, ext.maxY - ext.minY);
+    const map = p => ({ x: place.x + (p.x - ext.minX) / ratio, y: place.y + (ext.maxY - p.y) / ratio });
+    const placer = createPlacer(area), warnings = [];
+    const walls = model.walls.filter(wall => wall.levelId === level.id);
+    const wallBox = walls.length ? boundsOf(walls.flatMap(wall => [wall.start, wall.end])) : boundsOf(model.spaces.flatMap(space => space.boundary));
+    const center = { x: (wallBox.x0 + wallBox.x1) / 2, y: (wallBox.y0 + wallBox.y1) / 2 };
+    const layers = { rooms: [], roof: [], objects: [], stairs: [], wallStroke: [], wallFill: [], openings: [], marks: [], dims: [], tags: [], systems: [] };
+
+    for (const space of model.spaces.filter(item => item.levelId === level.id)) {
+      layers.rooms.push(`<g data-entity="${escapeHtml(space.id)}">${svgPoly(space.boundary.map(map), { fill: DRAFT.paper, fillOpacity: 0, width: 0 })}</g>`);
+    }
+    for (const roof of model.roofs.filter(item => item.levelId === level.id)) {
+      const box = boundsOf(roof.footprint), ov = roof.overhangMm ?? 0;
+      layers.roof.push(`<g data-entity="${escapeHtml(roof.id)}">${svgPoly([{ x: box.x0 - ov, y: box.y0 - ov }, { x: box.x1 + ov, y: box.y0 - ov }, { x: box.x1 + ov, y: box.y1 + ov }, { x: box.x0 - ov, y: box.y1 + ov }].map(map), { stroke: ink, width: P.thin, dash: '3 1.5' })}</g>`);
+    }
+    for (const object of [...model.fixtures, ...model.equipment].filter(item => item.levelId === level.id)) {
+      const corners = rotatedRect(object.position, object.size.x, object.size.y, object.rotationDeg).map(map);
+      layers.objects.push(`<g data-entity="${escapeHtml(object.id)}">${svgPoly(corners, { fill: DRAFT.paper, stroke: ink, width: P.thin })}</g>`);
+      placer.reserve(boundsOf(corners));
+    }
+
+    for (const stair of model.stairs) {
+      const from = model.levels.find(item => item.id === stair.fromLevelId), to = model.levels.find(item => item.id === stair.toLevelId);
+      const isLower = stair.fromLevelId === level.id, isUpper = stair.toLevelId === level.id;
+      if (!from || !to || (!isLower && !isUpper)) continue;
+      const u = unit2(sub(stair.end, stair.start)), n = perp(u), L = Math.hypot(stair.end.x - stair.start.x, stair.end.y - stair.start.y), half = stair.widthMm / 2;
+      const at = (r, side) => map(add(add(stair.start, mul(u, r)), mul(n, side)));
+      const rise = (to.elevationMm - from.elevationMm) / stair.riserCount;
+      const cutIndex = isLower ? Math.min(stair.riserCount - 1, Math.max(1, Math.ceil(DRAFT.cutHeightMm / rise))) : stair.riserCount;
+      const cutRun = cutIndex / stair.riserCount * L;
+      const parts = [svgPoly(stairCorners(stair).map(map), { fill: DRAFT.paper, fillOpacity: 0, width: 0 })];
+      for (let i = 1; i < stair.riserCount; i += 1) {
+        const r = i / stair.riserCount * L;
+        parts.push(svgLine(at(r, -half), at(r, half), { stroke: ink, width: P.thin, dash: isLower && i > cutIndex ? '3 1.5' : null }));
+      }
+      if (isLower) {
+        parts.push(svgLine(at(0, -half), at(0, half), { stroke: ink, width: P.medium }));
+        for (const side of [-half, half]) {
+          parts.push(svgLine(at(0, side), at(cutRun, side), { stroke: ink, width: P.medium }));
+          parts.push(svgLine(at(cutRun, side), at(L, side), { stroke: ink, width: P.thin, dash: '3 1.5' }));
+        }
+        parts.push(svgLine(at(cutRun - half * 0.45, -half * 1.15), at(cutRun + half * 0.45, half * 1.15), { stroke: ink, width: P.medium }));
+      } else {
+        parts.push(svgPoly(stairCorners(stair).map(map), { stroke: ink, width: P.medium }));
+      }
+      const tail = isLower ? 0.06 * L : L - 0.06 * L, head = isLower ? cutRun - half * 0.7 : 0.25 * L;
+      const tailP = at(tail, 0), headP = at(head, 0), dir = unit2(sub(headP, tailP)), wing = perp(dir);
+      parts.push(svgLine(tailP, headP, { stroke: ink, width: P.thin }));
+      parts.push(svgPoly([headP, add(sub(headP, mul(dir, 2.2)), mul(wing, 0.9)), sub(sub(headP, mul(dir, 2.2)), mul(wing, 0.9))], { fill: ink, width: 0 }));
+      parts.push(svgCircle(tailP, 0.6, { fill: ink, width: 0 }));
+      // The label sits just past the end of the run so it never lands on treads.
+      const edgeP = at(isLower ? 0 : L, 0), labelP = sub(edgeP, mul(dir, T.note * 1.4));
+      parts.push(svgText(labelP.x, labelP.y + T.note * 0.36, isLower ? 'UP' : 'DN', T.note, { fill: textInk, weight: 700 }));
+      layers.stairs.push(`<g data-entity="${escapeHtml(stair.id)}">${parts.join('')}</g>`);
+      placer.reserve(boundsOf(stairCorners(stair).map(map)));
+      placer.reserve(centeredBox(labelP, 6, 4));
+    }
+
+    for (const wall of walls) {
+      const L = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y), u = unit2(sub(wall.end, wall.start)), n = perp(u), t = wall.thicknessMm;
+      const inward = dot2(sub(center, mul(add(wall.start, wall.end), 0.5)), n) >= 0 ? 1 : -1;
+      const openings = model.openings.filter(item => item.wallId === wall.id).sort((a, b) => a.offsetMm - b.offsetMm);
+      const p = (along, side) => map(add(add(wall.start, mul(u, along)), mul(n, side)));
+      const startExt = wallEndJoined(wall, wall.start, walls, tolerance) ? t / 2 : 0, endExt = wallEndJoined(wall, wall.end, walls, tolerance) ? t / 2 : 0;
+      const solids = []; let cursor = -startExt;
+      for (const opening of openings) { solids.push([cursor, opening.offsetMm]); cursor = opening.offsetMm + opening.widthMm; }
+      solids.push([cursor, L + endExt]);
+      const strokeParts = [], fillParts = [];
+      for (const [a, b] of solids) {
+        if (b - a < 1) continue;
+        const corners = [p(a, -t / 2), p(b, -t / 2), p(b, t / 2), p(a, t / 2)];
+        strokeParts.push(svgPoly(corners, { fill: poche, stroke: ink, width: P.cut * 2, join: 'miter' }));
+        fillParts.push(svgPoly(corners, { fill: poche, width: 0, inert: true }));
+      }
+      layers.wallStroke.push(`<g data-entity="${escapeHtml(wall.id)}">${strokeParts.join('')}</g>`);
+      layers.wallFill.push(fillParts.join(''));
+      placer.reserveSegment(p(-startExt, 0), p(L + endExt, 0), t / ratio / 2 + 0.8);
+
+      for (const opening of openings) {
+        const a = opening.offsetMm, b = a + opening.widthMm, w = opening.widthMm, parts = [];
+        parts.push(svgPoly([p(a, -t / 2), p(b, -t / 2), p(b, t / 2), p(a, t / 2)], { fill: DRAFT.paper, fillOpacity: 0, width: 0 }));
+        if (opening.kind === 'window') {
+          for (const side of [-t / 2, t / 2]) parts.push(svgLine(p(a, side), p(b, side), { stroke: ink, width: P.thin }));
+          for (const side of [-t * 0.12, t * 0.12]) parts.push(svgLine(p(a, side), p(b, side), { stroke: ink, width: P.thin }));
+        } else if (opening.kind === 'overhead-door') {
+          parts.push(svgLine(p(a, 0), p(b, 0), { stroke: ink, width: P.thin, dash: '3 1.5' }));
+          parts.push(svgLine(p(a, inward * (t / 2 + 600)), p(b, inward * (t / 2 + 600)), { stroke: ink, width: P.thin, dash: '3 1.5' }));
+        } else if (opening.kind === 'door') {
+          const swing = opening.swing ?? 'left', face = inward * t / 2;
+          const leaf = (hingeAlong, closedAlong, width) => {
+            const hinge = p(hingeAlong, face), tip = map(add(add(add(wall.start, mul(u, hingeAlong)), mul(n, face)), mul(n, inward * width))), closed = p(closedAlong, face);
+            const sweep = cross2(sub(tip, hinge), sub(closed, hinge)) > 0 ? 1 : 0, r = width / ratio;
+            return svgLine(hinge, tip, { stroke: ink, width: P.medium }) + `<path d="M${num(tip.x)},${num(tip.y)} A${num(r)},${num(r)} 0 0 ${sweep} ${num(closed.x)},${num(closed.y)}" fill="none" ${strokeAttrs({ stroke: ink, width: P.fine })}/>`;
+          };
+          if (swing === 'left') parts.push(leaf(a, b, w));
+          else if (swing === 'right') parts.push(leaf(b, a, w));
+          else if (swing === 'double') parts.push(leaf(a, a + w / 2, w / 2), leaf(b, b - w / 2, w / 2));
+          else if (swing === 'sliding') {
+            parts.push(svgLine(p(a, -t / 6), p(a + w * 0.55, -t / 6), { stroke: ink, width: P.medium }));
+            parts.push(svgLine(p(b - w * 0.55, t / 6), p(b, t / 6), { stroke: ink, width: P.medium }));
+          }
+          if (swing !== 'sliding' && swing !== 'none') placer.reserve(boundsOf([p(a, face), p(b, face), p(a, inward * (t / 2 + w)), p(b, inward * (t / 2 + w))]));
+        }
+        layers.openings.push(`<g data-entity="${escapeHtml(opening.id)}">${parts.join('')}</g>`);
+      }
+    }
+
+    const centerPaper = map(center);
+    for (const dimension of model.dimensions ?? []) {
+      if (dimension.kind === 'elevation' || Math.abs(dimension.from.z - level.elevationMm) > tolerance || Math.abs(dimension.to.z - level.elevationMm) > tolerance) continue;
+      const a = map(dimension.from), b = map(dimension.to);
+      const measured = dimension.kind === 'horizontal' ? Math.abs(dimension.to.x - dimension.from.x) : dimension.kind === 'vertical' ? Math.abs(dimension.to.y - dimension.from.y) : Math.hypot(dimension.to.x - dimension.from.x, dimension.to.y - dimension.from.y);
+      const side = unit2(sub(mul(add(a, b), 0.5), centerPaper));
+      const offset = Math.max(Math.abs(dimension.offsetMm ?? 0) / ratio, 8);
+      layers.dims.push(`<g data-entity="${escapeHtml(dimension.id)}">${dimensionPaper(a, b, dimension.kind, side, offset, profile.dimension(measured), { ...profile, pens: P }, placer)}</g>`);
+    }
+
+    for (const section of model.sections ?? []) {
+      const s = map(section.start), e = map(section.end), d = unit2(sub(e, s));
+      const look = section.lookDirection === 'left' ? perp(unit2(sub(section.end, section.start))) : mul(perp(unit2(sub(section.end, section.start))), -1);
+      const lookPaper = unit2({ x: look.x, y: -look.y }), r = 5, letter = sectionLetter(model, section.id), sheet = sectionSheetId(model, section.id);
+      // Each bubble slides outward along the cut line until it clears dimensions and other marks.
+      const clearReach = (anchor, outward) => { let reach = 8; while (reach < 40 && !placer.fits(centeredBox(add(anchor, mul(outward, reach + r)), 2 * r + 7, 2 * r + 7))) reach += 1; return reach; };
+      const reachStart = clearReach(s, mul(d, -1)), reachEnd = clearReach(e, d);
+      const parts = [svgLine(sub(s, mul(d, reachStart)), add(e, mul(d, reachEnd)), { stroke: ink, width: P.fine, dash: '12 2 2 2' })];
+      for (const c of [sub(s, mul(d, reachStart + r)), add(e, mul(d, reachEnd + r))]) {
+        const tip = add(c, mul(lookPaper, r + 3)), side = perp(lookPaper);
+        parts.push(svgPoly([tip, add(c, mul(side, r * 0.85)), sub(c, mul(side, r * 0.85))], { fill: ink, width: 0 }));
+        parts.push(svgCircle(c, r, { fill: DRAFT.paper, stroke: ink, width: P.medium }));
+        parts.push(svgLine({ x: c.x - r, y: c.y }, { x: c.x + r, y: c.y }, { stroke: ink, width: P.fine }));
+        parts.push(svgText(c.x, c.y - 1, letter, T.note, { fill: textInk, weight: 700 }));
+        parts.push(svgText(c.x, c.y + T.label + 0.8, sheet, T.label, { fill: textInk }));
+        placer.reserve(centeredBox(c, 2 * r + 7, 2 * r + 7));
+      }
+      layers.marks.push(`<g data-entity="${escapeHtml(section.id)}">${parts.join('')}</g>`);
+    }
+
+    const legend = [];
+    if (screened) {
+      const band = levelBand(model, level.id);
+      for (const system of model.systems) {
+        if (!options.systems.has(system.discipline)) continue;
+        const style = DISCIPLINES[system.discipline];
+        legend.push({ label: style.label, color: style.color, dash: style.dash });
+        for (const edge of system.edges) {
+          const segments = [];
+          for (let index = 1; index < edge.path.length; index += 1) {
+            const segment = clipSegmentToBand(edge.path[index - 1], edge.path[index], band);
+            if (!segment || samePoint(segment[0], segment[1])) continue;
+            segments.push(svgLine(map(segment[0]), map(segment[1]), { stroke: style.color, width: P.profile, dash: style.dash, cap: 'round' }));
+            placer.reserveSegment(map(segment[0]), map(segment[1]), 0.8);
+          }
+          if (segments.length) layers.systems.push(`<g data-entity="${escapeHtml(edge.id)}">${segments.join('')}</g>`);
+        }
+        for (const node of system.nodes) {
+          if (node.levelId ? node.levelId !== level.id : node.position.z < band.min || node.position.z >= band.max) continue;
+          layers.systems.push(`<g data-entity="${escapeHtml(node.id)}">${svgCircle(map(node.position), 1.1, { fill: style.color, stroke: DRAFT.paper, width: 0.3 })}</g>`);
+        }
+      }
+    }
+
+    for (const space of model.spaces.filter(item => item.levelId === level.id)) {
+      const poly = space.boundary.map(map), name = space.name.toUpperCase(), areaLabel = profile.area(polygonArea(space.boundary));
+      const box = boundsOf(poly), c = map(centroid(space.boundary));
+      const attempt = lines => {
+        const w = Math.max(...lines.map(line => textWidth(line.text, line.size))) + 1.2, h = lines.reduce((sum, line) => sum + line.size * 1.25, 0) + 0.6;
+        const candidates = [c];
+        for (let dy = -(box.y1 - box.y0) / 2; dy <= (box.y1 - box.y0) / 2; dy += 2) for (let dx = -(box.x1 - box.x0) / 2; dx <= (box.x1 - box.x0) / 2; dx += 2) candidates.push({ x: c.x + dx, y: c.y + dy });
+        candidates.sort((p, q) => Math.hypot(p.x - c.x, p.y - c.y) - Math.hypot(q.x - c.x, q.y - c.y));
+        for (const candidate of candidates) {
+          const tagBox = centeredBox(candidate, w, h);
+          const corners = [{ x: tagBox.x0, y: tagBox.y0 }, { x: tagBox.x1, y: tagBox.y0 }, { x: tagBox.x1, y: tagBox.y1 }, { x: tagBox.x0, y: tagBox.y1 }];
+          if (corners.every(corner => pointInPolygon(corner, poly)) && placer.fits(tagBox)) return { candidate, tagBox };
+        }
+        return null;
+      };
+      const full = [{ text: name, size: T.room }, { text: areaLabel, size: T.note }];
+      let lines = full, spot = attempt(full);
+      if (!spot) { lines = [full[0]]; spot = attempt(lines); }
+      let leader = '';
+      if (!spot) {
+        lines = full;
+        const w = Math.max(textWidth(name, T.room), textWidth(areaLabel, T.note)) + 1.2, h = T.room * 1.25 + T.note * 1.25 + 0.6;
+        const right = map({ x: ext.maxX, y: 0 }).x + 8 + w / 2;
+        for (let y = area.y0 + h / 2; y <= area.y1 - h / 2 && !spot; y += 2) {
+          const tagBox = centeredBox({ x: right, y }, w, h);
+          if (placer.fits(tagBox)) spot = { candidate: { x: right, y }, tagBox };
+        }
+        if (spot) leader = svgLine(c, { x: spot.tagBox.x0 - 0.5, y: spot.candidate.y }, { stroke: ink, width: P.fine }) + svgCircle(c, 0.5, { fill: ink, width: 0 });
+      }
+      if (!spot) {
+        warnings.push({ severity: 'warning', code: 'label.placement', message: `${space.name}: no clear position for the room tag on ${level.name}.`, entityId: space.id });
+        spot = { candidate: c, tagBox: centeredBox(c, 0, 0) };
+      }
+      placer.reserve(spot.tagBox);
+      const total = lines.reduce((sum, line) => sum + line.size * 1.25, 0);
+      let y = spot.candidate.y - total / 2;
+      const text = lines.map(line => { y += line.size * 1.25; return svgText(spot.candidate.x, y - line.size * 0.25, line.text, line.size, { fill: textInk, weight: line.size === T.room ? 700 : null, upper: line.size === T.room }); }).join('');
+      layers.tags.push(`<g data-entity="${escapeHtml(space.id)}">${leader}${text}</g>`);
+    }
+
+    const title = screened ? `${level.name} systems coordination` : `${level.name} plan`;
+    const sheetId = screened ? `M-1${String(levelIndex + 1).padStart(2, '0')}` : `A-1${String(levelIndex + 1).padStart(2, '0')}`;
+    const body = ['rooms', 'roof', 'objects', 'stairs', 'wallStroke', 'wallFill', 'openings', 'marks', 'dims', 'tags', 'systems']
+      .map(key => `<g data-layer="${key}">${layers[key].join('')}</g>`).join('');
+    const svg = sheetSvg(model, profile, { sheetId, title, scaleLabel, ratio, area, view: screened ? 'systems' : 'plan', northDeg: model.project.coordinates.trueNorthDeg ?? 0, legend }, body);
+    return { svg, sheetId, title, view: screened ? 'systems' : 'plan', ratio, scaleLabel, warnings };
+  }
+
+  function elevationBasis(side, bounds) {
+    const definitions = {
+      north: { axis: 'y', face: bounds.maxY, project: point => -point.x, label: 'North' },
+      south: { axis: 'y', face: bounds.minY, project: point => point.x, label: 'South' },
+      east: { axis: 'x', face: bounds.maxX, project: point => point.y, label: 'East' },
+      west: { axis: 'x', face: bounds.minX, project: point => -point.y, label: 'West' }
+    };
+    return definitions[side];
+  }
+
+  function renderVerticalSheet(model, view, meta, build) {
+    // Shared frame for elevations and sections: build(hz) returns { minH, maxH, minZ, maxZ, draw(map, ratio, placer) }.
+    const profile = profileFor(model), area = drawingArea(profile);
+    const extent = build.extent;
+    const extra = { x: 46, y: 0 };
+    const width = extent.maxH - extent.minH, height = extent.maxZ - extent.minZ;
+    const { ratio, label: scaleLabel } = selectScale(profile, width, height, area, extra);
+    const place = placeExtent(area, ratio, width, height, extra);
+    const map = (h, z) => ({ x: place.x + (h - extent.minH) / ratio, y: place.y + (extent.maxZ - z) / ratio });
+    const placer = createPlacer(area), warnings = [];
+    const body = build.draw({ map, ratio, profile, placer, warnings, place });
+    const svg = sheetSvg(model, profile, { ...meta, scaleLabel, ratio, area, view }, body);
+    return { svg, sheetId: meta.sheetId, title: meta.title, view, ratio, scaleLabel, warnings };
+  }
+
+  function verticalAnnotations(model, ctx, minH, maxH, roof) {
+    const { map, profile, placer } = ctx, P = profile.pens, parts = [];
+    const ground = model.project.coordinates.siteDatumMm ?? 0;
+    const left = map(minH, 0).x, right = map(maxH, 0).x;
+    parts.push(svgLine({ x: left - 8, y: map(minH, ground).y }, { x: right + 8, y: map(minH, ground).y }, { width: P.ground }));
+    const datums = sortedLevels(model).map(level => ({ name: level.name, z: level.elevationMm }));
+    if (roof) datums.push({ name: 'Eave', z: roof.eaveElevationMm }, { name: 'Ridge', z: roof.ridgeElevationMm });
+    for (const item of datums) parts.push(datum(left - 4, right + 6, map(minH, item.z).y, item.name, item.z, profile));
+    for (const dimension of (model.dimensions ?? []).filter(item => item.kind === 'elevation')) {
+      const a = map(minH, dimension.from.z), b = map(minH, dimension.to.z);
+      parts.push(`<g data-entity="${escapeHtml(dimension.id)}">${dimensionPaper({ x: left, y: a.y }, { x: left, y: b.y }, 'vertical', { x: -1, y: 0 }, Math.max(Math.abs(dimension.offsetMm ?? 0) / ctx.ratio, 10), profile.dimension(Math.abs(dimension.to.z - dimension.from.z)), profile, placer)}</g>`);
+    }
+    return parts.join('');
+  }
+
+  function renderElevationSheet(model, side) {
+    const bounds = modelBounds(model), roof = model.roofs[0], basis = elevationBasis(side, bounds);
+    const wallBox = boundsOf(model.walls.flatMap(wall => [wall.start, wall.end]));
+    const projected = [{ x: wallBox.x0, y: wallBox.y0 }, { x: wallBox.x1, y: wallBox.y0 }, { x: wallBox.x1, y: wallBox.y1 }, { x: wallBox.x0, y: wallBox.y1 }].map(basis.project);
+    const wallMin = Math.min(...projected), wallMax = Math.max(...projected), ov = roof?.overhangMm ?? 0;
+    const minH = wallMin - ov, maxH = wallMax + ov;
+    const wallTop = Math.max(...model.walls.map(wall => (model.levels.find(level => level.id === wall.levelId)?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0) + wall.heightMm));
+    const ridge = roof?.ridgeElevationMm ?? wallTop, eave = roof?.eaveElevationMm ?? wallTop;
+    const gable = roof ? ((side === 'north' || side === 'south') ? roof.ridgeAxis === 'y' : roof.ridgeAxis === 'x') : false;
+    const isVisibleWall = wall => Math.abs(wall.start[basis.axis] - basis.face) < 3 && Math.abs(wall.end[basis.axis] - basis.face) < 3;
+    return renderVerticalSheet(model, 'elevation', { sheetId: ELEVATION_SHEETS[side], title: `${basis.label} elevation` }, {
+      extent: { minH, maxH, minZ: Math.min(0, model.project.coordinates.siteDatumMm ?? 0), maxZ: Math.max(ridge, eave, wallTop) },
+      draw(ctx) {
+        const { map, profile } = ctx, P = profile.pens, parts = [];
+        const silhouette = !roof
+          ? [[wallMin, 0], [wallMax, 0], [wallMax, wallTop], [wallMin, wallTop]]
+          : gable
+            ? [[wallMin, 0], [wallMax, 0], [wallMax, eave], [maxH, eave], [(minH + maxH) / 2, ridge], [minH, eave], [wallMin, eave]]
+            : [[wallMin, 0], [wallMax, 0], [wallMax, eave], [maxH, eave], [maxH, ridge], [minH, ridge], [minH, eave], [wallMin, eave]];
+        parts.push(`<g data-entity="${escapeHtml(roof?.id ?? 'building-outline')}">${svgPoly(silhouette.map(([h, z]) => map(h, z)), { fill: DRAFT.paper, width: P.profile, join: 'miter' })}</g>`);
+        if (roof && !gable) parts.push(svgLine(map(wallMin, eave), map(wallMax, eave), { width: P.thin }));
+        for (const opening of model.openings) {
+          const wall = model.walls.find(item => item.id === opening.wallId); if (!wall || !isVisibleWall(wall)) continue;
+          const level = model.levels.find(item => item.id === wall.levelId);
+          const h0 = basis.project(pointAlongWall(wall, opening.offsetMm)), h1 = basis.project(pointAlongWall(wall, opening.offsetMm + opening.widthMm));
+          const left = Math.min(h0, h1), right = Math.max(h0, h1), bottom = (level?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0) + opening.sillMm, top = bottom + opening.heightMm;
+          const box = [map(left, top), map(right, top), map(right, bottom), map(left, bottom)];
+          const inner = [];
+          if (opening.kind === 'window') {
+            const inset = 60;
+            inner.push(svgPoly([map(left + inset, top - inset), map(right - inset, top - inset), map(right - inset, bottom + inset), map(left + inset, bottom + inset)], { width: P.thin }));
+            inner.push(svgLine(map(left - 60, bottom), map(right + 60, bottom), { width: P.medium }));
+          } else if (opening.kind === 'overhead-door') {
+            for (let i = 1; i < 4; i += 1) inner.push(svgLine(map(left, bottom + opening.heightMm * i / 4), map(right, bottom + opening.heightMm * i / 4), { width: P.thin }));
+          } else if (opening.kind === 'door') {
+            inner.push(svgPoly([map(left + 50, top - 50), map(right - 50, top - 50), map(right - 50, bottom), map(left + 50, bottom)], { width: P.thin }));
+          }
+          parts.push(`<g data-entity="${escapeHtml(opening.id)}">${svgPoly(box, { fill: DRAFT.paper, width: P.medium })}${inner.join('')}</g>`);
+        }
+        parts.push(verticalAnnotations(model, ctx, minH, maxH, roof));
+        return parts.join('');
+      }
+    });
+  }
+
+  // Sutherland-Hodgman clip of a polygon to the half plane f(p) >= 0.
+  function clipHalfPlane(points, f) {
+    const out = [];
+    for (let i = 0; i < points.length; i += 1) {
+      const a = points[i], b = points[(i + 1) % points.length], fa = f(a), fb = f(b);
+      if (fa >= 0) out.push(a);
+      if ((fa >= 0) !== (fb >= 0)) { const t = fa / (fa - fb); out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }); }
+    }
+    return out;
+  }
+  // Parameter interval of segment p0->p1 inside a convex polygon (Cyrus-Beck), or null.
+  function clipSegmentToConvex(p0, p1, polygon) {
+    const area = polygon.reduce((sum, p, i) => sum + cross2(p, polygon[(i + 1) % polygon.length]), 0);
+    const orient = area >= 0 ? 1 : -1, d = sub(p1, p0);
+    let t0 = 0, t1 = 1;
+    for (let i = 0; i < polygon.length; i += 1) {
+      const a = polygon[i], b = polygon[(i + 1) % polygon.length], edge = sub(b, a);
+      const inward = mul(perp(edge), orient), denom = dot2(inward, d), numer = dot2(inward, sub(p0, a));
+      if (Math.abs(denom) < 1e-9) { if (numer < 0) return null; continue; }
+      const t = -numer / denom;
+      if (denom > 0) t0 = Math.max(t0, t); else t1 = Math.min(t1, t);
+      if (t0 > t1) return null;
+    }
+    return t1 - t0 > 1e-6 ? [t0, t1] : null;
+  }
+  function convexHull(points) {
+    const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+    if (sorted.length < 3) return sorted;
+    const turn = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    const lower = [], upper = [];
+    for (const p of sorted) { while (lower.length >= 2 && turn(lower.at(-2), lower.at(-1), p) <= 0) lower.pop(); lower.push(p); }
+    for (const p of [...sorted].reverse()) { while (upper.length >= 2 && turn(upper.at(-2), upper.at(-1), p) <= 0) upper.pop(); upper.push(p); }
+    return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+  }
+  function roofSurface(roof) {
+    const box = boundsOf(roof.footprint), ov = roof.overhangMm ?? 0;
+    const ext = { x0: box.x0 - ov, y0: box.y0 - ov, x1: box.x1 + ov, y1: box.y1 + ov };
+    const alongX = roof.ridgeAxis === 'y';
+    const mid = alongX ? (box.x0 + box.x1) / 2 : (box.y0 + box.y1) / 2, half = alongX ? (box.x1 - box.x0) / 2 : (box.y1 - box.y0) / 2;
+    const zAt = p => roof.ridgeElevationMm - (roof.ridgeElevationMm - roof.eaveElevationMm) * Math.abs((alongX ? p.x : p.y) - mid) / half;
+    const corners = [{ x: ext.x0, y: ext.y0 }, { x: ext.x1, y: ext.y0 }, { x: ext.x1, y: ext.y1 }, { x: ext.x0, y: ext.y1 }];
+    const ridgeEnds = alongX ? [{ x: mid, y: ext.y0 }, { x: mid, y: ext.y1 }] : [{ x: ext.x0, y: mid }, { x: ext.x1, y: mid }];
+    return { ext, corners, ridgeEnds, zAt, alongX, mid };
+  }
+
+  // Section geometry per references/coordinate-contract.md "Section Views".
+  function sectionGeometry(model, section) {
+    const d = unit2(sub(section.end, section.start)), lengthAlong = Math.hypot(section.end.x - section.start.x, section.end.y - section.start.y);
+    const n = section.lookDirection === 'left' ? perp(d) : mul(perp(d), -1), sign = section.lookDirection === 'left' ? 1 : -1;
+    const hOf = p => sign * dot2(sub(p, section.start), d), sOf = p => dot2(sub(p, section.start), n);
+    const levelOf = id => model.levels.find(level => level.id === id);
+    const cut = [], beyond = [], roofCut = [];
+    const at = t => add(section.start, mul(d, t * lengthAlong));
+    const hRange = points => { const hs = points.map(hOf); return [Math.min(...hs), Math.max(...hs)]; };
+
+    for (const wall of model.walls) {
+      const level = levelOf(wall.levelId), base = (level?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0), t = wall.thicknessMm;
+      const u = unit2(sub(wall.end, wall.start)), nw = perp(u), L = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+      const rect = [add(wall.start, mul(nw, t / 2)), add(wall.end, mul(nw, t / 2)), sub(wall.end, mul(nw, t / 2)), sub(wall.start, mul(nw, t / 2))];
+      const crossing = clipSegmentToConvex(section.start, section.end, rect);
+      const openings = model.openings.filter(item => item.wallId === wall.id);
+      if (crossing) {
+        const [h0, h1] = hRange([at(crossing[0]), at(crossing[1])]);
+        const along = dot2(sub(at((crossing[0] + crossing[1]) / 2), wall.start), u);
+        const hit = openings.find(item => along >= item.offsetMm && along <= item.offsetMm + item.widthMm);
+        const spans = hit ? [[base, base + hit.sillMm], [base + hit.sillMm + hit.heightMm, base + wall.heightMm]] : [[base, base + wall.heightMm]];
+        for (const [z0, z1] of spans) if (z1 - z0 > 1) cut.push({ id: wall.id, kind: 'wall', h0, h1, z0, z1 });
+        continue;
+      }
+      const clipped = clipHalfPlane(rect, sOf);
+      if (clipped.length < 3) continue;
+      const [h0, h1] = hRange(clipped), depth = Math.min(...clipped.map(sOf));
+      const broadside = Math.abs(dot2(u, d)) > 0.3;
+      const openingBoxes = broadside ? openings.map(item => {
+        const [a, b] = [pointAlongWall(wall, item.offsetMm), pointAlongWall(wall, item.offsetMm + item.widthMm)];
+        if (sOf(a) < 0 || sOf(b) < 0) return null;
+        const [oh0, oh1] = hRange([a, b]);
+        return { id: item.id, h0: oh0, h1: oh1, z0: base + item.sillMm, z1: base + item.sillMm + item.heightMm };
+      }).filter(Boolean) : [];
+      beyond.push({ id: wall.id, kind: 'wall', h0, h1, z0: base, z1: base + wall.heightMm, depth, openings: openingBoxes, length: L });
+    }
+    for (const slab of model.slabs) {
+      const level = levelOf(slab.levelId), top = level?.elevationMm ?? 0, bottom = top - slab.thicknessMm;
+      const crossing = clipSegmentToConvex(section.start, section.end, slab.boundary);
+      if (crossing) { const [h0, h1] = hRange([at(crossing[0]), at(crossing[1])]); cut.push({ id: slab.id, kind: 'slab', h0, h1, z0: bottom, z1: top }); }
+    }
+    for (const stair of model.stairs) {
+      const from = levelOf(stair.fromLevelId), to = levelOf(stair.toLevelId); if (!from || !to) continue;
+      const u = unit2(sub(stair.end, stair.start)), L = Math.hypot(stair.end.x - stair.start.x, stair.end.y - stair.start.y), rise = (to.elevationMm - from.elevationMm) / stair.riserCount;
+      const corners = stairCorners(stair), crossing = clipSegmentToConvex(section.start, section.end, corners);
+      const parallel = Math.abs(dot2(u, d)) >= 0.3;
+      let profile;
+      if (parallel) {
+        const run = r => hOf(add(stair.start, mul(u, r)));
+        profile = [{ h: run(0), z: from.elevationMm }];
+        for (let i = 0; i < stair.riserCount; i += 1) {
+          const r0 = i / stair.riserCount * L, r1 = (i + 1) / stair.riserCount * L, z = from.elevationMm + rise * (i + 1);
+          profile.push({ h: run(r0), z }, { h: run(r1), z });
+        }
+        profile.push({ h: run(L), z: to.elevationMm - rise }, { h: run(L / stair.riserCount), z: from.elevationMm });
+      } else {
+        const [h0, h1] = hRange(corners);
+        let top = to.elevationMm, soffit = from.elevationMm;
+        if (crossing) {
+          const along = dot2(sub(at((crossing[0] + crossing[1]) / 2), stair.start), u);
+          top = from.elevationMm + rise * Math.min(stair.riserCount, Math.ceil(Math.max(along, 1) / (L / stair.riserCount)));
+          soffit = Math.max(from.elevationMm, from.elevationMm + (to.elevationMm - from.elevationMm) * along / L - rise);
+        }
+        profile = [{ h: h0, z: soffit }, { h: h1, z: soffit }, { h: h1, z: top }, { h: h0, z: top }];
+      }
+      if (crossing) cut.push({ id: stair.id, kind: 'stair', profile });
+      else if (corners.some(p => sOf(p) > 0)) beyond.push({ id: stair.id, kind: 'stair', profile, depth: Math.max(0, Math.min(...corners.map(sOf))), risers: parallel ? 0 : stair.riserCount, from: from.elevationMm, rise });
+    }
+    for (const object of [...model.fixtures, ...model.equipment]) {
+      const corners = rotatedRect(object.position, object.size.x, object.size.y, object.rotationDeg), ss = corners.map(sOf);
+      if (Math.max(...ss) <= 0) continue;
+      const [h0, h1] = hRange(corners);
+      beyond.push({ id: object.id, kind: 'object', h0, h1, z0: object.position.z, z1: object.position.z + object.size.z, depth: Math.max(0, Math.min(...ss)), crossed: Math.min(...ss) < 0 });
+    }
+    for (const roof of model.roofs) {
+      const surface = roofSurface(roof), extPoly = surface.corners;
+      const crossing = clipSegmentToConvex(section.start, section.end, extPoly);
+      if (crossing) {
+        const ts = [crossing[0], crossing[1]];
+        const ridgeT = surface.alongX ? (d.x ? (surface.mid - section.start.x) / (d.x * lengthAlong) : null) : (d.y ? (surface.mid - section.start.y) / (d.y * lengthAlong) : null);
+        if (ridgeT != null && ridgeT > crossing[0] && ridgeT < crossing[1]) ts.push(ridgeT);
+        roofCut.push({ id: roof.id, points: ts.map(t => ({ h: hOf(at(t)), z: surface.zAt(at(t)) })).sort((a, b) => a.h - b.h) });
+      }
+      const vertices = [...surface.corners.map(p => ({ ...p, z: surface.zAt(p) })), ...surface.ridgeEnds.map(p => ({ ...p, z: roof.ridgeElevationMm }))];
+      const edges = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [4, 0], [4, 1], [5, 2], [5, 3], [4, 3], [5, 0], [5, 1], [4, 2]];
+      const kept = vertices.filter(p => sOf(p) >= 0);
+      for (const [i, j] of edges) {
+        const a = vertices[i], b = vertices[j], sa = sOf(a), sb = sOf(b);
+        if ((sa >= 0) !== (sb >= 0)) { const t = sa / (sa - sb); kept.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t }); }
+      }
+      if (kept.length >= 3) beyond.push({ id: roof.id, kind: 'roof', hull: convexHull(kept.map(p => ({ x: hOf(p), y: p.z }))), depth: Infinity });
+    }
+    return { cut, beyond, roofCut, hOf };
+  }
+
+  function renderSectionSheet(model, sectionId) {
+    const section = (model.sections ?? []).find(item => item.id === sectionId) ?? model.sections?.[0];
+    if (!section) return null;
+    const geometry = sectionGeometry(model, section), roof = model.roofs[0];
+    const hs = [], zs = [model.project.coordinates.siteDatumMm ?? 0];
+    for (const item of [...geometry.cut, ...geometry.beyond]) {
+      if (item.profile) { hs.push(...item.profile.map(p => p.h)); zs.push(...item.profile.map(p => p.z)); }
+      else if (item.hull) { hs.push(...item.hull.map(p => p.x)); zs.push(...item.hull.map(p => p.y)); }
+      else { hs.push(item.h0, item.h1); zs.push(item.z0, item.z1); }
+    }
+    for (const piece of geometry.roofCut) { hs.push(...piece.points.map(p => p.h)); zs.push(...piece.points.map(p => p.z)); }
+    const minH = Math.min(...hs), maxH = Math.max(...hs);
+    const letter = sectionLetter(model, section.id);
+    return renderVerticalSheet(model, 'section', { sheetId: sectionSheetId(model, section.id), title: section.name || `Section ${letter}-${letter}` }, {
+      extent: { minH, maxH, minZ: Math.min(...zs), maxZ: Math.max(...zs) },
+      draw(ctx) {
+        const { map, profile, warnings } = ctx, P = profile.pens, parts = [];
+        const rect = item => [map(item.h0, item.z1), map(item.h1, item.z1), map(item.h1, item.z0), map(item.h0, item.z0)];
+        for (const item of [...geometry.beyond].sort((a, b) => b.depth - a.depth)) {
+          const pen = item.depth < 1000 ? P.medium : P.thin;
+          if (item.kind === 'roof') parts.push(`<g data-entity="${escapeHtml(item.id)}">${svgPoly(item.hull.map(p => map(p.x, p.y)), { fill: DRAFT.paper, width: P.thin })}</g>`);
+          else if (item.kind === 'stair') {
+            const lines = [svgPoly(item.profile.map(p => map(p.h, p.z)), { fill: DRAFT.paper, width: pen })];
+            for (let i = 1; i < item.risers; i += 1) { const z = item.from + item.rise * i, a = map(item.profile[0].h, z), b = map(item.profile[1].h, z); lines.push(svgLine(a, b, { width: P.fine })); }
+            parts.push(`<g data-entity="${escapeHtml(item.id)}">${lines.join('')}</g>`);
+          } else if (item.kind === 'object') parts.push(`<g data-entity="${escapeHtml(item.id)}">${svgPoly(rect(item), { fill: DRAFT.paper, width: item.crossed ? P.medium : P.thin })}</g>`);
+          else {
+            const openings = (item.openings ?? []).map(box => `<g data-entity="${escapeHtml(box.id)}">${svgPoly(rect(box), { fill: DRAFT.paper, width: P.thin })}</g>`).join('');
+            parts.push(`<g data-entity="${escapeHtml(item.id)}">${svgPoly(rect(item), { fill: DRAFT.paper, width: pen })}${openings}</g>`);
+          }
+        }
+        const cutShapes = geometry.cut.map(item => ({ id: item.id, points: item.profile ? item.profile.map(p => map(p.h, p.z)) : rect(item) }));
+        parts.push(cutShapes.map(shape => `<g data-entity="${escapeHtml(shape.id)}">${svgPoly(shape.points, { fill: DRAFT.poche, width: P.cut * 2, join: 'miter' })}</g>`).join(''));
+        parts.push(cutShapes.map(shape => svgPoly(shape.points, { fill: DRAFT.poche, width: 0, inert: true })).join(''));
+        for (const piece of geometry.roofCut) parts.push(`<g data-entity="${escapeHtml(piece.id)}">${svgPoly(piece.points.map(p => map(p.h, p.z)), { open: true, width: P.cut, join: 'miter' })}</g>`);
+        if (!geometry.cut.length && !geometry.roofCut.length) warnings.push({ severity: 'warning', code: 'section.empty', message: `${section.name} does not cut any modelled element.`, entityId: section.id });
+        parts.push(verticalAnnotations(model, ctx, minH, maxH, roof));
+        return parts.join('');
+      }
+    });
+  }
+
+  // Full drawing set for the model. scripts/export-drawings.ts writes these files; the viewer
+  // only downloads what that script already wrote.
+  function renderDrawingSet(model) {
+    const sheets = [];
+    for (const level of sortedLevels(model)) sheets.push({ path: `exports/plans/${level.id}.svg`, ...renderPlanSheet(model, level.id) });
+    for (const side of ['north', 'east', 'south', 'west']) sheets.push({ path: `exports/elevations/${side}.svg`, ...renderElevationSheet(model, side) });
+    for (const section of model.sections ?? []) sheets.push({ path: `exports/sections/${section.id}.svg`, ...renderSectionSheet(model, section.id) });
+    for (const level of sortedLevels(model)) sheets.push({ path: `exports/systems/${level.id}.svg`, ...renderPlanSheet(model, level.id, { systems: new Set(Object.keys(DISCIPLINES)) }) });
+    return sheets;
+  }
+  // FNV-1a over canonical model JSON. Lets the viewer tell whether exported drawings are stale.
+  function modelFingerprint(model) {
+    const text = JSON.stringify(model);
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < text.length; i += 1) { hash ^= text.charCodeAt(i); hash = Math.imul(hash, 0x01000193) >>> 0; }
+    return hash.toString(16).padStart(8, '0');
+  }
+
+  function planSvg(includeSystems) {
+    return renderPlanSheet(state.model, state.levelId, includeSystems ? { systems: state.systems } : {}).svg;
+  }
+  function elevationSvg() {
+    return renderElevationSheet(state.model, state.elevation).svg;
+  }
+  function sectionSvg() {
+    return renderSectionSheet(state.model, state.sectionId)?.svg ?? '';
+  }
+
+  function entityExists(id) {
+    return Boolean(id) && allEntityIds(state.model).some(entity => entity.id === id);
+  }
+  function findingMarkup(severityLabel, title, body, className, entityId) {
+    const inner = `<b><span class="severity">${escapeHtml(severityLabel)}</span> · ${escapeHtml(title)}</b><span>${escapeHtml(body)}</span>`;
+    return entityExists(entityId)
+      ? `<button type="button" class="finding ${className}" data-select="${escapeHtml(entityId)}" aria-label="${escapeHtml(`${severityLabel}: ${title}. Select in drawing`)}">${inner}</button>`
+      : `<div class="finding ${className}">${inner}</div>`;
+  }
+
+  function renderDocument(kind) {
+    if (kind === 'assumptions') {
+      const rows = state.model.assumptions.map(item => `<tr data-entity="${escapeHtml(item.id)}" tabindex="0"><td>${escapeHtml(item.topic)}</td><td>${escapeHtml(item.statement)}</td><td>${escapeHtml(item.impact)}</td></tr>`).join('');
+      content.innerHTML = `<div class="page"><h1>Assumptions stay attached to the model.</h1><p>Every unresolved fact is listed here instead of disappearing behind finished-looking drawings. Select a row to inspect it.</p>${rows ? `<table><thead><tr><th scope="col">Topic</th><th scope="col">Statement</th><th scope="col">Impact</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty">The model records no assumptions yet. Add them to models/building.json before handoff.</div>'}<div class="disclaimer">Concept only. A licensed architect and the relevant engineering disciplines must verify these assumptions before they inform construction.</div></div>`;
+      return;
+    }
+    const jurisdiction = state.model.project.jurisdiction;
+    const report = state.codeReport;
+    const reportBody = report.status === 'loaded'
+      ? `<h2>Findings</h2>${report.data.findings.map(finding => findingMarkup(finding.status, finding.topic, `${finding.summary} Source: ${finding.authority}, ${finding.sourceTitle} (${finding.sourceRef}; accessed ${finding.accessedDate}).`, finding.status === 'needs-review' ? 'warning' : 'advisory', finding.affectedEntityIds?.[0])).join('') || '<div class="empty">The report contains no findings.</div>'}<h2>Coverage</h2><table><tbody>${Object.entries(report.data.coverage).map(([key, values]) => `<tr><th scope="row">${escapeHtml(key)}</th><td>${escapeHtml(values.join('; ') || 'None recorded')}</td></tr>`).join('')}</tbody></table>`
+      : `<h2>Coverage</h2><div class="empty">${escapeHtml(report.message)} Research adopted codes and local amendments from official sources, or attach source documents. Until then, all code-sensitive decisions remain unresolved.</div>`;
+    content.innerHTML = `<div class="page"><h1>No compliance claim without evidence.</h1><p>This model targets ${escapeHtml([jurisdiction.locality, jurisdiction.county, jurisdiction.stateOrRegion, jurisdiction.country].filter(Boolean).join(', '))}. Its code review status is <strong>${escapeHtml(jurisdiction.codeReviewStatus)}</strong>.</p>${reportBody}<div class="disclaimer">Advisory only. Confirm interpretations with the authority having jurisdiction and licensed professionals.</div></div>`;
+  }
+
+  function selectedEntity() {
+    return allEntityIds(state.model).find(entity => entity.id === state.selected) ?? null;
+  }
+
+  function renderInspector() {
+    const entity = selectedEntity();
+    const findings = [...state.findings, ...state.renderWarnings];
+    const errors = findings.filter(item => item.severity === 'error');
+    if (entity) {
+      const ev = entity.evidence ?? evidence('Derived output without authored evidence.');
+      inspector.innerHTML = `<h2>${escapeHtml(entity.name ?? entity.id)}</h2><p class="lede">${escapeHtml(entity.use ?? entity.kind ?? entity.discipline ?? entity.statement ?? 'Model entity')}</p><dl class="metric"><dt>ID</dt><dd>${escapeHtml(entity.id)}</dd><dt>Source</dt><dd>${escapeHtml(ev.source)}</dd><dt>Confidence</dt><dd>${Math.round((ev.confidence ?? 0) * 100)}%</dd><dt>Status</dt><dd>${escapeHtml(ev.status)}</dd></dl><h3>Evidence</h3><p class="lede">${escapeHtml(ev.note)}</p><p><button type="button" class="tool" id="clear-selection">Clear selection</button></p><div class="disclaimer">Concept only. Selected geometry and systems require professional verification.</div>`;
+      $('#clear-selection')?.addEventListener('click', () => select(null));
+      return;
+    }
+    const counts = findings.reduce((out, finding) => { out[finding.severity] = (out[finding.severity] ?? 0) + 1; return out; }, {});
+    const list = findings.slice(0, 10).map(item => findingMarkup(item.severity, item.code, item.message, item.severity, item.entityId)).join('');
+    inspector.innerHTML = `<h2>${errors.length ? 'Resolve model errors' : 'Internally consistent concept'}</h2><p class="lede">${escapeHtml(state.model.project.description ?? '')}</p><dl class="metric"><dt>Levels</dt><dd>${state.model.levels.length}</dd><dt>Spaces</dt><dd>${state.model.spaces.length}</dd><dt>Openings</dt><dd>${state.model.openings.length}</dd><dt>System networks</dt><dd>${state.model.systems.length}</dd><dt>Sections</dt><dd>${(state.model.sections ?? []).length}</dd><dt>Errors</dt><dd>${counts.error ?? 0}</dd><dt>Warnings</dt><dd>${counts.warning ?? 0}</dd><dt>Advisories</dt><dd>${counts.advisory ?? 0}</dd></dl><h3>Priority findings</h3><div class="diagnostics">${list || '<p class="lede">No findings.</p>'}</div><div class="disclaimer">Concept only. This is not a permit set, engineering design, survey, or construction document.</div>`;
+    inspector.querySelectorAll('[data-select]').forEach(button => button.addEventListener('click', () => select(button.dataset.select)));
+  }
+
+  let glState = null;
+  function initWebGL() {
+    const gl = canvas.getContext('webgl2', { antialias: true, alpha: false });
+    if (!gl) { state.findings.unshift({ severity: 'error', code: 'webgl.unavailable', message: 'WebGL2 is unavailable; the 3D view cannot render.' }); renderInspector(); return null; }
+    const vertexSource = `#version 300 es\nin vec3 aPosition;in vec3 aColor;uniform mat4 uMvp;out vec3 vColor;void main(){vColor=aColor;gl_Position=uMvp*vec4(aPosition,1.0);}`;
+    const fragmentSource = `#version 300 es\nprecision highp float;in vec3 vColor;out vec4 outColor;void main(){outColor=vec4(vColor,1.0);}`;
+    const compile = (type, source) => { const shader = gl.createShader(type); gl.shaderSource(shader, source); gl.compileShader(shader); if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader)); return shader; };
+    const program = gl.createProgram(); gl.attachShader(program, compile(gl.VERTEX_SHADER, vertexSource)); gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragmentSource)); gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
+    const gls = { gl, program, position: gl.getAttribLocation(program, 'aPosition'), color: gl.getAttribLocation(program, 'aColor'), mvp: gl.getUniformLocation(program, 'uMvp'), triangles: [], lines: [], yaw: .72, pitch: .47, radius: 24, dragging: false, lastX: 0, lastY: 0, walkPosition: [4.8, 1.7, -9.2] };
+    buildScene(gls); bind3DControls(gls); return gls;
+  }
+
+  const rgb = hex => [parseInt(hex.slice(1, 3), 16) / 255, parseInt(hex.slice(3, 5), 16) / 255, parseInt(hex.slice(5, 7), 16) / 255];
+  function pushPrism(target, cx, cy, cz, length, height, depth, angle, color) {
+    const c = Math.cos(angle), s = Math.sin(angle), hx = length / 2, hy = height / 2, hz = depth / 2;
+    const local = [[-hx,-hy,-hz],[hx,-hy,-hz],[hx,hy,-hz],[-hx,hy,-hz],[-hx,-hy,hz],[hx,-hy,hz],[hx,hy,hz],[-hx,hy,hz]];
+    const points = local.map(([x,y,z]) => [cx + x*c - z*s, cy + y, cz + x*s + z*c]);
+    const faces = [[0,2,1,0,3,2],[5,7,4,5,6,7],[4,3,0,4,7,3],[1,6,5,1,2,6],[3,6,2,3,7,6],[4,1,5,4,0,1]];
+    faces.flat().forEach(index => target.push(...points[index], ...color));
+  }
+
+  function pushLine(target, a, b, color) { target.push(a[0],a[1],a[2],...color,b[0],b[1],b[2],...color); }
+  const worldPoint = point => [point.x / 1000, point.z / 1000, -point.y / 1000];
+
+  function buildScene(gls) {
+    gls.triangles.length = 0; gls.lines.length = 0; const model = state.model;
+    const levelMap = new Map(model.levels.map(level => [level.id, level]));
+    for (const slab of model.slabs) {
+      const level = levelMap.get(slab.levelId); const bounds = rectangleBounds(slab.boundary);
+      pushPrism(gls.triangles, (bounds.minX+bounds.maxX)/2000, ((level?.elevationMm ?? 0)-slab.thicknessMm/2)/1000, -(bounds.minY+bounds.maxY)/2000, (bounds.maxX-bounds.minX)/1000, slab.thicknessMm/1000, (bounds.maxY-bounds.minY)/1000, 0, rgb('#b9b8b0'));
+    }
+    for (const wall of model.walls) {
+      const level = levelMap.get(wall.levelId); const length = Math.hypot(wall.end.x-wall.start.x,wall.end.y-wall.start.y); const openings = model.openings.filter(item => item.wallId === wall.id).sort((a,b)=>a.offsetMm-b.offsetMm);
+      const angle = Math.atan2(-(wall.end.y-wall.start.y), wall.end.x-wall.start.x); const unit = { x:(wall.end.x-wall.start.x)/length, y:(wall.end.y-wall.start.y)/length };
+      const addChunk = (from,to,z0,z1) => { if (to-from < 1 || z1-z0 < 1) return; const offset=(from+to)/2; const x=wall.start.x+unit.x*offset; const y=wall.start.y+unit.y*offset; pushPrism(gls.triangles,x/1000,((level?.elevationMm??0)+(wall.baseOffsetMm??0)+z0+(z1-z0)/2)/1000,-y/1000,(to-from)/1000,(z1-z0)/1000,wall.thicknessMm/1000,angle,rgb(wall.kind==='exterior'?'#d6d0c3':'#b8c7bd')); };
+      let cursor=0; for(const opening of openings){addChunk(cursor,opening.offsetMm,0,wall.heightMm);addChunk(opening.offsetMm,opening.offsetMm+opening.widthMm,0,opening.sillMm);addChunk(opening.offsetMm,opening.offsetMm+opening.widthMm,opening.sillMm+opening.heightMm,wall.heightMm);cursor=opening.offsetMm+opening.widthMm;} addChunk(cursor,length,0,wall.heightMm);
+    }
+    for (const object of [...model.fixtures, ...model.equipment]) {
+      const color = object.kind.includes('panel') ? DISCIPLINES.electrical.color : object.kind.includes('heat') ? DISCIPLINES.mechanical.color : '#c8a46b';
+      pushPrism(gls.triangles, object.position.x/1000, (object.position.z+object.size.z/2)/1000, -object.position.y/1000, object.size.x/1000, object.size.z/1000, object.size.y/1000, -object.rotationDeg*Math.PI/180, rgb(color));
+    }
+    for (const stair of model.stairs) {
+      const from = levelMap.get(stair.fromLevelId), to = levelMap.get(stair.toLevelId);
+      const dx = stair.end.x - stair.start.x, dy = stair.end.y - stair.start.y, run = Math.hypot(dx, dy), angle = Math.atan2(-dy, dx);
+      for (let index = 0; index < stair.riserCount; index += 1) {
+        const t = (index + .5) / stair.riserCount, height = (to.elevationMm - from.elevationMm) * (index + 1) / stair.riserCount;
+        pushPrism(gls.triangles, (stair.start.x + dx * t) / 1000, (from.elevationMm + height / 2) / 1000, -(stair.start.y + dy * t) / 1000, run / stair.riserCount / 1000, height / 1000, stair.widthMm / 1000, angle, rgb('#9b8b76'));
+      }
+    }
+    for (const roof of model.roofs) {
+      // Gable wireframe: eaves, ridge, and the four rakes that tie the ridge back to the eave corners.
+      const surface = roofSurface(roof), lineColor = rgb('#7a6650');
+      const corners = surface.corners.map(p => ({ ...p, z: surface.zAt(p) }));
+      const ridge = surface.ridgeEnds.map(p => ({ ...p, z: roof.ridgeElevationMm }));
+      corners.forEach((p, i) => pushLine(gls.lines, worldPoint(p), worldPoint(corners[(i + 1) % 4]), lineColor));
+      pushLine(gls.lines, worldPoint(ridge[0]), worldPoint(ridge[1]), lineColor);
+      const rakes = surface.alongX ? [[0, 0], [0, 1], [1, 2], [1, 3]] : [[0, 0], [0, 3], [1, 1], [1, 2]];
+      for (const [r, c] of rakes) pushLine(gls.lines, worldPoint(ridge[r]), worldPoint(corners[c]), lineColor);
+    }
+    for (const system of model.systems) if (state.systems.has(system.discipline)) for (const edge of system.edges) for (let i=1;i<edge.path.length;i++) pushLine(gls.lines,worldPoint(edge.path[i-1]),worldPoint(edge.path[i]),rgb(DISCIPLINES[system.discipline].color));
+  }
+
+  function mat4Perspective(fov, aspect, near, far) { const f=1/Math.tan(fov/2),nf=1/(near-far); return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)*nf,-1,0,0,2*far*near*nf,0]); }
+  function normalize(v){const l=Math.hypot(...v)||1;return v.map(n=>n/l);} function cross(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];} function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+  function mat4LookAt(eye, center) { const z=normalize([eye[0]-center[0],eye[1]-center[1],eye[2]-center[2]]),x=normalize(cross([0,1,0],z)),y=cross(z,x); return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,eye),-dot(y,eye),-dot(z,eye),1]); }
+  function mat4Multiply(a,b){const out=new Float32Array(16);for(let col=0;col<4;col++)for(let row=0;row<4;row++){let sum=0;for(let k=0;k<4;k++)sum+=a[row+k*4]*b[k+col*4];out[row+col*4]=sum;}return out;}
+
+  function drawBuffer(gls, data, mode) {
+    if (!data.length) return; const {gl}=gls, buffer=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buffer); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW); gl.enableVertexAttribArray(gls.position); gl.vertexAttribPointer(gls.position,3,gl.FLOAT,false,24,0); gl.enableVertexAttribArray(gls.color); gl.vertexAttribPointer(gls.color,3,gl.FLOAT,false,24,12); gl.drawArrays(mode,0,data.length/6); gl.deleteBuffer(buffer);
+  }
+
+  function renderWebGL() {
+    if (!glState) glState=initWebGL(); if (!glState) return; const {gl}=glState; const rect=canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2),w=Math.max(1,Math.floor(rect.width*dpr)),h=Math.max(1,Math.floor(rect.height*dpr)); if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;} gl.viewport(0,0,w,h); gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.clearColor(.875,.902,.886,1); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    const bounds=modelBounds(state.model),center=[(bounds.minX+bounds.maxX)/2000,3.7,-(bounds.minY+bounds.maxY)/2000]; let eye,target;
+    if(state.cameraMode==='orbit'){const cp=Math.cos(glState.pitch);eye=[center[0]+Math.sin(glState.yaw)*cp*glState.radius,center[1]+Math.sin(glState.pitch)*glState.radius,center[2]+Math.cos(glState.yaw)*cp*glState.radius];target=center;}else{eye=glState.walkPosition;target=[eye[0]+Math.sin(glState.yaw),eye[1]+Math.tan(glState.pitch),eye[2]-Math.cos(glState.yaw)];}
+    const mvp=mat4Multiply(mat4Perspective(Math.PI/3,w/h,.05,200),mat4LookAt(eye,target)); gl.useProgram(glState.program); gl.uniformMatrix4fv(glState.mvp,false,mvp); drawBuffer(glState,glState.triangles,gl.TRIANGLES); gl.lineWidth(3); drawBuffer(glState,glState.lines,gl.LINES);
+  }
+
+  function bind3DControls(gls) {
+    canvas.addEventListener('pointerdown',event=>{gls.dragging=true;gls.lastX=event.clientX;gls.lastY=event.clientY;canvas.setPointerCapture(event.pointerId);});
+    canvas.addEventListener('pointerup',()=>gls.dragging=false);
+    canvas.addEventListener('pointermove',event=>{if(!gls.dragging)return;gls.yaw+=(event.clientX-gls.lastX)*.006;gls.pitch=Math.max(-1.2,Math.min(1.2,gls.pitch-(event.clientY-gls.lastY)*.006));gls.lastX=event.clientX;gls.lastY=event.clientY;renderWebGL();});
+    canvas.addEventListener('wheel',event=>{event.preventDefault();gls.radius=Math.max(7,Math.min(60,gls.radius+event.deltaY*.02));renderWebGL();},{passive:false});
+    canvas.addEventListener('keydown', event => {
+      const turns = { ArrowLeft: [-0.08, 0], ArrowRight: [0.08, 0], ArrowUp: [0, 0.06], ArrowDown: [0, -0.06] };
+      if (turns[event.key]) { gls.yaw += turns[event.key][0]; gls.pitch = Math.max(-1.2, Math.min(1.2, gls.pitch + turns[event.key][1])); }
+      else if (event.key === '+' || event.key === '=') gls.radius = Math.max(7, gls.radius - 1.5);
+      else if (event.key === '-' || event.key === '_') gls.radius = Math.min(60, gls.radius + 1.5);
+      else return;
+      event.preventDefault(); renderWebGL();
+    });
+    window.addEventListener('keydown',event=>{if(state.view!=='model'||state.cameraMode!=='walk')return;const speed=event.shiftKey?1:.45,forward=[Math.sin(gls.yaw),0,-Math.cos(gls.yaw)],right=[Math.cos(gls.yaw),0,Math.sin(gls.yaw)];if(event.key.toLowerCase()==='w')gls.walkPosition=gls.walkPosition.map((n,i)=>n+forward[i]*speed);if(event.key.toLowerCase()==='s')gls.walkPosition=gls.walkPosition.map((n,i)=>n-forward[i]*speed);if(event.key.toLowerCase()==='a')gls.walkPosition=gls.walkPosition.map((n,i)=>n-right[i]*speed);if(event.key.toLowerCase()==='d')gls.walkPosition=gls.walkPosition.map((n,i)=>n+right[i]*speed);if(event.key.toLowerCase()==='q')gls.walkPosition[1]=Math.max(.8,gls.walkPosition[1]-.2);if(event.key.toLowerCase()==='e')gls.walkPosition[1]=Math.min(8,gls.walkPosition[1]+.2);renderWebGL();});
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // Drawing-set download. Packages files scripts/export-drawings.ts already wrote.
+  // ---------------------------------------------------------------------------
+  const CRC_TABLE = (() => {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < 256; n += 1) { let c = n; for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; table[n] = c >>> 0; }
+    return table;
+  })();
+  function crc32(bytes) {
+    let c = 0xffffffff;
+    for (const byte of bytes) c = CRC_TABLE[(c ^ byte) & 255] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  }
+  // Store-only ZIP with a fixed 1980-01-01 timestamp so the same files give the same archive.
+  function zipFiles(files) {
+    const encoder = new TextEncoder(), parts = [], central = [];
+    let offset = 0;
+    for (const file of files) {
+      const name = encoder.encode(file.name), bytes = file.bytes, crc = crc32(bytes);
+      const local = new DataView(new ArrayBuffer(30));
+      [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, 0, 2], [12, 0x0021, 2], [14, crc, 4], [18, bytes.length, 4], [22, bytes.length, 4], [26, name.length, 2], [28, 0, 2]]
+        .forEach(([at, value, size]) => size === 4 ? local.setUint32(at, value, true) : local.setUint16(at, value, true));
+      const header = new DataView(new ArrayBuffer(46));
+      [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, 0, 2], [14, 0x0021, 2], [16, crc, 4], [20, bytes.length, 4], [24, bytes.length, 4], [28, name.length, 2], [30, 0, 2], [32, 0, 2], [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, offset, 4]]
+        .forEach(([at, value, size]) => size === 4 ? header.setUint32(at, value, true) : header.setUint16(at, value, true));
+      parts.push(new Uint8Array(local.buffer), name, bytes);
+      central.push(new Uint8Array(header.buffer), name);
+      offset += 30 + name.length + bytes.length;
+    }
+    const centralSize = central.reduce((sum, part) => sum + part.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, files.length, 2], [10, files.length, 2], [12, centralSize, 4], [16, offset, 4], [20, 0, 2]]
+      .forEach(([at, value, size]) => size === 4 ? end.setUint32(at, value, true) : end.setUint16(at, value, true));
+    const all = [...parts, ...central, new Uint8Array(end.buffer)];
+    const out = new Uint8Array(all.reduce((sum, part) => sum + part.length, 0));
+    let cursor = 0;
+    for (const part of all) { out.set(part, cursor); cursor += part.length; }
+    return out;
+  }
+
+  async function loadManifest() {
+    try {
+      const response = await fetch('./exports/manifest.json', { cache: 'no-store' });
+      if (response.status === 404) { state.manifest = { status: 'missing' }; return; }
+      if (!response.ok) { state.manifest = { status: 'invalid', message: `The drawing manifest request failed with status ${response.status}.` }; return; }
+      const data = await response.json();
+      if (data?.schemaVersion !== '1.0.0' || data.projectId !== state.model.project.id || !Array.isArray(data.files)) { state.manifest = { status: 'invalid', message: 'exports/manifest.json is malformed or belongs to another project.' }; return; }
+      state.manifest = { status: 'loaded', data, stale: data.modelFingerprint !== modelFingerprint(state.model) };
+    } catch (error) {
+      state.manifest = { status: 'missing' };
+    } finally {
+      updateDownloadState();
+    }
+  }
+  function updateDownloadState() {
+    const button = $('#download-set');
+    if (!button?.setAttribute) return;
+    const m = state.manifest;
+    button.setAttribute('aria-label', m.status === 'loaded' ? `Download drawing set, ${m.data.files.length} files${m.stale ? ', out of date' : ''}` : 'Download drawing set, not exported yet');
+  }
+  async function downloadDrawingSet() {
+    const m = state.manifest;
+    if (m.status !== 'loaded') {
+      downloadStatus.textContent = m.status === 'invalid' ? m.message : 'No drawing set has been exported yet. Run scripts/export-drawings.ts to write exports/, then reload this page.';
+      return;
+    }
+    downloadStatus.textContent = 'Packaging the drawing set...';
+    const encoder = new TextEncoder(), files = [{ name: 'exports/manifest.json', bytes: encoder.encode(JSON.stringify(m.data, null, 2)) }], missing = [];
+    for (const entry of [...m.data.files, ...(m.data.artifacts ?? [])]) {
+      try {
+        const response = await fetch(`./${entry.path}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error(String(response.status));
+        files.push({ name: entry.path, bytes: new Uint8Array(await response.arrayBuffer()) });
+      } catch { missing.push(entry.path); }
+    }
+    const blob = new Blob([zipFiles(files)], { type: 'application/zip' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${state.model.project.id}-drawing-set.zip`;
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+    downloadStatus.textContent = [
+      `Downloaded ${files.length} files as ${link.download}.`,
+      m.stale ? 'The exported drawings predate the current model. Rerun scripts/export-drawings.ts to refresh them.' : '',
+      missing.length ? `Not found: ${missing.join(', ')}.` : ''
+    ].filter(Boolean).join(' ');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Viewer runtime
+  // ---------------------------------------------------------------------------
+  const PX_PER_MM = 96 / 25.4;
+  const sheetView = { zoom: 1, fitZoom: 1, x: 0, y: 0, width: 0, height: 0, adjusted: false };
+  const pointers = new Map();
+  let dragDistance = 0;
+
+  function applySheetTransform() { sheetStage.style.transform = `translate(${sheetView.x}px, ${sheetView.y}px) scale(${sheetView.zoom})`; }
+  function fitSheet() {
+    const rect = viewport.getBoundingClientRect();
+    if (!sheetView.width || !rect.width || !rect.height) return;
+    const zoom = Math.min(rect.width / sheetView.width, rect.height / sheetView.height) * 0.96;
+    Object.assign(sheetView, { zoom, fitZoom: zoom, x: (rect.width - sheetView.width * zoom) / 2, y: (rect.height - sheetView.height * zoom) / 2, adjusted: false });
+    applySheetTransform();
+  }
+  function zoomAt(factor, cx, cy) {
+    const rect = viewport.getBoundingClientRect();
+    const px = cx ?? rect.width / 2, py = cy ?? rect.height / 2;
+    const next = Math.min(sheetView.fitZoom * 12, Math.max(sheetView.fitZoom * 0.5, sheetView.zoom * factor));
+    sheetView.x = px - (px - sheetView.x) * (next / sheetView.zoom);
+    sheetView.y = py - (py - sheetView.y) * (next / sheetView.zoom);
+    sheetView.zoom = next; sheetView.adjusted = true;
+    applySheetTransform();
+  }
+  function panBy(dx, dy) { sheetView.x += dx; sheetView.y += dy; sheetView.adjusted = true; applySheetTransform(); }
+
+  function currentSheetResult() {
+    if (state.view === 'plan') return renderPlanSheet(state.model, state.levelId);
+    if (state.view === 'systems') return renderPlanSheet(state.model, state.levelId, { systems: state.systems });
+    if (state.view === 'elevation') return renderElevationSheet(state.model, state.elevation);
+    if (state.view === 'section') return renderSectionSheet(state.model, state.sectionId);
+    return null;
+  }
+  function entityLabel(id) {
+    const entity = allEntityIds(state.model).find(item => item.id === id);
+    return entity?.name ?? entity?.kind ?? id;
+  }
+  function renderSheetView(refit) {
+    const focusedId = document.activeElement?.closest?.('[data-entity]')?.dataset.entity;
+    const result = currentSheetResult();
+    if (!result) {
+      sheetStage.innerHTML = '';
+      state.renderWarnings = [];
+      showStageStatus('No section definitions', 'Add sections to models/building.json to draw building sections.');
+      return;
+    }
+    showStageStatus(null);
+    state.renderWarnings = result.warnings;
+    sheetStage.innerHTML = result.svg;
+    const svg = sheetStage.querySelector('svg');
+    const { w, h } = profileFor(state.model).sheet;
+    sheetView.width = w * PX_PER_MM; sheetView.height = h * PX_PER_MM;
+    svg.style.width = `${sheetView.width}px`; svg.style.height = `${sheetView.height}px`;
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', `${result.sheetId} ${result.title}, scale ${result.scaleLabel}`);
+    const seen = new Set();
+    sheetStage.querySelectorAll('[data-entity]').forEach(el => {
+      const id = el.dataset.entity;
+      el.classList.toggle('is-selected', id === state.selected);
+      if (seen.has(id)) return;
+      seen.add(id);
+      el.setAttribute('tabindex', '0');
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', `Inspect ${entityLabel(id)}`);
+    });
+    if (refit || !sheetView.adjusted) fitSheet(); else applySheetTransform();
+    if (focusedId) sheetStage.querySelector(`[data-entity="${CSS.escape(focusedId)}"][tabindex]`)?.focus({ preventScroll: true });
+  }
+  function showStageStatus(title, detail) {
+    stageStatus.classList.toggle('hidden-view', !title);
+    if (title) stageStatus.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail ?? '')}</span>`;
+  }
+  function select(id) {
+    state.selected = id && entityExists(id) ? id : null;
+    sheetStage.querySelectorAll?.('[data-entity]').forEach(el => el.classList.toggle('is-selected', el.dataset.entity === state.selected));
+    renderInspector();
+  }
+
+  function render(options = {}) {
+    if (!state.model) return;
+    const isSheet = SHEET_VIEWS.includes(state.view), isDocument = DOCUMENT_VIEWS.includes(state.view), isModel = state.view === 'model';
+    viewport.classList.toggle('hidden-view', !isSheet);
+    canvas.classList.toggle('hidden-view', !isModel);
+    content.classList.toggle('hidden-view', !isDocument);
+    modelHelp.classList.toggle('hidden-view', !isModel);
+    $('#level-control').classList.toggle('hidden-view', !['plan', 'systems'].includes(state.view));
+    $('#elevation-control').classList.toggle('hidden-view', state.view !== 'elevation');
+    $('#section-control').classList.toggle('hidden-view', state.view !== 'section' || !(state.model.sections ?? []).length);
+    $('#zoom-controls').classList.toggle('hidden-view', !isSheet);
+    $('#camera-controls').classList.toggle('hidden-view', !isModel);
+    $('#system-controls').classList.toggle('hidden-view', !['systems', 'model'].includes(state.view));
+    document.querySelectorAll('.tab').forEach(tab => {
+      const active = tab.dataset.view === state.view;
+      tab.setAttribute('aria-selected', String(active));
+      tab.setAttribute('tabindex', active ? '0' : '-1');
+      if (active) $('#stage').setAttribute('aria-labelledby', tab.id);
+    });
+    if (!isSheet) showStageStatus(null);
+    if (isSheet) renderSheetView(options.refit);
+    else state.renderWarnings = [];
+    if (isModel) { if (glState) buildScene(glState); requestAnimationFrame(renderWebGL); }
+    if (isDocument) {
+      renderDocument(state.view);
+      content.querySelectorAll('[data-select]').forEach(button => button.addEventListener('click', () => select(button.dataset.select)));
+      content.querySelectorAll('tr[data-entity]').forEach(row => {
+        row.addEventListener('click', () => select(row.dataset.entity));
+        row.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(row.dataset.entity); } });
+      });
+    }
+    renderInspector();
+  }
+
+  function setView(view, focusTab) {
+    if (!ALL_VIEWS.includes(view)) return;
+    const changed = view !== state.view;
+    state.view = view;
+    render({ refit: changed });
+    if (focusTab) $(`#tab-${view}`).focus();
+  }
+
+  function wireControls() {
+    const tabs = [...document.querySelectorAll('.tab')];
+    tabs.forEach(tab => tab.addEventListener('click', () => setView(tab.dataset.view)));
+    $('.tabs').addEventListener('keydown', event => {
+      const index = tabs.findIndex(tab => tab.dataset.view === state.view);
+      const next = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: tabs.length - 1 }[event.key];
+      if (next === undefined) return;
+      event.preventDefault();
+      setView(tabs[(next + tabs.length) % tabs.length].dataset.view, true);
+    });
+    levelSelect.addEventListener('change', () => { state.levelId = levelSelect.value; render(); });
+    elevationSelect.addEventListener('change', () => { state.elevation = elevationSelect.value; render({ refit: true }); });
+    sectionSelect.addEventListener('change', () => { state.sectionId = sectionSelect.value; render({ refit: true }); });
+    $('#zoom-in').addEventListener('click', () => zoomAt(1.25));
+    $('#zoom-out').addEventListener('click', () => zoomAt(0.8));
+    $('#zoom-fit').addEventListener('click', fitSheet);
+    document.querySelectorAll('.system-toggle').forEach(button => button.addEventListener('click', () => {
+      const key = button.dataset.system;
+      if (state.systems.has(key)) state.systems.delete(key); else state.systems.add(key);
+      button.setAttribute('aria-pressed', String(state.systems.has(key)));
+      render();
+    }));
+    const setCamera = mode => {
+      state.cameraMode = mode;
+      $('#mode-orbit').setAttribute('aria-pressed', String(mode === 'orbit'));
+      $('#mode-walk').setAttribute('aria-pressed', String(mode === 'walk'));
+      render();
+    };
+    $('#mode-orbit').addEventListener('click', () => setCamera('orbit'));
+    $('#mode-walk').addEventListener('click', () => setCamera('walk'));
+    $('#download-set').addEventListener('click', downloadDrawingSet);
+
+    viewport.addEventListener('wheel', event => {
+      event.preventDefault();
+      const rect = viewport.getBoundingClientRect();
+      zoomAt(Math.exp(-event.deltaY * 0.0015), event.clientX - rect.left, event.clientY - rect.top);
+    }, { passive: false });
+    viewport.addEventListener('pointerdown', event => {
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.size === 1) dragDistance = 0;
+      viewport.setPointerCapture(event.pointerId);
+      viewport.classList.add('dragging');
+    });
+    viewport.addEventListener('pointermove', event => {
+      const previous = pointers.get(event.pointerId); if (!previous) return;
+      const current = { x: event.clientX, y: event.clientY };
+      if (pointers.size === 1) {
+        dragDistance += Math.hypot(current.x - previous.x, current.y - previous.y);
+        if (dragDistance > 4) panBy(current.x - previous.x, current.y - previous.y);
+      } else if (pointers.size === 2) {
+        const other = [...pointers.entries()].find(([id]) => id !== event.pointerId)[1];
+        const before = Math.hypot(previous.x - other.x, previous.y - other.y), after = Math.hypot(current.x - other.x, current.y - other.y);
+        const rect = viewport.getBoundingClientRect();
+        if (before > 0) zoomAt(after / before, (current.x + other.x) / 2 - rect.left, (current.y + other.y) / 2 - rect.top);
+        dragDistance = Infinity;
+      }
+      pointers.set(event.pointerId, current);
+    });
+    const release = event => { pointers.delete(event.pointerId); if (!pointers.size) viewport.classList.remove('dragging'); };
+    viewport.addEventListener('pointerup', event => {
+      if (pointers.size === 1 && dragDistance <= 4) {
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-entity]');
+        select(target?.dataset.entity ?? null);
+      }
+      release(event);
+    });
+    viewport.addEventListener('pointercancel', release);
+    viewport.addEventListener('keydown', event => {
+      const entity = event.target.closest?.('[data-entity]');
+      if (entity && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(entity.dataset.entity); return; }
+      if (event.key === 'Escape' && state.selected) { select(null); return; }
+      const step = 48, moves = { ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] };
+      if (event.target === viewport && moves[event.key]) { event.preventDefault(); panBy(...moves[event.key]); }
+      else if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomAt(1.25); }
+      else if (event.key === '-' || event.key === '_') { event.preventDefault(); zoomAt(0.8); }
+      else if (event.key === '0') { event.preventDefault(); fitSheet(); }
+    });
+    window.addEventListener('resize', () => {
+      if (SHEET_VIEWS.includes(state.view) && !sheetView.adjusted) fitSheet();
+      if (state.view === 'model') renderWebGL();
+    });
+  }
+
+  async function loadModel(params) {
+    const embedded = $('#embedded-model')?.textContent?.trim();
+    if (!params.get('model') && embedded) return JSON.parse(embedded);
+    const modelPath = params.get('model') || './models/building.json';
+    const response = await fetch(modelPath, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Model request failed: ${response.status}`);
+    return response.json();
+  }
+
+  async function start() {
+    try {
+      const params = new URLSearchParams(location.search);
+      state.model = await loadModel(params);
+      const requestedView = params.get('view'); if (ALL_VIEWS.includes(requestedView)) state.view = requestedView;
+      const requestedLevel = params.get('level'); state.levelId = state.model.levels.some(level => level.id === requestedLevel) ? requestedLevel : (sortedLevels(state.model)[0]?.id ?? null);
+      const requestedSection = params.get('section'); state.sectionId = (state.model.sections ?? []).some(item => item.id === requestedSection) ? requestedSection : (state.model.sections?.[0]?.id ?? null);
+      state.findings = validateModel(state.model);
+      const codePath = params.get('code') || './reviews/code-findings.json';
+      try {
+        const codeResponse = await fetch(codePath, { cache: 'no-store' });
+        if (codeResponse.ok) {
+          const data = await codeResponse.json();
+          const valid = data?.schemaVersion === '1.0.0' && data.projectId === state.model.project.id && Array.isArray(data.findings) && data.coverage && ['researched', 'needs-review', 'unavailable'].includes(data.status);
+          state.codeReport = valid ? { status: 'loaded', data } : { status: 'invalid', message: 'The advisory code report is malformed or belongs to another project.' };
+        } else if (codeResponse.status !== 404) state.codeReport = { status: 'invalid', message: `The advisory code report request failed with status ${codeResponse.status}.` };
+      } catch (error) {
+        state.codeReport = { status: 'invalid', message: `The advisory code report could not be read: ${error instanceof Error ? error.message : String(error)}` };
+      }
+      $('#project-name').textContent = state.model.project.name;
+      $('#project-meta').textContent = `${state.model.project.status} · ${profileFor(state.model).label}`;
+      if (state.findings.some(item => item.severity === 'error')) {
+        showStageStatus('Resolve model errors', 'The drawings stay hidden until every model error in the inspector is fixed.');
+        renderInspector();
+        return;
+      }
+      levelSelect.innerHTML = sortedLevels(state.model).map(level => `<option value="${escapeHtml(level.id)}"${level.id === state.levelId ? ' selected' : ''}>${escapeHtml(level.name)}</option>`).join('');
+      sectionSelect.innerHTML = (state.model.sections ?? []).map(section => `<option value="${escapeHtml(section.id)}"${section.id === state.sectionId ? ' selected' : ''}>${escapeHtml(section.name)}</option>`).join('');
+      elevationSelect.value = state.elevation;
+      wireControls();
+      render({ refit: true });
+      loadManifest();
+    } catch (error) {
+      showStageStatus('Model unavailable', 'Expected a schema-valid model at models/building.json. The studio does not invent fallback geometry.');
+      inspector.innerHTML = `<h2>Model unavailable</h2><p class="lede">${escapeHtml(error instanceof Error ? error.message : String(error))}</p><div class="disclaimer">Expected a schema-valid model at <code>models/building.json</code>. The studio will not invent fallback geometry.</div>`;
+    }
+  }
+
+  const studioApi = {
+    state, PROFILES, DISCIPLINES, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
+    renderPlanSheet, renderElevationSheet, renderSectionSheet, sectionGeometry, renderDrawingSet, modelFingerprint,
+    planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength
+  };
+  if (typeof globalThis.__OD_STUDIO_TEST__ === 'function') globalThis.__OD_STUDIO_TEST__(studioApi);
+  else start();
+})();
+</script>
 </body>
 </html>

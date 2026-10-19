@@ -2,8 +2,8 @@
 
 Architecture Studio is a portable OpenDesign plugin for exploring
 dimensionally consistent building ideas before professional design begins. One
-structured coordinate model drives plans, project-axis elevations, conceptual
-plumbing/electrical/mechanical systems, and an interactive 3D view.
+structured coordinate model drives drafted plan, elevation, section, and
+systems sheets, an exportable SVG drawing set, and an interactive 3D view.
 
 ## Scope
 
@@ -43,8 +43,11 @@ restricted until the user reviews and grants them.
 index.html
 models/building.json
 models/variants/*.json
+exports/manifest.json
 exports/plans/*.svg
 exports/elevations/*.svg
+exports/sections/*.svg
+exports/systems/*.svg
 reviews/code-findings.json
 reviews/code-review.md
 ASSUMPTIONS.md
@@ -59,6 +62,42 @@ override:
 assets/studio-template.html?model=../examples/lakeside-barn-residence/building.json
 ```
 
+Other query parameters: `view` (`plan`, `elevation`, `section`, `systems`,
+`model`, `code`, `assumptions`), `level`, and `section`.
+
+## Drawings
+
+Every drawing is a drafted sheet with a border, title block, view title,
+graphic scale bar, and (on plans) a north arrow. Linework weight, lettering,
+dimensions, and symbols follow `references/drafting-standard.md`:
+
+- `feet-inches` models use an NCS-informed imperial profile: ANSI B sheets,
+  architect's scales, architectural tick terminators.
+- `metric` models use an ISO-informed metric profile: A3 sheets, ISO scales,
+  arrow terminators, dimensions in millimetres.
+
+The profiles are informed by those standards; the drawings never claim
+conformance to them, and every title block reads "Concept - not for
+construction".
+
+The viewer around the sheets (tabs, toolbar, inspector, Code and Assumptions
+pages) follows `references/viewer-chrome.md`.
+
+## Exported Drawing Set
+
+`scripts/export-drawings.ts` renders every sheet with the same code the viewer
+runs and writes standalone SVG files plus `exports/manifest.json`:
+
+```bash
+node --experimental-strip-types scripts/export-drawings.ts --project <project-dir>
+```
+
+The script refuses to write anything while the model has validation errors.
+The manifest records a model fingerprint, so the viewer can tell when the
+exported drawings are older than the model. The viewer's **Download drawing
+set** button packages the files listed in the manifest into one ZIP; it does
+not render anything itself.
+
 ## Included Fixture
 
 `examples/lakeside-barn-residence/building.json` is synthetic. It exercises a
@@ -71,14 +110,18 @@ private address, satellite imagery, photographs, or construction documents.
 ```bash
 node --experimental-strip-types --test plugins/community/architecture-studio/tests/studio-template.test.ts
 corepack pnpm exec od plugin validate ./plugins/community/architecture-studio --no-daemon
+node --experimental-strip-types plugins/community/architecture-studio/scripts/build-preview.ts --check
 corepack pnpm guard
 corepack pnpm --filter @open-design/plugin-runtime typecheck
 ```
 
-Visual acceptance must confirm that plan, elevation, systems, and 3D views all
-use the same openings, levels, stair, roof, and system coordinates.
+Visual acceptance must confirm that plan, elevation, section, systems, and 3D
+views all use the same openings, levels, stair, roof, and system coordinates.
 
-Version 0.1 accepts section definitions for professional handoff but does not
-render or export section drawings. Slabs must be axis-aligned rectangles, and
-the active model may contain one axis-aligned rectangular gable roof. The
-studio blocks unsupported or invalid geometry instead of approximating it.
+`preview/index.html` is generated from the studio template with the example
+model embedded; regenerate it with `scripts/build-preview.ts` after changing
+either file.
+
+Slabs must be axis-aligned rectangles, and the active model may contain one
+axis-aligned rectangular gable roof. The studio blocks unsupported or invalid
+geometry instead of approximating it.

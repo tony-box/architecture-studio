@@ -27,6 +27,40 @@ Every renderer must expose inverse transforms for pointer inspection and
 coordinate readouts. A view may rotate or mirror its presentation, but entity
 coordinates remain unchanged.
 
+Drawings then map sheet coordinates onto paper millimetres at a standard plot
+scale (see `drafting-standard.md`). Pen widths and lettering are authored in
+paper millimetres, never in model millimetres.
+
+## Section Views
+
+A section definition is a vertical cutting plane through `start` and `end`.
+
+- Let `d` be the unit vector from `start` to `end`. The look direction `n` is
+  `d` rotated 90° counter-clockwise for `lookDirection: "left"` and clockwise
+  for `"right"`.
+- The horizontal drawing axis `h` runs to the viewer's right: `h = t` for
+  `left` and `h = -t` for `right`, where `t` is distance along `d` from
+  `start`. Vertical is `z`.
+- The signed depth of a point `p` is `s = (p - start) · n`. Geometry with
+  `s < 0` is behind the viewer and omitted. The far clip is the far edge of
+  the building extent.
+- An element is **cut** when the cutting segment crosses it. Cut elements draw
+  last with the `cut` pen and poché:
+  - Walls: the wall rectangle (centreline ± half thickness) crossed by the
+    segment, from base to top. If the crossing falls inside a hosted opening,
+    only the wall below the sill and above the head is cut.
+  - Slabs: the crossed interval from `elevation - thickness` to `elevation`.
+  - Roofs: the roof surface profile along the crossed interval, including
+    overhangs, as a cut line. No roof assembly thickness is invented.
+  - Stairs: the stepped profile projected onto the plane.
+- Elements with `s > 0` that are not cut are **beyond**. They are projected
+  onto the plane and drawn back to front (largest `s` first) with a paper fill
+  so nearer elements hide farther ones: walls and their openings at `medium`
+  when within 1 m of the plane and `thin` otherwise, fixtures and equipment at
+  `thin`, the roof silhouette at `thin`.
+- Every level contributes a datum line. The ground line runs across the full
+  drawing at `z = siteDatumMm`.
+
 ## Precision
 
 - Geometry computations use integer millimeters where practical.

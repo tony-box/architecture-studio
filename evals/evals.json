@@ -8,6 +8,7 @@
       "assertions": [
         "The result writes one active models/building.json source of truth",
         "Plans, elevations, sections, systems, and 3D derive from the same stable entity IDs",
+        "exports/ contains drafted plan, elevation, section, and systems sheets written by export-drawings.ts, with a manifest whose fingerprint matches the model",
         "The code review cites official jurisdiction sources or reports unavailable",
         "MEP routes are conceptual and disclose unresolved sizing and loads",
         "The handoff rejects permit-ready and code-compliant claims"
@@ -40,6 +41,7 @@
       "assertions": [
         "Only the canonical opening offset changes",
         "Every derived view resolves the same opening ID and new offset",
+        "The drawing set is re-exported so the manifest fingerprint matches the edited model",
         "No renderer-local opening coordinate is introduced"
       ]
     }

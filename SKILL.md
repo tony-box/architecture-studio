@@ -1,10 +1,10 @@
 ---
 name: architecture-studio
-description: Use this plugin to brainstorm close-to-accurate Architecture with dimensioned plans, project-axis elevations, conceptual MEP layouts, advisory local-code research, and an interactive 3D walkthrough.
+description: Use this plugin to brainstorm close-to-accurate architecture concepts with drafted plans, elevations, and sections, conceptual MEP layouts, advisory local-code research, and an interactive 3D walkthrough.
 license: MIT
 metadata:
   author: OpenDesign Community
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # Architecture Studio
@@ -24,8 +24,8 @@ survey accurate, or professionally engineered.
    room program, preferred units, and source materials. If a sketch or image is
    dimensional evidence, require at least one trusted calibration dimension.
 2. Read `references/coordinate-contract.md`,
-   `references/building.schema.json`, and `references/model-validation.md`
-   before authoring geometry.
+   `references/building.schema.json`, `references/model-validation.md`, and
+   `references/drafting-standard.md` before authoring geometry.
 3. Write one active model to `models/building.json`. Store complete alternative
    concepts under `models/variants/`; do not maintain separate plan, elevation,
    or 3D geometry sources.
@@ -38,12 +38,21 @@ survey accurate, or professionally engineered.
 6. Stabilize the architectural envelope, then place and route conceptual
    plumbing, electrical, and mechanical systems according to
    `references/mep-concept-rules.md`.
-7. Copy `assets/studio-template.html` to `index.html`. Version 0.1 renders
-   dimensioned plans, project-axis elevations, systems, and a conceptual 3D
-   model. Preserve section definitions for professional handoff, but do not
-   claim that this version renders or exports sections.
-8. Run the cross-view checklist in `references/checklist.md`, then write
+7. Copy `assets/studio-template.html` to `index.html`. It renders drafted
+   plan, elevation, section, and systems sheets plus a conceptual 3D model
+   from `models/building.json`, following `references/drafting-standard.md`
+   (NCS-informed for feet-inches models, ISO-informed for metric models). Add
+   section definitions for the cuts the handoff needs.
+8. Export the drawing set: copy `scripts/export-drawings.ts` into the project
+   and run `node --experimental-strip-types export-drawings.ts --project .`.
+   It renders every sheet with the same code as `index.html` and writes
+   `exports/**/*.svg` plus `exports/manifest.json`. Rerun it after every model
+   change; never hand-write or edit the SVG files. If the script cannot run
+   (no Node 24), say so in `HANDOFF.md` instead of producing drawings another
+   way. The viewer's Download drawing set button packages these files.
+9. Run the cross-view checklist in `references/checklist.md`, then write
    `ASSUMPTIONS.md` and `HANDOFF.md` for the architect and engineering team.
+   Rerun the export last so the manifest lists both handoff files.
 
 ## Output Contract
 
@@ -51,8 +60,11 @@ survey accurate, or professionally engineered.
 index.html
 models/building.json
 models/variants/*.json            # optional complete alternatives
-exports/plans/*.svg
-exports/elevations/*.svg
+exports/manifest.json             # written by export-drawings.ts
+exports/plans/*.svg               # A-1xx floor plans
+exports/elevations/*.svg          # A-2xx exterior elevations
+exports/sections/*.svg            # A-3xx building sections
+exports/systems/*.svg             # M-1xx systems coordination plans
 reviews/code-findings.json
 reviews/code-review.md
 ASSUMPTIONS.md

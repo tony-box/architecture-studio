@@ -1,0 +1,1177 @@
+{
+  "schemaVersion": "1.0.0",
+  "project": {
+    "id": "compact-metric-studio",
+    "name": "Compact Metric Studio House",
+    "status": "study",
+    "description": "Synthetic metric fixture with an L-shaped room, long labels, crowded dimensions, and sections through openings and a stair.",
+    "coordinates": {
+      "unit": "mm",
+      "origin": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "siteDatumMm": 0,
+      "trueNorthDeg": 0,
+      "toleranceMm": 3,
+      "displayUnits": "metric"
+    },
+    "jurisdiction": {
+      "country": "Example Country",
+      "stateOrRegion": "Example Region",
+      "locality": "Example Municipality",
+      "codeReviewStatus": "unavailable"
+    }
+  },
+  "levels": [
+    {
+      "id": "level-ground",
+      "name": "Ground Floor",
+      "elevationMm": 0,
+      "floorToFloorMm": 3000,
+      "evidence": {
+        "source": "generated",
+        "confidence": 1,
+        "status": "accepted",
+        "note": "Synthetic fixture datum."
+      }
+    },
+    {
+      "id": "level-upper",
+      "name": "Upper Floor",
+      "elevationMm": 3000,
+      "floorToFloorMm": 2800,
+      "evidence": {
+        "source": "generated",
+        "confidence": 1,
+        "status": "accepted",
+        "note": "Synthetic fixture datum."
+      }
+    }
+  ],
+  "spaces": [
+    {
+      "id": "space-living",
+      "name": "Open Plan Living, Dining and Kitchen Area",
+      "levelId": "level-ground",
+      "use": "living, dining, and kitchen",
+      "boundary": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 5200,
+          "y": 0
+        },
+        {
+          "x": 5200,
+          "y": 3600
+        },
+        {
+          "x": 8400,
+          "y": 3600
+        },
+        {
+          "x": 8400,
+          "y": 6000
+        },
+        {
+          "x": 0,
+          "y": 6000
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "L-shaped room exercises tag placement."
+      }
+    },
+    {
+      "id": "space-bath-ground",
+      "name": "Shower Room",
+      "levelId": "level-ground",
+      "use": "shower and WC",
+      "boundary": [
+        {
+          "x": 5200,
+          "y": 0
+        },
+        {
+          "x": 8400,
+          "y": 0
+        },
+        {
+          "x": 8400,
+          "y": 3600
+        },
+        {
+          "x": 5200,
+          "y": 3600
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wet room."
+      }
+    },
+    {
+      "id": "space-bedroom",
+      "name": "Primary Bedroom with Dressing Area",
+      "levelId": "level-upper",
+      "use": "sleeping",
+      "boundary": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 4200,
+          "y": 0
+        },
+        {
+          "x": 4200,
+          "y": 6000
+        },
+        {
+          "x": 0,
+          "y": 6000
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept bedroom."
+      }
+    },
+    {
+      "id": "space-studio",
+      "name": "Studio",
+      "levelId": "level-upper",
+      "use": "work studio",
+      "boundary": [
+        {
+          "x": 4200,
+          "y": 0
+        },
+        {
+          "x": 8400,
+          "y": 0
+        },
+        {
+          "x": 8400,
+          "y": 6000
+        },
+        {
+          "x": 4200,
+          "y": 6000
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept studio."
+      }
+    }
+  ],
+  "walls": [
+    {
+      "id": "wall-g-south",
+      "levelId": "level-ground",
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "end": {
+        "x": 8400,
+        "y": 0
+      },
+      "thicknessMm": 250,
+      "heightMm": 3000,
+      "kind": "exterior",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wall."
+      }
+    },
+    {
+      "id": "wall-g-east",
+      "levelId": "level-ground",
+      "start": {
+        "x": 8400,
+        "y": 0
+      },
+      "end": {
+        "x": 8400,
+        "y": 6000
+      },
+      "thicknessMm": 250,
+      "heightMm": 3000,
+      "kind": "exterior",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wall."
+      }
+    },
+    {
+      "id": "wall-g-north",
+      "levelId": "level-ground",
+      "start": {
+        "x": 8400,
+        "y": 6000
+      },
+      "end": {
+        "x": 0,
+        "y": 6000
+      },
+      "thicknessMm": 250,
+      "heightMm": 3000,
+      "kind": "exterior",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wall."
+      }
+    },
+    {
+      "id": "wall-g-west",
+      "levelId": "level-ground",
+      "start": {
+        "x": 0,
+        "y": 6000
+      },
+      "end": {
+        "x": 0,
+        "y": 0
+      },
+      "thicknessMm": 250,
+      "heightMm": 3000,
+      "kind": "exterior",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wall."
+      }
+    },
+    {
+      "id": "wall-u-south",
+      "levelId": "level-upper",
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "end": {
+        "x": 8400,
+        "y": 0
+      },
+      "thicknessMm": 250,
+      "heightMm": 2800,
+      "kind": "exterior",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wall."
+      }
+    },
+    {
+      "id": "wall-u-east",
+      "levelId": "level-upper",
+      "start": {
+        "x": 8400,
+        "y": 0
+      },
+      "end": {
+        "x": 8400,
+        "y": 6000
+      },
+      "thicknessMm": 250,
+      "heightMm": 2800,
+      "kind": "exterior",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wall."
+      }
+    },
+    {
+      "id": "wall-u-north",
+      "levelId": "level-upper",
+      "start": {
+        "x": 8400,
+        "y": 6000
+      },
+      "end": {
+        "x": 0,
+        "y": 6000
+      },
+      "thicknessMm": 250,
+      "heightMm": 2800,
+      "kind": "exterior",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wall."
+      }
+    },
+    {
+      "id": "wall-u-west",
+      "levelId": "level-upper",
+      "start": {
+        "x": 0,
+        "y": 6000
+      },
+      "end": {
+        "x": 0,
+        "y": 0
+      },
+      "thicknessMm": 250,
+      "heightMm": 2800,
+      "kind": "exterior",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wall."
+      }
+    },
+    {
+      "id": "wall-g-bath-west",
+      "levelId": "level-ground",
+      "start": {
+        "x": 5200,
+        "y": 0
+      },
+      "end": {
+        "x": 5200,
+        "y": 3600
+      },
+      "thicknessMm": 100,
+      "heightMm": 2700,
+      "kind": "interior",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wall."
+      }
+    },
+    {
+      "id": "wall-g-bath-north",
+      "levelId": "level-ground",
+      "start": {
+        "x": 5200,
+        "y": 3600
+      },
+      "end": {
+        "x": 8400,
+        "y": 3600
+      },
+      "thicknessMm": 100,
+      "heightMm": 2700,
+      "kind": "interior",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wall."
+      }
+    },
+    {
+      "id": "wall-u-partition",
+      "levelId": "level-upper",
+      "start": {
+        "x": 4200,
+        "y": 0
+      },
+      "end": {
+        "x": 4200,
+        "y": 6000
+      },
+      "thicknessMm": 100,
+      "heightMm": 2600,
+      "kind": "interior",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wall."
+      }
+    }
+  ],
+  "openings": [
+    {
+      "id": "opening-entry",
+      "wallId": "wall-g-south",
+      "kind": "door",
+      "offsetMm": 1200,
+      "widthMm": 1000,
+      "heightMm": 2100,
+      "sillMm": 0,
+      "swing": "left",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept opening."
+      }
+    },
+    {
+      "id": "opening-living-window",
+      "wallId": "wall-g-south",
+      "kind": "window",
+      "offsetMm": 2800,
+      "widthMm": 1600,
+      "heightMm": 1200,
+      "sillMm": 900,
+      "swing": "none",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept opening."
+      }
+    },
+    {
+      "id": "opening-bath-window",
+      "wallId": "wall-g-east",
+      "kind": "window",
+      "offsetMm": 1200,
+      "widthMm": 900,
+      "heightMm": 700,
+      "sillMm": 1400,
+      "swing": "none",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept opening."
+      }
+    },
+    {
+      "id": "opening-bath-door",
+      "wallId": "wall-g-bath-north",
+      "kind": "door",
+      "offsetMm": 400,
+      "widthMm": 800,
+      "heightMm": 2100,
+      "sillMm": 0,
+      "swing": "right",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept opening."
+      }
+    },
+    {
+      "id": "opening-garden-door",
+      "wallId": "wall-g-north",
+      "kind": "door",
+      "offsetMm": 1800,
+      "widthMm": 1600,
+      "heightMm": 2100,
+      "sillMm": 0,
+      "swing": "double",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept opening."
+      }
+    },
+    {
+      "id": "opening-bedroom-window",
+      "wallId": "wall-u-west",
+      "kind": "window",
+      "offsetMm": 400,
+      "widthMm": 1800,
+      "heightMm": 1300,
+      "sillMm": 900,
+      "swing": "none",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept opening."
+      }
+    },
+    {
+      "id": "opening-studio-window",
+      "wallId": "wall-u-north",
+      "kind": "window",
+      "offsetMm": 900,
+      "widthMm": 2400,
+      "heightMm": 1400,
+      "sillMm": 800,
+      "swing": "none",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept opening."
+      }
+    },
+    {
+      "id": "opening-studio-door",
+      "wallId": "wall-u-partition",
+      "kind": "door",
+      "offsetMm": 4600,
+      "widthMm": 900,
+      "heightMm": 2100,
+      "sillMm": 0,
+      "swing": "sliding",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept opening."
+      }
+    }
+  ],
+  "slabs": [
+    {
+      "id": "slab-ground",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 8400,
+          "y": 0
+        },
+        {
+          "x": 8400,
+          "y": 6000
+        },
+        {
+          "x": 0,
+          "y": 6000
+        }
+      ],
+      "thicknessMm": 200,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept ground slab."
+      }
+    },
+    {
+      "id": "slab-upper",
+      "levelId": "level-upper",
+      "boundary": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 8400,
+          "y": 0
+        },
+        {
+          "x": 8400,
+          "y": 6000
+        },
+        {
+          "x": 0,
+          "y": 6000
+        }
+      ],
+      "thicknessMm": 250,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Visual allowance, not a structural depth."
+      }
+    }
+  ],
+  "roofs": [
+    {
+      "id": "roof-main",
+      "levelId": "level-upper",
+      "kind": "gable",
+      "footprint": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 8400,
+          "y": 0
+        },
+        {
+          "x": 8400,
+          "y": 6000
+        },
+        {
+          "x": 0,
+          "y": 6000
+        }
+      ],
+      "eaveElevationMm": 5800,
+      "ridgeElevationMm": 7400,
+      "ridgeAxis": "x",
+      "overhangMm": 400,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept gable roof."
+      }
+    }
+  ],
+  "stairs": [
+    {
+      "id": "stair-main",
+      "fromLevelId": "level-ground",
+      "toLevelId": "level-upper",
+      "start": {
+        "x": 600,
+        "y": 5250
+      },
+      "end": {
+        "x": 3900,
+        "y": 5250
+      },
+      "widthMm": 900,
+      "riserCount": 17,
+      "treadDepthMm": 200,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept straight stair; landing and headroom unverified."
+      }
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "fixture-kitchen-sink",
+      "name": "Kitchen Sink",
+      "kind": "sink",
+      "levelId": "level-ground",
+      "position": {
+        "x": 2600,
+        "y": 600,
+        "z": 0
+      },
+      "rotationDeg": 0,
+      "size": {
+        "x": 900,
+        "y": 600,
+        "z": 900
+      },
+      "connections": [
+        "plumbing-kitchen"
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept placement."
+      }
+    },
+    {
+      "id": "fixture-shower",
+      "name": "Shower",
+      "kind": "shower",
+      "levelId": "level-ground",
+      "position": {
+        "x": 7600,
+        "y": 2800,
+        "z": 0
+      },
+      "rotationDeg": 0,
+      "size": {
+        "x": 900,
+        "y": 900,
+        "z": 2100
+      },
+      "connections": [
+        "plumbing-shower"
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept placement."
+      }
+    }
+  ],
+  "equipment": [
+    {
+      "id": "equipment-panel",
+      "name": "Distribution Board",
+      "kind": "electrical-panel",
+      "levelId": "level-ground",
+      "position": {
+        "x": 250,
+        "y": 3000,
+        "z": 1200
+      },
+      "rotationDeg": 90,
+      "size": {
+        "x": 500,
+        "y": 150,
+        "z": 700
+      },
+      "connections": [
+        "electrical-panel-node"
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept placement."
+      }
+    },
+    {
+      "id": "equipment-heat-pump",
+      "name": "Heat Pump Outdoor Unit",
+      "kind": "heat-pump",
+      "levelId": "level-ground",
+      "position": {
+        "x": 9200,
+        "y": 4600,
+        "z": 0
+      },
+      "rotationDeg": 0,
+      "size": {
+        "x": 900,
+        "y": 400,
+        "z": 800
+      },
+      "connections": [
+        "mechanical-unit"
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept placement."
+      }
+    }
+  ],
+  "systems": [
+    {
+      "id": "system-plumbing",
+      "discipline": "plumbing",
+      "name": "Concept Plumbing",
+      "status": "concept",
+      "nodes": [
+        {
+          "id": "plumbing-entry",
+          "kind": "water-entry",
+          "position": {
+            "x": 6000,
+            "y": 0,
+            "z": 0
+          },
+          "levelId": "level-ground",
+          "evidence": {
+            "source": "generated",
+            "confidence": 0.6,
+            "status": "needs-review",
+            "note": "Concept node."
+          }
+        },
+        {
+          "id": "plumbing-kitchen",
+          "kind": "fixture-connection",
+          "position": {
+            "x": 2600,
+            "y": 600,
+            "z": 450
+          },
+          "levelId": "level-ground",
+          "evidence": {
+            "source": "generated",
+            "confidence": 0.6,
+            "status": "needs-review",
+            "note": "Concept node."
+          }
+        },
+        {
+          "id": "plumbing-shower",
+          "kind": "fixture-connection",
+          "position": {
+            "x": 7600,
+            "y": 2800,
+            "z": 0
+          },
+          "levelId": "level-ground",
+          "evidence": {
+            "source": "generated",
+            "confidence": 0.6,
+            "status": "needs-review",
+            "note": "Concept node."
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "plumbing-edge-kitchen",
+          "from": "plumbing-entry",
+          "to": "plumbing-kitchen",
+          "path": [
+            {
+              "x": 6000,
+              "y": 0,
+              "z": 0
+            },
+            {
+              "x": 6000,
+              "y": 300,
+              "z": 0
+            },
+            {
+              "x": 2600,
+              "y": 300,
+              "z": 0
+            },
+            {
+              "x": 2600,
+              "y": 600,
+              "z": 450
+            }
+          ],
+          "nominalSize": "unverified",
+          "evidence": {
+            "source": "generated",
+            "confidence": 0.6,
+            "status": "needs-review",
+            "note": "Concept route; sizing unresolved."
+          }
+        },
+        {
+          "id": "plumbing-edge-shower",
+          "from": "plumbing-entry",
+          "to": "plumbing-shower",
+          "path": [
+            {
+              "x": 6000,
+              "y": 0,
+              "z": 0
+            },
+            {
+              "x": 6000,
+              "y": 2800,
+              "z": 0
+            },
+            {
+              "x": 7600,
+              "y": 2800,
+              "z": 0
+            }
+          ],
+          "nominalSize": "unverified",
+          "evidence": {
+            "source": "generated",
+            "confidence": 0.6,
+            "status": "needs-review",
+            "note": "Concept route; sizing unresolved."
+          }
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept plumbing only."
+      }
+    },
+    {
+      "id": "system-electrical",
+      "discipline": "electrical",
+      "name": "Concept Electrical",
+      "status": "concept",
+      "nodes": [
+        {
+          "id": "electrical-panel-node",
+          "kind": "panel",
+          "position": {
+            "x": 250,
+            "y": 3000,
+            "z": 1200
+          },
+          "levelId": "level-ground",
+          "evidence": {
+            "source": "generated",
+            "confidence": 0.6,
+            "status": "needs-review",
+            "note": "Concept node."
+          }
+        },
+        {
+          "id": "electrical-studio",
+          "kind": "circuit-end",
+          "position": {
+            "x": 6300,
+            "y": 3000,
+            "z": 3300
+          },
+          "levelId": "level-upper",
+          "evidence": {
+            "source": "generated",
+            "confidence": 0.6,
+            "status": "needs-review",
+            "note": "Concept node."
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "electrical-edge-studio",
+          "from": "electrical-panel-node",
+          "to": "electrical-studio",
+          "path": [
+            {
+              "x": 250,
+              "y": 3000,
+              "z": 1200
+            },
+            {
+              "x": 250,
+              "y": 3000,
+              "z": 3300
+            },
+            {
+              "x": 6300,
+              "y": 3000,
+              "z": 3300
+            }
+          ],
+          "nominalSize": "unverified",
+          "evidence": {
+            "source": "generated",
+            "confidence": 0.6,
+            "status": "needs-review",
+            "note": "Concept route; sizing unresolved."
+          }
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept electrical only."
+      }
+    },
+    {
+      "id": "system-mechanical",
+      "discipline": "mechanical",
+      "name": "Concept Mechanical",
+      "status": "concept",
+      "nodes": [
+        {
+          "id": "mechanical-unit",
+          "kind": "outdoor-unit",
+          "position": {
+            "x": 9200,
+            "y": 4600,
+            "z": 0
+          },
+          "levelId": "level-ground",
+          "evidence": {
+            "source": "generated",
+            "confidence": 0.6,
+            "status": "needs-review",
+            "note": "Concept node."
+          }
+        },
+        {
+          "id": "mechanical-indoor",
+          "kind": "indoor-unit",
+          "position": {
+            "x": 4400,
+            "y": 4600,
+            "z": 2400
+          },
+          "levelId": "level-ground",
+          "evidence": {
+            "source": "generated",
+            "confidence": 0.6,
+            "status": "needs-review",
+            "note": "Concept node."
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "mechanical-edge-lineset",
+          "from": "mechanical-unit",
+          "to": "mechanical-indoor",
+          "path": [
+            {
+              "x": 9200,
+              "y": 4600,
+              "z": 0
+            },
+            {
+              "x": 8400,
+              "y": 4600,
+              "z": 2400
+            },
+            {
+              "x": 4400,
+              "y": 4600,
+              "z": 2400
+            }
+          ],
+          "nominalSize": "unverified",
+          "evidence": {
+            "source": "generated",
+            "confidence": 0.6,
+            "status": "needs-review",
+            "note": "Concept route; sizing unresolved."
+          }
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept mechanical only."
+      }
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dimension-overall-width",
+      "kind": "horizontal",
+      "from": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "to": {
+        "x": 8400,
+        "y": 0,
+        "z": 0
+      },
+      "offsetMm": -1400
+    },
+    {
+      "id": "dimension-living-width",
+      "kind": "horizontal",
+      "from": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "to": {
+        "x": 5200,
+        "y": 0,
+        "z": 0
+      },
+      "offsetMm": -700
+    },
+    {
+      "id": "dimension-bath-width",
+      "kind": "horizontal",
+      "from": {
+        "x": 5200,
+        "y": 0,
+        "z": 0
+      },
+      "to": {
+        "x": 8400,
+        "y": 0,
+        "z": 0
+      },
+      "offsetMm": -700
+    },
+    {
+      "id": "dimension-depth",
+      "kind": "vertical",
+      "from": {
+        "x": 8400,
+        "y": 0,
+        "z": 0
+      },
+      "to": {
+        "x": 8400,
+        "y": 6000,
+        "z": 0
+      },
+      "offsetMm": 900
+    },
+    {
+      "id": "dimension-ridge",
+      "kind": "elevation",
+      "from": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "to": {
+        "x": 0,
+        "y": 0,
+        "z": 7400
+      },
+      "offsetMm": -1000
+    }
+  ],
+  "sections": [
+    {
+      "id": "section-a",
+      "name": "Longitudinal Section A-A",
+      "start": {
+        "x": -500,
+        "y": 5250
+      },
+      "end": {
+        "x": 8900,
+        "y": 5250
+      },
+      "lookDirection": "left"
+    },
+    {
+      "id": "section-b",
+      "name": "Cross Section B-B",
+      "start": {
+        "x": 6800,
+        "y": -500
+      },
+      "end": {
+        "x": 6800,
+        "y": 6500
+      },
+      "lookDirection": "right"
+    }
+  ],
+  "viewpoints": [],
+  "assumptions": [
+    {
+      "id": "assumption-site",
+      "topic": "site",
+      "statement": "No survey, setbacks, or utility locations are known for this synthetic fixture.",
+      "impact": "high",
+      "affectedEntityIds": [],
+      "evidence": {
+        "source": "generated",
+        "confidence": 1,
+        "status": "needs-review",
+        "note": "Fixture intentionally excludes survey data."
+      }
+    }
+  ]
+}

@@ -2,42 +2,18 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import vm from 'node:vm';
+import { buildDrawingSet, loadStudioApi } from '../scripts/export-drawings.ts';
+import { expectedPreview } from '../scripts/build-preview.ts';
 
 const pluginRoot = path.resolve(import.meta.dirname, '..');
 const html = fs.readFileSync(path.join(pluginRoot, 'assets', 'studio-template.html'), 'utf8');
-const fixture = JSON.parse(fs.readFileSync(path.join(pluginRoot, 'examples', 'lakeside-barn-residence', 'building.json'), 'utf8'));
-const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
-
-if (!script) throw new Error('studio-template.html does not contain an inline script');
+const readFixture = (name: string) => JSON.parse(fs.readFileSync(path.join(pluginRoot, 'examples', name, 'building.json'), 'utf8'));
+const fixture = readFixture('lakeside-barn-residence');
+const metricFixture = readFixture('compact-metric-studio');
 
 function loadStudio() {
-  const elements = new Map();
-  const element = selector => {
-    if (!elements.has(selector)) {
-      elements.set(selector, {
-        innerHTML: '',
-        setAttribute() {},
-        querySelectorAll() { return []; }
-      });
-    }
-    return elements.get(selector);
-  };
-  let api;
-  const context = vm.createContext({
-    console,
-    structuredClone,
-    document: {
-      querySelector: element,
-      querySelectorAll() { return []; }
-    },
-    __OD_STUDIO_TEST__(value) { api = value; }
-  });
-  vm.runInContext(script, context);
-  if (!api) throw new Error('Studio test API was not exposed');
-  return { api, elements };
+  return loadStudioApi(html);
 }
-
 function cloneFixture() {
   return structuredClone(fixture);
 }
@@ -161,4 +137,155 @@ test('code view renders a valid staged report and distinguishes invalid reports'
   api.state.codeReport = { status: 'invalid', message: 'The report belongs to another project.' };
   api.renderDocument('code');
   assert.match(elements.get('#content').innerHTML, /belongs to another project/);
+});
+
+const svgAttr = (svg: string, name: string) => svg.match(new RegExp(`<svg[^>]*\\s${name}="([^"]*)"`))?.[1];
+const entityGroup = (svg: string, id: string) => svg.match(new RegExp(`<g data-entity="${id}">([\\s\\S]*?)</g>`))?.[1] ?? '';
+const numbersIn = (markup: string, attr: string) => [...markup.matchAll(new RegExp(`\\s${attr}="(-?[\\d.]+)"`, 'g'))].map(match => Number(match[1]));
+const pointXs = (markup: string) => [...markup.matchAll(/points="([^"]+)"/g)].flatMap(match => match[1].split(' ').map(pair => Number(pair.split(',')[0])));
+
+test('sheets follow the drafting profile selected by display units', () => {
+  const { api } = loadStudio();
+  const imperial = api.renderPlanSheet(cloneFixture(), 'level-ground');
+  assert.equal(svgAttr(imperial.svg, 'width'), '431.8mm');
+  assert.equal(svgAttr(imperial.svg, 'viewBox'), '0 0 431.8 279.4');
+  assert.match(imperial.svg, /NCS-INFORMED IMPERIAL/);
+  assert.match(imperial.scaleLabel, /" = 1'-0"$/);
+  assert.equal(imperial.sheetId, 'A-101');
+
+  const metric = api.renderPlanSheet(structuredClone(metricFixture), 'level-ground');
+  assert.equal(svgAttr(metric.svg, 'viewBox'), '0 0 420 297');
+  assert.match(metric.svg, /ISO-INFORMED METRIC/);
+  assert.match(metric.scaleLabel, /^1:\d+$/);
+  // Metric dimensions are bare millimetres with arrow terminators (filled polygons).
+  const living = entityGroup(metric.svg, 'dimension-living-width');
+  assert.match(living, />5200</);
+  assert.match(living, /<polygon[^>]*fill="#1b1b1b"/);
+});
+
+test('scale selection picks the largest standard scale that fits', () => {
+  const { api } = loadStudio();
+  const profile = api.PROFILES.imperial, area = api.drawingArea(profile);
+  assert.equal(api.selectScale(profile, 2000, 2000, area).ratio, 12);
+  assert.equal(api.selectScale(profile, 3000, 3000, area).ratio, 24);
+  assert.equal(api.selectScale(profile, 12000, 14000, area).ratio, 96);
+  const huge = api.selectScale(profile, 900000, 900000, area);
+  assert.equal(huge.ratio, profile.scales.at(-1)[0]);
+});
+
+test('sheets are deterministic and carry no invented document-control data', () => {
+  const { api } = loadStudio();
+  const first = api.renderDrawingSet(cloneFixture()).map(sheet => sheet.svg).join('\n');
+  const second = api.renderDrawingSet(cloneFixture()).map(sheet => sheet.svg).join('\n');
+  assert.equal(first, second);
+  assert.match(first, /UNDATED CONCEPT/);
+  assert.match(first, /CONCEPT - NOT FOR CONSTRUCTION/);
+  assert.doesNotMatch(first, /\b20\d\d-\d\d-\d\d\b/);
+  assert.doesNotMatch(first, /var\(|<script|class="/);
+  assert.doesNotMatch(first, /\u2014/);
+});
+
+test('plan dimensions sit outside the building footprint', () => {
+  const { api } = loadStudio();
+  const plan = api.renderPlanSheet(cloneFixture(), 'level-ground').svg;
+  const eastWall = Math.max(...pointXs(entityGroup(plan, 'wall-g-east')));
+  const depth = entityGroup(plan, 'dimension-depth');
+  assert.ok(depth, 'depth dimension is drawn');
+  assert.ok(Math.min(...numbersIn(depth, 'x1'), ...numbersIn(depth, 'x2')) > eastWall, 'depth dimension clears the east wall');
+});
+
+test('room tags find clear positions on crowded metric plans', () => {
+  const { api } = loadStudio();
+  for (const levelId of ['level-ground', 'level-upper']) {
+    const result = api.renderPlanSheet(structuredClone(metricFixture), levelId);
+    assert.equal(result.warnings.length, 0, JSON.stringify(result.warnings));
+  }
+  const placer = api.createPlacer({ x0: 0, y0: 0, x1: 100, y1: 100 });
+  placer.reserve({ x0: 10, y0: 10, x1: 20, y1: 20 });
+  assert.equal(placer.fits({ x0: 15, y0: 15, x1: 25, y1: 25 }), false);
+  assert.equal(placer.fits({ x0: 30, y0: 30, x1: 40, y1: 40 }), true);
+  assert.equal(placer.fits({ x0: 95, y0: 95, x1: 105, y1: 105 }), false);
+});
+
+test('sections cut walls, slabs, stairs, and roofs from the canonical model', () => {
+  const { api } = loadStudio();
+  const barn = api.sectionGeometry(cloneFixture(), fixture.sections[0]);
+  const cutIds = new Set(barn.cut.map(item => item.id));
+  for (const id of ['wall-g-west', 'wall-g-east', 'wall-u-west', 'wall-u-east', 'slab-ground', 'slab-upper', 'stair-main']) assert.ok(cutIds.has(id), `${id} is cut`);
+  const slab = barn.cut.find(item => item.id === 'slab-upper');
+  assert.equal(slab.z1 - slab.z0, 300);
+  assert.equal(barn.roofCut.length, 1);
+  assert.equal(Math.max(...barn.roofCut[0].points.map(point => point.z)), 9000);
+
+  const metric = api.sectionGeometry(structuredClone(metricFixture), metricFixture.sections[0]);
+  const stair = metric.cut.find(item => item.id === 'stair-main');
+  assert.ok(stair.profile.length > 2 * 17, 'stair cut along its run shows every riser');
+  const partition = metric.cut.filter(item => item.id === 'wall-u-partition');
+  assert.equal(partition.length, 1, 'the sliding door leaves only the wall above its head');
+  assert.equal(partition[0].z0, 3000 + 2100);
+  const window = metric.cut.filter(item => item.id === 'wall-u-west');
+  assert.equal(window.length, 2, 'the west window splits the cut wall');
+
+  const reversed = structuredClone(metricFixture.sections[0]);
+  reversed.lookDirection = 'right';
+  const mirrored = api.sectionGeometry(structuredClone(metricFixture), reversed);
+  const span = geometry => geometry.cut.filter(item => item.id === 'slab-upper').map(item => [item.h0, item.h1].sort((a, b) => a - b));
+  assert.deepEqual(span(mirrored)[0].map(value => -value).sort((a, b) => a - b), span(metric)[0]);
+});
+
+test('section sheets render with marks on every plan and no unsupported warning', () => {
+  const { api } = loadStudio();
+  const model = cloneFixture();
+  assert.ok(!api.validateModel(model).some(finding => finding.code === 'renderer.unsupported-sections'));
+  const section = api.renderSectionSheet(model, 'section-aa');
+  assert.equal(section.sheetId, 'A-301');
+  assert.equal(section.warnings.length, 0);
+  assert.match(section.svg, /TRANSVERSE SECTION A-A/);
+  for (const levelId of ['level-ground', 'level-upper']) assert.match(api.renderPlanSheet(model, levelId).svg, /data-entity="section-aa"/);
+});
+
+test('the export script writes a complete, standalone, deterministic drawing set', () => {
+  const first = buildDrawingSet(html, cloneFixture());
+  const second = buildDrawingSet(html, cloneFixture());
+  assert.equal(first.errors.length, 0);
+  assert.equal(JSON.stringify(first.manifest), JSON.stringify(second.manifest));
+  assert.equal(first.sheets.map(sheet => sheet.svg).join(''), second.sheets.map(sheet => sheet.svg).join(''));
+  assert.deepEqual([...first.manifest.files.map(file => file.sheet)], ['A-101', 'A-102', 'A-201', 'A-202', 'A-203', 'A-204', 'A-301', 'M-101', 'M-102']);
+  assert.ok(first.manifest.files.every(file => /^exports\/(plans|elevations|sections|systems)\/[a-z0-9-]+\.svg$/.test(file.path)));
+  for (const sheet of first.sheets) {
+    assert.match(sheet.svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="[\d.]+mm" height="[\d.]+mm"/);
+    assert.equal((sheet.svg.match(/<svg/g) ?? []).length, 1);
+  }
+
+  const edited = cloneFixture();
+  edited.openings[0].offsetMm += 100;
+  assert.notEqual(buildDrawingSet(html, edited).manifest.modelFingerprint, first.manifest.modelFingerprint);
+
+  const broken = cloneFixture();
+  broken.openings[0].widthMm = -1;
+  const refused = buildDrawingSet(html, broken);
+  assert.ok(refused.errors.length > 0);
+  assert.equal(refused.sheets.length, 0);
+});
+
+test('the drawing-set ZIP is a valid store-only archive', () => {
+  const { api } = loadStudio();
+  const encoder = new TextEncoder();
+  const zip = api.zipFiles([{ name: 'exports/a.svg', bytes: encoder.encode('<svg/>') }, { name: 'exports/manifest.json', bytes: encoder.encode('{}') }]);
+  const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+  assert.equal(view.getUint32(0, true), 0x04034b50);
+  const end = zip.byteLength - 22;
+  assert.equal(view.getUint32(end, true), 0x06054b50);
+  assert.equal(view.getUint16(end + 10, true), 2);
+  assert.equal(api.crc32(encoder.encode('123456789')), 0xcbf43926);
+});
+
+test('the marketplace preview is generated from the current template', () => {
+  const current = fs.readFileSync(path.join(pluginRoot, 'preview', 'index.html'), 'utf8').replace(/\r\n/g, '\n');
+  assert.equal(current, expectedPreview().replace(/\r\n/g, '\n'));
+});
+
+test('plugin copy contains no em dashes', () => {
+  const files = ['SKILL.md', 'README.md', 'open-design.json', 'assets/studio-template.html', ...fs.readdirSync(path.join(pluginRoot, 'references')).map(file => `references/${file}`)];
+  for (const file of files) assert.doesNotMatch(fs.readFileSync(path.join(pluginRoot, file), 'utf8'), /\u2014/, file);
 });
