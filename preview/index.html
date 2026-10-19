@@ -37,12 +37,15 @@
 
   .app { display: grid; grid-template-rows: auto minmax(0, 1fr); width: 100%; height: 100%; min-width: 0; }
   .masthead { display: flex; align-items: stretch; min-width: 0; border-bottom: 1px solid var(--line); background: var(--sheet); }
-  .brand { display: flex; flex-direction: column; justify-content: center; gap: 2px; width: 280px; flex: none; padding: 8px 18px; border-right: 1px solid var(--line); min-width: 0; }
+  .brand { display: flex; flex-direction: column; justify-content: center; gap: 2px; width: 260px; flex: none; padding: 8px 18px; border-right: 1px solid var(--line); min-width: 0; }
   .brand strong { overflow: hidden; font: 600 18px/1.2 var(--serif); text-overflow: ellipsis; white-space: nowrap; }
   .brand span { color: var(--muted); font-size: 12px; }
-  .tabs { display: flex; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+  .tabs { display: flex; flex: 1 1 auto; align-items: stretch; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+  /* Drawing sheets lead on the left; the model and review pages sit at the right edge. */
+  .tab-cluster { display: flex; align-items: stretch; flex: none; }
+  .tab-cluster--review { margin-left: auto; border-left: 1px solid var(--line); }
   .tab {
-    position: relative; flex: none; min-height: 52px; padding: 0 16px; border: 0; border-right: 1px solid var(--line);
+    position: relative; flex: none; min-height: 54px; padding: 0 16px; border: 0; border-right: 1px solid var(--line);
     background: transparent; color: var(--muted); font-weight: 600; font-size: 14px;
     transition: background-color 160ms var(--ease), color 160ms var(--ease);
   }
@@ -50,12 +53,20 @@
   .tab[aria-selected="true"] { color: var(--ink); background: var(--paper); }
   .tab[aria-selected="true"]::after { content: ""; position: absolute; inset: auto 0 -1px; height: 3px; background: var(--accent); }
   .tab:focus-visible { outline-offset: -3px; }
+  .tab-cluster--review .tab { border-right: 0; border-left: 1px solid var(--line); }
+  .tab-cluster--review .tab:first-child { border-left: 0; }
 
   .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: 0; }
   .stage { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
-  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--paper); }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--paper); }
   .field { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
-  .group { display: flex; align-items: center; gap: 4px; }
+  /* Related controls fuse into one segmented control so each group reads as a single tool. */
+  .group { display: flex; align-items: center; gap: 0; }
+  .group > .tool { position: relative; margin-left: -1px; border-radius: 0; }
+  .group > .tool:first-child { margin-left: 0; border-radius: 4px 0 0 4px; }
+  .group > .tool:last-child { border-radius: 0 4px 4px 0; }
+  .group > .tool:hover, .group > .tool:focus-visible { z-index: 1; }
+  .group > .tool[aria-pressed="true"] + .tool[aria-pressed="true"] { box-shadow: inset 1px 0 0 rgba(251, 250, 246, .4); }
   select, .tool {
     min-height: var(--control-h); border: 1px solid var(--control-line); border-radius: 4px;
     background: var(--sheet); padding: 0 12px; font-size: 14px;
@@ -96,6 +107,20 @@
   .metric { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; margin: 16px 0 0; }
   .metric dt { color: var(--muted); font-size: 14px; }
   .metric dd { margin: 0; font: 600 14px/1.45 var(--mono); text-align: right; }
+  /* Inspector review queue: what needs the user's input, then informational notes. */
+  .inspector .lede { margin-bottom: 16px; }
+  .queue-heading { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 8px; font-size: 14px; }
+  .queue-count { color: var(--muted); font: 600 12px/1 var(--mono); }
+  .queue { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .queue-item { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--sheet); text-align: left; }
+  button.queue-item:hover { border-color: var(--ink); }
+  .queue-item__kind { grid-row: span 2; align-self: start; padding-top: 1px; color: var(--warning); font-weight: 700; font-size: 12px; }
+  .queue-item--fix .queue-item__kind { color: var(--error); }
+  .queue-item--note .queue-item__kind { color: var(--advisory); }
+  .queue-item__title { font-weight: 600; }
+  .queue-item__body { color: var(--muted); font-size: 12px; }
+  .queue-notes { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .fineprint { margin: 22px 0 0; color: var(--muted); font-size: 12px; }
   .diagnostics { display: grid; gap: 6px; }
   .finding { display: block; width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--sheet); text-align: left; }
   button.finding:hover { border-color: var(--ink); }
@@ -137,13 +162,17 @@
   <header class="masthead">
     <div class="brand"><strong id="project-name">Architecture Studio</strong><span id="project-meta">Loading the building model</span></div>
     <div class="tabs" role="tablist" aria-label="Studio views">
-      <button class="tab" role="tab" id="tab-plan" data-view="plan" aria-selected="true" aria-controls="stage" tabindex="0">Plans</button>
-      <button class="tab" role="tab" id="tab-elevation" data-view="elevation" aria-selected="false" aria-controls="stage" tabindex="-1">Elevations</button>
-      <button class="tab" role="tab" id="tab-section" data-view="section" aria-selected="false" aria-controls="stage" tabindex="-1">Sections</button>
-      <button class="tab" role="tab" id="tab-systems" data-view="systems" aria-selected="false" aria-controls="stage" tabindex="-1">Systems</button>
-      <button class="tab" role="tab" id="tab-model" data-view="model" aria-selected="false" aria-controls="stage" tabindex="-1">3D model</button>
-      <button class="tab" role="tab" id="tab-code" data-view="code" aria-selected="false" aria-controls="stage" tabindex="-1">Code review</button>
-      <button class="tab" role="tab" id="tab-assumptions" data-view="assumptions" aria-selected="false" aria-controls="stage" tabindex="-1">Assumptions</button>
+      <div class="tab-cluster">
+        <button class="tab" role="tab" id="tab-plan" data-view="plan" aria-selected="true" aria-controls="stage" tabindex="0">Plans</button>
+        <button class="tab" role="tab" id="tab-elevation" data-view="elevation" aria-selected="false" aria-controls="stage" tabindex="-1">Elevations</button>
+        <button class="tab" role="tab" id="tab-section" data-view="section" aria-selected="false" aria-controls="stage" tabindex="-1">Sections</button>
+        <button class="tab" role="tab" id="tab-systems" data-view="systems" aria-selected="false" aria-controls="stage" tabindex="-1">Systems</button>
+      </div>
+      <div class="tab-cluster tab-cluster--review">
+        <button class="tab" role="tab" id="tab-model" data-view="model" aria-selected="false" aria-controls="stage" tabindex="-1">3D model</button>
+        <button class="tab" role="tab" id="tab-code" data-view="code" aria-selected="false" aria-controls="stage" tabindex="-1">Code review</button>
+        <button class="tab" role="tab" id="tab-assumptions" data-view="assumptions" aria-selected="false" aria-controls="stage" tabindex="-1">Assumptions</button>
+      </div>
     </div>
   </header>
   <div class="workspace">
@@ -1251,6 +1280,32 @@
     return allEntityIds(state.model).find(entity => entity.id === state.selected) ?? null;
   }
 
+  const FINDING_TOPICS = {
+    'evidence.review': 'Evidence to confirm', 'stair.code': 'Stair', 'code.status': 'Code research', 'system.review': 'Systems',
+    'label.placement': 'Drawing label', 'section.empty': 'Section', 'webgl.unavailable': '3D view'
+  };
+  // Groups findings by code so repeated notes (one per system, say) read as one entry.
+  function reviewQueue(findings) {
+    const groups = new Map();
+    for (const finding of findings) {
+      if (!groups.has(finding.code)) groups.set(finding.code, []);
+      groups.get(finding.code).push(finding);
+    }
+    const entries = [...groups.entries()].map(([code, items]) => {
+      const severity = items.some(item => item.severity === 'error') ? 'error' : items.some(item => item.severity === 'warning') ? 'warning' : 'advisory';
+      const title = FINDING_TOPICS[code] ?? code.split('.')[0].replace(/^./, c => c.toUpperCase());
+      let body = items[0].message;
+      if (code === 'system.review' && items.length > 1) {
+        const names = state.model.systems.filter(system => items.some(item => item.entityId === system.id)).map(system => system.discipline);
+        body = `${names.slice(0, -1).join(', ')}${names.length > 2 ? ',' : ''} and ${names.at(-1)} routes remain conceptual.`.replace(/^./, c => c.toUpperCase());
+      } else if (items.length > 1) body = `${items.length} findings. ${items[0].message}`;
+      return { kind: severity === 'error' ? 'Fix' : severity === 'warning' ? 'Check' : 'Note', severity, title, body, entityId: items[0].entityId };
+    });
+    const rank = { error: 0, warning: 1, advisory: 2 };
+    entries.sort((a, b) => rank[a.severity] - rank[b.severity]);
+    return { checks: entries.filter(entry => entry.severity !== 'advisory'), notes: entries.filter(entry => entry.severity === 'advisory') };
+  }
+
   function renderInspector() {
     const entity = selectedEntity();
     const findings = [...state.findings, ...state.renderWarnings];
@@ -1261,9 +1316,24 @@
       $('#clear-selection')?.addEventListener('click', () => select(null));
       return;
     }
-    const counts = findings.reduce((out, finding) => { out[finding.severity] = (out[finding.severity] ?? 0) + 1; return out; }, {});
-    const list = findings.slice(0, 10).map(item => findingMarkup(item.severity, item.code, item.message, item.severity, item.entityId)).join('');
-    inspector.innerHTML = `<h2>${errors.length ? 'Resolve model errors' : 'Internally consistent concept'}</h2><p class="lede">${escapeHtml(state.model.project.description ?? '')}</p><dl class="metric"><dt>Levels</dt><dd>${state.model.levels.length}</dd><dt>Spaces</dt><dd>${state.model.spaces.length}</dd><dt>Openings</dt><dd>${state.model.openings.length}</dd><dt>System networks</dt><dd>${state.model.systems.length}</dd><dt>Sections</dt><dd>${(state.model.sections ?? []).length}</dd><dt>Errors</dt><dd>${counts.error ?? 0}</dd><dt>Warnings</dt><dd>${counts.warning ?? 0}</dd><dt>Advisories</dt><dd>${counts.advisory ?? 0}</dd></dl><h3>Priority findings</h3><div class="diagnostics">${list || '<p class="lede">No findings.</p>'}</div><div class="disclaimer">Concept only. This is not a permit set, engineering design, survey, or construction document.</div>`;
+    const { checks, notes } = reviewQueue(findings);
+    const item = entry => {
+      const inner = `<span class="queue-item__kind">${escapeHtml(entry.kind)}</span><span class="queue-item__title">${escapeHtml(entry.title)}</span><span class="queue-item__body">${escapeHtml(entry.body)}</span>`;
+      const cls = `queue-item queue-item--${entry.kind.toLowerCase()}`;
+      return entityExists(entry.entityId)
+        ? `<li><button type="button" class="${cls}" data-select="${escapeHtml(entry.entityId)}" aria-label="${escapeHtml(`${entry.kind}: ${entry.title}. ${entry.body} Select in drawing`)}">${inner}</button></li>`
+        : `<li><div class="${cls}">${inner}</div></li>`;
+    };
+    const lede = errors.length
+      ? `Fix ${errors.length} model error${errors.length === 1 ? '' : 's'} before the drawings render.`
+      : checks.length || notes.length ? 'No model errors. Review these before handoff.' : 'Nothing needs your input right now.';
+    inspector.innerHTML = [
+      '<h2>Needs your input</h2>',
+      `<p class="lede">${lede}</p>`,
+      checks.length ? `<h3 class="queue-heading">To check <span class="queue-count">${checks.length}</span></h3><ol class="queue">${checks.map(item).join('')}</ol>` : '',
+      notes.length ? `<div class="queue-notes"><h3 class="queue-heading">Notes <span class="queue-count">${notes.length}</span></h3><ol class="queue">${notes.map(item).join('')}</ol></div>` : '',
+      '<p class="fineprint">Concept only. Not a permit set, engineering design, survey, or construction document.</p>'
+    ].join('');
     inspector.querySelectorAll('[data-select]').forEach(button => button.addEventListener('click', () => select(button.dataset.select)));
   }
 

@@ -136,13 +136,23 @@ table".
 
 - **Tabs**: real `tablist` semantics, roving tabindex, arrow keys, Home and
   End. The selected tab gets a 3px accent underline and the paper background.
-- **Toolbar**: only the controls for the active view are shown. View-specific
-  selects first, then zoom or camera controls, then system toggles; the
-  primary "Download drawing set" sits at the end.
+  The four drawing tabs (Plans, Elevations, Sections, Systems) lead on the left;
+  3D model, Code review, and Assumptions sit together at the right edge behind a
+  divider, because they are not drawing sheets.
+- **Toolbar**: one shared toolbar for every view; only the controls for the
+  active view are shown. The view's sheet dropdown (Level, Face, or Section)
+  comes first. Related buttons are fused into one segmented control (zoom,
+  camera mode, system toggles) so each group reads as a single tool. The
+  primary "Download drawing set" sits at the far right.
 - **Toggle buttons** use `aria-pressed`; pressed is ink-filled.
-- **Findings**: a card with a coloured severity word and the code. A finding
-  that points at a model entity is a button that selects it; one that does not
-  is plain text and is not styled as clickable.
+- **Inspector (default)**: "Needs your input". Findings are grouped into To
+  check (errors as Fix, warnings as Check) and Notes (advisories), each with a
+  heading and count. Codes become plain topics (Stair, Code research, Systems)
+  and repeated findings merge. No model statistics. An entry that points at a
+  model entity is a button that selects it; one that does not is not styled as
+  clickable. The concept-only notice closes the panel as fine print.
+- **Findings on the Code review page**: a card with a coloured severity word
+  and topic, same clickable rule.
 - **Sheet entities** are focusable; Enter or Space inspects, Escape clears.
   Focus and selection draw the entity in the accent.
 - **Status**: loading, empty, and error states replace the canvas with a short
