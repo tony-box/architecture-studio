@@ -1,0 +1,21 @@
+{
+  "name": "architecture-studio",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Agent Skill for close-to-accurate building concepts: drafted plans, elevations, sections, conceptual MEP, advisory code research, and a 3D walkthrough.",
+  "license": "MIT",
+  "author": "Tony Box",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tony-box/architecture-studio.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "preview": "node scripts/build-preview.mjs",
+    "preview:check": "node scripts/build-preview.mjs --check"
+  }
+}

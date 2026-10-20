@@ -1,76 +1,125 @@
 # Architecture Studio
 
-Architecture Studio is a portable OpenDesign plugin for exploring
-dimensionally consistent building ideas before professional design begins. One
-structured coordinate model drives drafted plan, elevation, section, and
-systems sheets, an exportable SVG drawing set, and an interactive 3D view.
+An [Agent Skill](https://agentskills.io) for exploring building concepts with
+the coding agent you already use. Describe a house, workshop, cabin, or studio,
+and your agent builds one real-unit coordinate model that drives:
 
-## Scope
+- drafted floor plans, elevations, sections, and systems sheets,
+- an exportable SVG drawing set,
+- conceptual plumbing, electrical, and mechanical layouts,
+- advisory, cited local building-code research,
+- an interactive 3D orbit and walkthrough,
+- an assumptions list and a handoff for your architect and engineers.
 
-The plugin is intended for programming, option studies, spatial coordination,
-and professional handoff. It is not a substitute for a survey, licensed
-architect, structural engineer, MEP engineer, energy professional, or authority
-having jurisdiction.
+[Open the live demo](https://raw.githack.com/tony-box/architecture-studio/main/preview/index.html)
+(the included example model in the real viewer).
 
-“Close to accurate” means that model coordinates are real units and that every
-derived view agrees within the declared tolerance. It does not imply structural
-adequacy, engineered system sizing, permit readiness, or construction accuracy.
+> **Concept only.** Architecture Studio produces concept documents for
+> programming, option studies, and professional handoff. It is not a substitute
+> for a survey, licensed architect, structural engineer, MEP engineer, energy
+> professional, or authority having jurisdiction. Nothing it produces is code
+> compliant, permit ready, or engineered.
 
-## Install and Apply
+## Requirements
 
-From the OpenDesign repository:
+- A coding agent that supports Agent Skills: Claude Code, GitHub Copilot (CLI,
+  VS Code, cloud agent), OpenAI Codex, Cursor, Gemini CLI, OpenCode, and others.
+- Node.js 20 or newer. The scripts use only Node built-ins; there is nothing to
+  `npm install`.
+- A browser with WebGL2 for the 3D view.
+
+## Install
+
+**Any supported agent** (uses the [skills CLI](https://github.com/vercel-labs/skills)):
 
 ```bash
-corepack pnpm exec od plugin validate ./plugins/community/architecture-studio --no-daemon
-corepack pnpm exec od plugin install ./plugins/community/architecture-studio
-corepack pnpm exec od plugin apply architecture-studio \
-  --input project_name="Workshop residence" \
-  --input jurisdiction="Town, County, State, US" \
-  --input building_program="Workshop below, two-bedroom residence above" \
-  --input levels=2 \
-  --input display_units=feet-inches
+npx skills add tony-box/architecture-studio        # this project only
+npx skills add tony-box/architecture-studio -g     # every project
 ```
 
-The plugin requests file read/write and network capabilities. File access lets
-the agent stage the studio, model schema, and generated outputs. Network access
-is used only to research current official jurisdiction sources. A trusted local
-installation receives the requested capabilities; other install sources remain
-restricted until the user reviews and grants them.
+**Manual install:** clone the repository into your agent's skills folder.
 
-## Canonical Outputs
+| Agent | Personal skills folder | Project skills folder |
+| --- | --- | --- |
+| Claude Code | `~/.claude/skills/` | `.claude/skills/` |
+| GitHub Copilot | `~/.copilot/skills/` | `.github/skills/` |
+| OpenAI Codex | `~/.codex/skills/` | `.agents/skills/` |
+| Others | see your agent's docs | `.agents/skills/` is widely supported |
+
+```bash
+git clone https://github.com/tony-box/architecture-studio ~/.claude/skills/architecture-studio
+```
+
+Update later with `git pull` (manual install) or `npx skills update`.
+
+## Use
+
+Ask your agent for a building concept, for example:
+
+> Design a two-level 36 by 48 foot workshop residence in upstate New York, with
+> a fabrication shop below and a two-bedroom home above.
+
+The agent then:
+
+1. **Creates a project folder** for the building (`scripts/init.mjs`). Each
+   building gets its own folder; design alternatives live inside it under
+   `models/variants/`.
+2. **Interviews you in short rounds** following
+   [`references/intake.md`](references/intake.md): basics, room program, site,
+   systems preferences, and source materials. Answers are saved to
+   `brief.json`, so a later session resumes where you left off. Nothing is
+   modeled until you confirm the brief and every assumption.
+3. **Builds the model**, researches the local code (only with your
+   permission), and lays out conceptual systems.
+4. **Opens the studio in your default browser** (`scripts/serve.mjs`). The
+   page reloads itself as the agent edits the model. If the browser cannot
+   open (SSH, containers, cloud agents), the agent gives you the URL.
+5. **Exports the drawing set** and writes `ASSUMPTIONS.md` and `HANDOFF.md`.
+
+## Project folder
 
 ```text
-index.html
-models/building.json
-models/variants/*.json
-exports/manifest.json
-exports/plans/*.svg
-exports/elevations/*.svg
-exports/sections/*.svg
-exports/systems/*.svg
-reviews/code-findings.json
-reviews/code-review.md
-reviews/approvals.json
-ASSUMPTIONS.md
-HANDOFF.md
+my-workshop/
+  architecture-studio.json   skill version that created the project
+  index.html                 the studio viewer
+  brief.json                 your confirmed answers
+  sources/                   sketches, photos, and documents you supplied
+  models/building.json       the single source of truth
+  models/variants/           complete alternative concepts
+  exports/                   SVG drawing set and manifest.json
+  reviews/                   code findings, code review, your approvals
+  ASSUMPTIONS.md
+  HANDOFF.md
 ```
 
-Open `index.html` through OpenDesign to inspect the model. WebGL content uses
-the existing powered-preview path. The studio also accepts a development model
-override:
+The folder is self-contained: zip it, put it under version control, or open it
+on another machine without the skill.
 
-```text
-assets/studio-template.html?model=../examples/lakeside-barn-residence/building.json
-```
+## Scripts
 
-Other query parameters: `view` (`plan`, `elevation`, `section`, `systems`,
-`model`, `code`, `assumptions`), `level`, and `section`.
+All scripts live in `scripts/` and run with plain `node`.
+
+| Command | What it does |
+| --- | --- |
+| `node scripts/init.mjs <project>` | Create a project folder. `--update` replaces only the viewer with this skill's version. |
+| `node scripts/serve.mjs <project>` | Serve the project on `127.0.0.1` and open the default browser. Live reload is on by default. Options: `--port`, `--no-open`, `--no-watch`, `--json`. |
+| `node scripts/export-drawings.mjs --project <project>` | Validate the model and write `exports/**/*.svg` plus `exports/manifest.json`. Writes nothing while the model has errors. |
+| `node scripts/bundle.mjs <project>` | Write one self-contained HTML file to `exports/` for sharing. It opens with a double-click and needs no server. |
+
+`serve.mjs` picks a port derived from the project path, so a project always
+opens at the same address and keeps the approvals the viewer stores in the
+browser.
+
+The viewer accepts query parameters: `view` (`plan`, `elevation`, `section`,
+`systems`, `model`, `code`, `assumptions`), `level`, `section`, `elevation`,
+and `model` (a path to an alternative model file).
 
 ## Drawings
 
 Every drawing is a drafted sheet with a border, title block, view title,
 graphic scale bar, and (on plans) a north arrow. Linework weight, lettering,
-dimensions, and symbols follow `references/drafting-standard.md`:
+dimensions, and symbols follow
+[`references/drafting-standard.md`](references/drafting-standard.md):
 
 - `feet-inches` models use an NCS-informed imperial profile: ANSI B sheets,
   architect's scales, architectural tick terminators.
@@ -81,55 +130,35 @@ The profiles are informed by those standards; the drawings never claim
 conformance to them, and every title block reads "Concept - not for
 construction".
 
-The viewer around the sheets (tabs, toolbar, inspector, Code and Assumptions
-pages) follows `references/viewer-chrome.md`.
-
-## Exported Drawing Set
-
-`scripts/export-drawings.ts` renders every sheet with the same code the viewer
-runs and writes standalone SVG files plus `exports/manifest.json`:
-
-```bash
-node --experimental-strip-types scripts/export-drawings.ts --project <project-dir>
-```
-
-The script refuses to write anything while the model has validation errors.
-The manifest records a model fingerprint, so the viewer can tell when the
-exported drawings are older than the model. The viewer's **Download drawing
-set** button packages the files listed in the manifest into one ZIP; it does
-not render anything itself.
-
 Selecting an element in any drawing opens its review details: key dimensions,
 a small detail drawing for stairs, openings, and roofs, the decisions the
-concept leaves open (header sizes, framing, guards), and its evidence. The
-owner can approve an element there. Approvals are kept in the browser and
-exported as `reviews/approvals.json` with the drawing set; they record the
-owner's sign-off on the concept, not a professional approval.
+concept leaves open, and its evidence. You can approve an element there.
+Approvals are exported as `reviews/approvals.json` with the drawing set; they
+record your sign-off on the concept, not a professional approval.
 
-## Included Fixture
+## Limits
 
-`examples/lakeside-barn-residence/building.json` is synthetic. It exercises a
-two-level workshop/residence, hosted openings, stairs, roof geometry, all three
-MEP disciplines, evidence metadata, and handoff assumptions. It contains no
-private address, satellite imagery, photographs, or construction documents.
+- Slabs must be axis-aligned rectangles, and a model may contain one
+  axis-aligned rectangular gable roof. The studio blocks unsupported or invalid
+  geometry instead of approximating it.
+- "Close to accurate" means model coordinates are real units and every derived
+  view agrees within the declared tolerance. It does not imply structural
+  adequacy, engineered system sizing, permit readiness, or construction
+  accuracy.
 
-## Development Validation
+## Development
 
 ```bash
-node --experimental-strip-types --test plugins/community/architecture-studio/tests/studio-template.test.ts
-corepack pnpm exec od plugin validate ./plugins/community/architecture-studio --no-daemon
-node --experimental-strip-types plugins/community/architecture-studio/scripts/build-preview.ts --check
-corepack pnpm guard
-corepack pnpm --filter @open-design/plugin-runtime typecheck
+node --test                            # run the test suite
+node scripts/build-preview.mjs         # regenerate preview/index.html
+node scripts/build-preview.mjs --check # fail if the preview is stale
 ```
 
-Visual acceptance must confirm that plan, elevation, section, systems, and 3D
-views all use the same openings, levels, stair, roof, and system coordinates.
+`preview/index.html` is the studio template with the example model embedded.
+Regenerate it after changing either file. The examples in `examples/` are
+synthetic and contain no private addresses, imagery, or construction
+documents.
 
-`preview/index.html` is generated from the studio template with the example
-model embedded; regenerate it with `scripts/build-preview.ts` after changing
-either file.
+## License
 
-Slabs must be axis-aligned rectangles, and the active model may contain one
-axis-aligned rectangular gable roof. The studio blocks unsupported or invalid
-geometry instead of approximating it.
+[MIT](LICENSE)

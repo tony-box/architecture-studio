@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/tony-box/architecture-studio/main/references/brief.schema.json",
+  "title": "Architecture Studio Brief",
+  "description": "What the user told the agent before modeling began. Written during intake (references/intake.md) and read on later sessions to resume.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "project", "location", "levels", "units", "program", "targetArea", "assumptions"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "status": {
+      "description": "in-progress while intake continues; confirmed once the user accepts the summary.",
+      "enum": ["in-progress", "confirmed"]
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "use"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "use": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" }
+      }
+    },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["country", "stateOrRegion", "locality"],
+      "properties": {
+        "country": { "type": "string", "minLength": 2 },
+        "stateOrRegion": { "type": "string" },
+        "county": { "type": "string" },
+        "locality": { "type": "string" }
+      }
+    },
+    "levels": { "type": "integer", "minimum": 1 },
+    "units": { "enum": ["feet-inches", "metric"] },
+    "program": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "quantity": { "type": "integer", "minimum": 1, "default": 1 },
+          "approxArea": { "$ref": "#/$defs/area" },
+          "level": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "targetArea": {
+      "oneOf": [
+        { "$ref": "#/$defs/area" },
+        { "const": "derive-from-program" }
+      ]
+    },
+    "occupants": { "type": "string" },
+    "priorities": { "type": "array", "items": { "type": "string" } },
+    "site": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lot": { "$ref": "#/$defs/answer" },
+        "setbacks": { "$ref": "#/$defs/answer" },
+        "orientation": { "$ref": "#/$defs/answer" },
+        "slope": { "$ref": "#/$defs/answer" },
+        "utilities": { "$ref": "#/$defs/answer" },
+        "access": { "$ref": "#/$defs/answer" }
+      }
+    },
+    "preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roof": { "$ref": "#/$defs/answer" },
+        "construction": { "$ref": "#/$defs/answer" },
+        "heating": { "$ref": "#/$defs/answer" },
+        "water": { "$ref": "#/$defs/answer" },
+        "accessibility": { "$ref": "#/$defs/answer" }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "kind"],
+        "properties": {
+          "path": { "type": "string", "description": "Relative to the project folder, normally under sources/." },
+          "kind": { "enum": ["sketch", "plan", "photo", "survey", "code-document", "other"] },
+          "calibration": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["description", "valueMm"],
+            "properties": {
+              "description": { "type": "string" },
+              "valueMm": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "research": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "network": { "type": "boolean", "description": "Whether the user allowed online code research." }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["topic", "assumption", "acceptedByUser"],
+        "properties": {
+          "topic": { "type": "string" },
+          "assumption": { "type": "string" },
+          "acceptedByUser": { "type": "boolean" }
+        }
+      }
+    },
+    "openQuestions": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "area": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": { "type": "number", "exclusiveMinimum": 0 },
+        "unit": { "enum": ["sq-ft", "m2"] }
+      }
+    },
+    "answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source"],
+      "properties": {
+        "value": { "type": "string" },
+        "source": {
+          "description": "user: stated by the user. assumed: proposed by the agent and accepted. unknown: left for professional follow-up.",
+          "enum": ["user", "assumed", "unknown"]
+        }
+      }
+    }
+  }
+}

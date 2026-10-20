@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import { buildDrawingSet, loadStudioApi } from '../scripts/export-drawings.ts';
-import { expectedPreview } from '../scripts/build-preview.ts';
+import { buildDrawingSet, loadStudioApi } from '../scripts/export-drawings.mjs';
+import { expectedPreview } from '../scripts/build-preview.mjs';
 
-const pluginRoot = path.resolve(import.meta.dirname, '..');
-const html = fs.readFileSync(path.join(pluginRoot, 'assets', 'studio-template.html'), 'utf8');
-const readFixture = (name: string) => JSON.parse(fs.readFileSync(path.join(pluginRoot, 'examples', name, 'building.json'), 'utf8'));
+const skillRoot = path.resolve(import.meta.dirname, '..');
+const html = fs.readFileSync(path.join(skillRoot, 'assets', 'studio-template.html'), 'utf8');
+const readFixture = name => JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', name, 'building.json'), 'utf8'));
 const fixture = readFixture('lakeside-barn-residence');
 const metricFixture = readFixture('compact-metric-studio');
 
@@ -139,10 +139,10 @@ test('code view renders a valid staged report and distinguishes invalid reports'
   assert.match(elements.get('#content').innerHTML, /belongs to another project/);
 });
 
-const svgAttr = (svg: string, name: string) => svg.match(new RegExp(`<svg[^>]*\\s${name}="([^"]*)"`))?.[1];
-const entityGroup = (svg: string, id: string) => svg.match(new RegExp(`<g data-entity="${id}">([\\s\\S]*?)</g>`))?.[1] ?? '';
-const numbersIn = (markup: string, attr: string) => [...markup.matchAll(new RegExp(`\\s${attr}="(-?[\\d.]+)"`, 'g'))].map(match => Number(match[1]));
-const pointXs = (markup: string) => [...markup.matchAll(/points="([^"]+)"/g)].flatMap(match => match[1].split(' ').map(pair => Number(pair.split(',')[0])));
+const svgAttr = (svg, name) => svg.match(new RegExp(`<svg[^>]*\\s${name}="([^"]*)"`))?.[1];
+const entityGroup = (svg, id) => svg.match(new RegExp(`<g data-entity="${id}">([\\s\\S]*?)</g>`))?.[1] ?? '';
+const numbersIn = (markup, attr) => [...markup.matchAll(new RegExp(`\\s${attr}="(-?[\\d.]+)"`, 'g'))].map(match => Number(match[1]));
+const pointXs = markup => [...markup.matchAll(/points="([^"]+)"/g)].flatMap(match => match[1].split(' ').map(pair => Number(pair.split(',')[0])));
 
 test('sheets follow the drafting profile selected by display units', () => {
   const { api } = loadStudio();
@@ -280,14 +280,14 @@ test('the drawing-set ZIP is a valid store-only archive', () => {
   assert.equal(api.crc32(encoder.encode('123456789')), 0xcbf43926);
 });
 
-test('the marketplace preview is generated from the current template', () => {
-  const current = fs.readFileSync(path.join(pluginRoot, 'preview', 'index.html'), 'utf8').replace(/\r\n/g, '\n');
+test('the demo preview is generated from the current template', () => {
+  const current = fs.readFileSync(path.join(skillRoot, 'preview', 'index.html'), 'utf8').replace(/\r\n/g, '\n');
   assert.equal(current, expectedPreview().replace(/\r\n/g, '\n'));
 });
 
-test('plugin copy contains no em dashes', () => {
-  const files = ['SKILL.md', 'README.md', 'open-design.json', 'assets/studio-template.html', ...fs.readdirSync(path.join(pluginRoot, 'references')).map(file => `references/${file}`)];
-  for (const file of files) assert.doesNotMatch(fs.readFileSync(path.join(pluginRoot, file), 'utf8'), /\u2014/, file);
+test('skill copy contains no em dashes', () => {
+  const files = ['SKILL.md', 'README.md', 'assets/studio-template.html', ...fs.readdirSync(path.join(skillRoot, 'scripts')).map(file => `scripts/${file}`), ...fs.readdirSync(path.join(skillRoot, 'references')).map(file => `references/${file}`)];
+  for (const file of files) assert.doesNotMatch(fs.readFileSync(path.join(skillRoot, file), 'utf8'), /\u2014/, file);
 });
 test('selected elements expose review details without inventing undefined values', () => {
   const { api } = loadStudio();

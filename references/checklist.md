@@ -17,7 +17,7 @@
 - [ ] Code findings cite sources or explicitly report research as unavailable.
 - [ ] Diagnostics, Code, Assumptions, and Handoff surfaces all state that the
       work is conceptual and requires professional verification.
-- [ ] `exports/` was written by `export-drawings.ts` after the last model
+- [ ] `exports/` was written by `export-drawings.mjs` after the last model
       change: `exports/manifest.json` lists every sheet and its model fingerprint
       matches the active model. No SVG was hand-written or edited.
 

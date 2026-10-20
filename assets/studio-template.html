@@ -230,6 +230,7 @@
   </div>
 </div>
 <script type="application/json" id="embedded-model"></script>
+<script type="application/json" id="embedded-code-findings"></script>
 <script>
 (() => {
   'use strict';
@@ -1245,7 +1246,7 @@
     });
   }
 
-  // Full drawing set for the model. scripts/export-drawings.ts writes these files; the viewer
+  // Full drawing set for the model. scripts/export-drawings.mjs writes these files; the viewer
   // only downloads what that script already wrote.
   function renderDrawingSet(model) {
     const sheets = [];
@@ -1459,7 +1460,7 @@
 
   // Approvals are the user's sign-off on a concept element. The page is static, so they are
   // kept in this browser and exported with the drawing set as reviews/approvals.json.
-  const approvalsKey = () => `od-architecture-studio:approvals:${state.model?.project.id}`;
+  const approvalsKey = () => `architecture-studio:approvals:${state.model?.project.id}`;
   function loadApprovals() {
     try { return typeof localStorage === 'undefined' ? {} : JSON.parse(localStorage.getItem(approvalsKey()) ?? '{}') ?? {}; } catch { return {}; }
   }
@@ -1653,7 +1654,7 @@
 
 
   // ---------------------------------------------------------------------------
-  // Drawing-set download. Packages files scripts/export-drawings.ts already wrote.
+  // Drawing-set download. Packages files scripts/export-drawings.mjs already wrote.
   // ---------------------------------------------------------------------------
   const CRC_TABLE = (() => {
     const table = new Uint32Array(256);
@@ -1716,7 +1717,7 @@
     const m = state.manifest;
     const approvalCount = Object.keys(state.approvals).length;
     if (m.status !== 'loaded' && !approvalCount) {
-      downloadStatus.textContent = m.status === 'invalid' ? m.message : 'No drawing set has been exported yet. Run scripts/export-drawings.ts to write exports/, then reload this page.';
+      downloadStatus.textContent = m.status === 'invalid' ? m.message : 'No drawing set has been exported yet. Run scripts/export-drawings.mjs to write exports/, then reload this page.';
       return;
     }
     downloadStatus.textContent = 'Packaging the drawing set...';
@@ -1738,7 +1739,7 @@
     setTimeout(() => URL.revokeObjectURL(link.href), 4000);
     downloadStatus.textContent = [
       `Downloaded ${files.length} files as ${link.download}.`,
-      m.stale ? 'The exported drawings predate the current model. Rerun scripts/export-drawings.ts to refresh them.' : '',
+      m.stale ? 'The exported drawings predate the current model. Rerun scripts/export-drawings.mjs to refresh them.' : '',
       m.status !== 'loaded' ? 'Only your approvals were included; no drawing set has been exported yet.' : '',
       missing.length ? `Not found: ${missing.join(', ')}.` : ''
     ].filter(Boolean).join(' ');
@@ -1863,6 +1864,18 @@
       });
     }
     renderInspector();
+    syncLocation();
+  }
+
+  // Mirrors the current view into the URL so a reload (including live reload) keeps the user's place.
+  function syncLocation() {
+    if (typeof history === 'undefined' || typeof location === 'undefined' || !history.replaceState) return;
+    const params = new URLSearchParams(location.search);
+    params.set('view', state.view);
+    if (state.levelId) params.set('level', state.levelId);
+    if (state.sectionId) params.set('section', state.sectionId);
+    if (state.elevation) params.set('elevation', state.elevation);
+    history.replaceState(null, '', `${location.pathname}?${params}${location.hash}`);
   }
 
   function setView(view, focusTab) {
@@ -1972,13 +1985,15 @@
       const requestedView = params.get('view'); if (ALL_VIEWS.includes(requestedView)) state.view = requestedView;
       const requestedLevel = params.get('level'); state.levelId = state.model.levels.some(level => level.id === requestedLevel) ? requestedLevel : (sortedLevels(state.model)[0]?.id ?? null);
       const requestedSection = params.get('section'); state.sectionId = (state.model.sections ?? []).some(item => item.id === requestedSection) ? requestedSection : (state.model.sections?.[0]?.id ?? null);
+      const requestedElevation = params.get('elevation'); if ([...elevationSelect.options].some(option => option.value === requestedElevation)) state.elevation = requestedElevation;
       state.findings = validateModel(state.model);
       state.approvals = loadApprovals();
+      const embeddedCode = params.get('code') ? '' : $('#embedded-code-findings')?.textContent?.trim();
       const codePath = params.get('code') || './reviews/code-findings.json';
       try {
-        const codeResponse = await fetch(codePath, { cache: 'no-store' });
-        if (codeResponse.ok) {
-          const data = await codeResponse.json();
+        const codeResponse = embeddedCode ? null : await fetch(codePath, { cache: 'no-store' });
+        if (embeddedCode || codeResponse.ok) {
+          const data = embeddedCode ? JSON.parse(embeddedCode) : await codeResponse.json();
           const valid = data?.schemaVersion === '1.0.0' && data.projectId === state.model.project.id && Array.isArray(data.findings) && data.coverage && ['researched', 'needs-review', 'unavailable'].includes(data.status);
           state.codeReport = valid ? { status: 'loaded', data } : { status: 'invalid', message: 'The advisory code report is malformed or belongs to another project.' };
         } else if (codeResponse.status !== 404) state.codeReport = { status: 'invalid', message: `The advisory code report request failed with status ${codeResponse.status}.` };
@@ -2009,7 +2024,7 @@
     renderPlanSheet, renderElevationSheet, renderSectionSheet, sectionGeometry, renderDrawingSet, modelFingerprint,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport
   };
-  if (typeof globalThis.__OD_STUDIO_TEST__ === 'function') globalThis.__OD_STUDIO_TEST__(studioApi);
+  if (typeof globalThis.__ARCHITECTURE_STUDIO_API__ === 'function') globalThis.__ARCHITECTURE_STUDIO_API__(studioApi);
   else start();
 })();
 </script>

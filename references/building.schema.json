@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://open-design.ai/schemas/concept-building.v1.json",
+  "$id": "https://raw.githubusercontent.com/tony-box/architecture-studio/main/references/building.schema.json",
   "title": "Architecture Building Model",
   "type": "object",
   "additionalProperties": false,
