@@ -50,13 +50,15 @@ A section definition is a vertical cutting plane through `start` and `end`.
   - Walls: the wall rectangle (centreline ± half thickness) crossed by the
     segment, from base to top. If the crossing falls inside a hosted opening,
     only the wall below the sill and above the head is cut. Each wall layer is
-    the crossed interval of its own band; a header replaces its layer from the
-    head up by its depth wherever the crossing falls within the opening plus
-    its bearing.
+    the crossed interval of its own band, in the wall's `layerOrder`; a header
+    replaces the layer its `layerId` names from the head up by its depth
+    wherever the crossing falls within the opening plus its bearing (a steel
+    angle draws over its layer instead).
   - Slabs: the crossed interval from `elevation - thickness` to `elevation`,
     split into layers from the top down.
-  - Foundations and site surfaces: the crossed interval from
-    `topElevationMm - depthMm` (or `- thicknessMm`) to `topElevationMm`.
+  - Foundations and site surfaces: every interval the segment spends inside
+    the polygon, from `topElevationMm - depthMm` (or `- thicknessMm`) to
+    `topElevationMm`.
   - Beams crossing the plane at more than about 45°: the member profile,
     centred on the crossed interval, from `topElevationMm - depthMm` up.
   - Roofs: the roof surface profile along the crossed interval, including

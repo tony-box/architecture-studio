@@ -122,82 +122,108 @@ The viewer's interface accent must never reuse a discipline colour.
 
 ## Materials
 
-Cut elements are hatched by material, following the conventions below. They
-are informed by ISO 128-3 (general principles for hatching cut areas: thin
-lines, 45° to the outline, a key on the sheet) and common European building
-practice in DIN 1356-1 for the metric profile, and by the NCS Uniform Drawing
-System material indications and *Architectural Graphic Standards* for the
-imperial profile. They are not a claim of conformance.
+Cut elements are hatched by material. The conventions below are informed by
+the sources in "Material sources" and are not a claim of conformance. Where a
+rule is the studio's own choice rather than a published convention, it is
+marked as a studio rule. Tests check that the renderer follows this section;
+they cannot check that this section matches the named standards.
 
-**When materials are drawn.** A sheet carries material detail when the model
-has a `materials` catalog, the sheet is a floor plan or a building section,
-and the plot scale is 1:100 (1/8" = 1'-0") or larger. Elevations, systems
-sheets, and sheets at smaller scales keep solid poché, as both profiles reduce
-walls to solid fill at small scales. Elements without a material on a
-material sheet stay in poché and appear in the key as "Material not
-specified".
+**When materials are drawn (studio rule).** A sheet carries material detail
+when the model has a `materials` catalog, the sheet is a floor plan or a
+building section, and the plot scale is at or larger than the profile's
+1:100-class scale: 1/8" = 1'-0" (1:96) imperial, 1:100 metric. This is a
+plotting policy: DIN 1356-1 practice reserves detailed hatching for 1:100 and
+larger (secondary source), and NCS has no equivalent single threshold.
+Elevations, systems sheets, and smaller scales keep solid poché. Elements
+without a material on a material sheet stay in poché and appear in the key as
+"Material not specified".
 
 **Material key.** Every sheet with material detail lists, in the title block
 under "Materials", a 12 x 4 mm swatch and the catalog name of each material it
 draws, in drawing order. Nothing appears in the key that the sheet does not
-draw.
+draw. When the title block has no room for an entry, the key ends with "+N
+drawn but not keyed" and the sheet raises a `material.key-overflow` warning
+naming the missing materials; it never drops them silently.
 
 **Hatching.** Hatch linework uses the `fine` pen and is authored in paper
 millimetres, so spacing is the same at every scale. 45° means rising to the
 right on the sheet.
 
-| Category | Imperial (NCS-informed) | Metric (ISO/DIN-informed) |
-|---|---|---|
-| `earth` | Groups of three short lines, alternating direction, at 45° | Same |
-| `gravel` | Small open pebbles of varying size | Same |
-| `sand` | Fine dense stipple | Same |
-| `concrete` | Stipple with small open triangles (aggregate) | Same |
-| `reinforced-concrete` | Same as concrete; reinforcement is a note, not a hatch | Concrete stipple plus 45° lines at 2 mm |
-| `concrete-masonry` | 45° lines at 2 mm with sparse stipple | Same |
-| `brick` | 45° lines at 1 mm | Same |
-| `steel` | Solid black | Solid black (thin-section blackening) |
-| `wood-framing` | Along a layer: wavy grain lines. A member cut across: an X corner to corner | Along a layer: wavy grain lines. A member cut across: growth rings |
-| `engineered-wood` | Laminations parallel to the long side | Same |
-| `insulation-batt` | Continuous wave touching both faces | Same |
-| `insulation-rigid` | Zig-zag X between the faces | 45° crosshatch at 1.2 mm |
-| `gypsum` | Sparse fine stipple | Same |
-| `generic` | Solid poché | Same |
+| Category | Imperial (NCS-informed) | Metric (ISO/DIN-informed) | Basis |
+|---|---|---|---|
+| `earth` | Groups of three short lines, alternating direction, at 45° | Same | B, C |
+| `gravel` | Small open pebbles of varying size | Same | B, C |
+| `sand` | Fine dense stipple | Same | B, C |
+| `concrete` | Stipple with small open triangles (aggregate) | Same | B, C |
+| `reinforced-concrete` | Same as concrete; reinforcement is a note, not a hatch | Concrete stipple plus 45° lines at 2 mm | B (metric), C (imperial) |
+| `concrete-masonry` | 45° lines at 2 mm with sparse stipple | Same | D |
+| `brick` | 45° lines at 1 mm | Same | A, B |
+| `steel` | Solid black | Solid black (thin-section blackening) | A, C |
+| `wood-framing` | Along a layer: wavy grain lines. A member cut across: an X corner to corner | Along a layer: wavy grain lines. A member cut across: growth rings | B (metric), C (imperial) |
+| `engineered-wood` | Laminations parallel to the long side | Same | D |
+| `insulation-batt` | Continuous wave touching both faces | Same | B, C |
+| `insulation-rigid` | Zig-zag X between the faces | 45° crosshatch at 1.2 mm | B (metric), C (imperial) |
+| `gypsum` | Sparse fine stipple | Same | C |
+| `generic` | Solid poché | Same | D |
 
 A region thinner than 0.6 mm on paper is outlined but not hatched, except
-steel, which stays solid. Directional symbols (grain, batt, zig-zag) run along
-the longer side of their region.
+steel, which stays solid (studio rule). Directional symbols (grain, batt,
+zig-zag) run along the longer side of their region; on a non-rectangular
+region they are clipped to its outline.
 
-**Assemblies.** `layers` on a wall run from its left face to its right face,
-looking from start to end; on a slab, from top to bottom. Each layer is its own
-region with a `fine` boundary line, inside the `cut` outline of the whole
-element. In plan, where two walls meet at their ends (within half the other
-wall's thickness), both are mitered on the line through their inner and outer
-face intersections; collinear walls butt square. A wall that ends part way
-along another wall stops at that wall's face.
+### Material sources
 
-**Structural members.** A column the plan cut plane passes through is drawn
-cut, in its profile (rectangle, wide-flange I, or hollow section), with the
-`cut` pen. Beams on a plan's level show their two edges as hidden lines when
-they are above the cut plane. In section, a beam crossing the plane at more
-than about 45° is drawn cut, in profile; members cut along their length, and
-members beyond the plane, are drawn in outline (with flange lines for
-wide-flange beams), as a member seen in elevation.
+| Key | Source | Kind | Confidence |
+|---|---|---|---|
+| A | ISO 128-3:2022, *Technical product documentation, General principles of representation, Part 3: Views, sections and cuts*. Thin 45° hatching of cut areas, blackening of thin sections, and a key for hatches that encode material. Catalogue scope only; the text was not reviewed. | Primary (scope only) | Medium |
+| B | DIN 1356-1:2024-04 hatch conventions as summarised by cad-markt.de, "DIN 1356-1 Schraffurdarstellungen von Baumaterialien", accessed 2026-10-19. The standard itself was not reviewed. | Secondary | Low to medium |
+| C | US practice as summarised from *Architectural Graphic Standards* and the NCS Uniform Drawing System, Module 6 (Symbols), whose content listing is at nationalcadstandard.org/ncs6/content.php (accessed 2026-10-19). The symbol sheets themselves were not reviewed. | Secondary | Low to medium |
+| D | Studio convention: no source located; chosen to keep categories distinguishable. | Studio rule | n/a |
 
-**Headers.** In section, a header occupies its wall layer from the opening
-head up by its depth, replacing that layer, and extends past each jamb by its
-bearing. Sawn and built-up lumber draw one end-grain symbol per ply; engineered
-lumber draws laminations; a steel beam header draws its I profile; a steel
-angle lintel draws an L at the inner edge of its layer and leaves the layer it
-carries in place; concrete lintels and bond beams add two reinforcing bars
-near the bottom.
+Before relying on a profile difference (reinforced concrete, rigid insulation,
+timber end grain) in a handoff, confirm it against the licensed standard or
+the receiving office's own material legend.
+
+**Assemblies.** `layers` on a wall follow its `layerOrder`: `left-to-right`
+(the default) lists them from the wall's left face looking from start to end;
+`interior-to-exterior` starts at the face toward the centre of the level's
+walls, so reversing a wall's direction does not flip its assembly. Slab layers
+run from top to bottom. Every layer has an `id`, stable within its wall or
+slab, that headers reference. Each layer is its own region with a `fine`
+boundary line, inside the `cut` outline of the whole element. In plan, where
+two walls meet at their ends (within half the other wall's thickness), both
+are mitered on the line through their inner and outer face intersections;
+collinear walls butt square. A wall that ends part way along another wall
+stops at that wall's face.
+
+**Structural members (studio rule).** A column the plan cut plane passes
+through is drawn cut, in its profile (rectangle, wide-flange I, or hollow
+section), with the `cut` pen. Beams on a plan's level show their two edges as
+hidden lines when they are above the cut plane. In section, a beam crossing the
+plane at more than about 45° is drawn cut, in profile; members cut along their
+length, and members beyond the plane, are drawn in outline (with flange lines
+for wide-flange beams), as a member seen in elevation.
+
+**Headers.** A header sits in the wall layer its `layerId` names (or the whole
+wall when the wall has no layers). Its kind sets only its shape; its material
+comes from `materialId`, and without one it is unspecified and draws in poché.
+In section, a header occupies its layer from the opening head up by its depth,
+replacing that layer, and extends past each jamb by its bearing. Sawn and
+built-up lumber draw one end-grain symbol per ply; engineered lumber draws
+laminations; a steel beam header draws its I profile; a steel angle lintel
+draws an L whose vertical leg sits on the layer face named by `face` (`inner`,
+toward the wall centre, by default, or `outer`), and leaves the layer it
+carries in place. Two angles on different faces may share a layer; any other
+header has its layer to itself. Reinforcement is never drawn: the model has no
+bar sizes, counts, or cover.
 
 **Site.** With `site.groundMaterialId`, sections hatch earth below the ground
 line down to 300 mm under the deepest cut element (at least 600 mm), with no
-outline. The earth is left out when including it would drop the sheet below
-1:100, so it never costs a section its material detail. Foundations and site
-surfaces are cut like slabs. In plan, surfaces
-on the level are hatched with a `thin` outline; higher surfaces draw over lower
-ones, and a surface wholly under a higher one is not drawn.
+outline (studio rule). The earth is left out when including it would drop the
+sheet below the material detail scale. Foundations and site surfaces may be any
+simple polygon; sections cut every interval the plane crosses. In plan,
+surfaces on the level are hatched with a `thin` outline; higher surfaces draw
+over lower ones, and a surface wholly inside a higher one is not drawn.
 
 ## Symbols
 

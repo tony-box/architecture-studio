@@ -352,10 +352,10 @@ test('material hatching follows the drafting profile', () => {
   };
   const imperial = slabMaterial('feet-inches'), metric = slabMaterial('metric');
   assert.match(imperial, /url\(#hatch-concrete\)/);
-  assert.doesNotMatch(imperial, /url\(#hatch-diagonal-wide\)/, 'NCS shows reinforced concrete as plain concrete');
-  assert.match(metric, /url\(#hatch-diagonal-wide\)/, 'ISO/DIN practice adds 45-degree lines for reinforcement');
+  assert.doesNotMatch(imperial, /url\(#hatch-diagonal-wide\)/, 'imperial profile convention: reinforced concrete hatches as plain concrete');
+  assert.match(metric, /url\(#hatch-diagonal-wide\)/, 'metric profile convention: reinforced concrete adds 45-degree lines');
 
-  // Rigid insulation: zig-zag (NCS) against crosshatch (ISO/DIN). Sawn lumber end grain: X against rings.
+  // Profile conventions (drafting-standard.md): rigid insulation zig-zag against crosshatch; sawn end grain X against rings.
   const imperialSection = api.renderSectionSheet(structuredClone(materialFixture), 'section-aa').svg;
   const metricSection = api.renderSectionSheet(structuredClone(metricMaterialFixture), 'section-aa').svg;
   assert.doesNotMatch(imperialSection, /hatch-crosshatch/);
@@ -398,17 +398,28 @@ test('validation catches material, assembly, header, and member errors', () => {
   expectError('reference.material', model => { model.slabs[0].layers[2].materialId = 'mat-missing'; });
   expectError('reference.material', model => { model.beams[0].materialId = 'mat-missing'; });
   expectError('material.category', model => { model.materials[0].category = 'adobe'; });
-  expectError('opening.header', model => { model.openings.find(item => item.id === 'opening-studio-window').headers[0].layerIndex = 9; });
+  expectError('opening.header', model => { model.openings.find(item => item.id === 'opening-studio-window').headers[0].layerId = 'missing-layer'; });
+  expectError('opening.header', model => { delete model.openings.find(item => item.id === 'opening-studio-window').headers[0].layerId; });
   expectError('opening.header', model => { delete model.openings.find(item => item.id === 'opening-studio-window').headers[0].plies; });
-  expectError('opening.header', model => { model.openings.find(item => item.id === 'opening-studio-window').headers[1].layerIndex = 1; });
+  expectError('opening.header', model => { model.openings.find(item => item.id === 'opening-studio-window').headers[1].layerId = 'studs'; });
+  expectError('opening.header', model => { model.openings.find(item => item.id === 'opening-office-window').headers[1].face = 'inner'; });
+  expectError('opening.header', model => { model.openings.find(item => item.id === 'opening-studio-window').headers[0].face = 'outer'; });
+  expectError('material.layers', model => { model.walls[0].layers[1].id = model.walls[0].layers[0].id; });
+  expectError('material.layers', model => { delete model.slabs[0].layers[0].id; });
+  expectError('material.layers', model => { model.walls[0].layerOrder = 'outside-in'; });
   expectError('opening.header-fit', model => { model.openings.find(item => item.id === 'opening-studio-window').headers[0].depthMm = 900; });
   expectError('opening.header-fit', model => { model.openings.find(item => item.id === 'opening-overhead-door').headers[0].bearingMm = 5000; });
   expectError('member.profile', model => { delete model.beams[0].shape.flangeThicknessMm; });
   expectError('member.profile', model => { model.columns[0].shape.wallThicknessMm = 80; });
   expectError('member.geometry', model => { model.columns[0].topElevationMm = -10; });
-  expectError('renderer.unsupported-foundation', model => { model.foundations[0].boundary = [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 0, y: 1000 }]; });
-  expectError('renderer.unsupported-surface', model => { model.surfaces[0].boundary = [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 0, y: 1000 }]; });
-  assert.ok(api.validateModel(structuredClone(materialFixture)).some(finding => finding.code === 'structure.review' && finding.severity === 'advisory'));
+  expectError('polygon.geometry', model => { model.foundations[0].boundary = [{ x: 0, y: 0 }, { x: 1000, y: 1000 }, { x: 0, y: 1000 }, { x: 1000, y: 0 }]; });
+  expectError('polygon.geometry', model => { model.surfaces[0].boundary = [{ x: 0, y: 0 }, { x: 1000, y: 0 }]; });
+  const findings = api.validateModel(structuredClone(materialFixture));
+  assert.ok(findings.some(finding => finding.code === 'structure.review' && finding.severity === 'advisory'));
+  assert.ok(!findings.some(finding => finding.code === 'material.evidence'), 'example materials carry evidence');
+  const unsourced = structuredClone(materialFixture);
+  delete unsourced.materials[0].evidence;
+  assert.ok(api.validateModel(unsourced).some(finding => finding.code === 'material.evidence' && finding.severity === 'advisory'));
 });
 
 test('sections cut assemblies, headers, members, foundations, and site surfaces', () => {
@@ -494,7 +505,7 @@ test('review regressions: lintel draw order, near-miss corners, unequal miters, 
   // Steel angle lintels draw after (over) the brick layer they carry.
   const section = api.renderSectionSheet(structuredClone(materialFixture), 'section-aa').svg;
   const materials = section.match(/<g data-role="materials"[^>]*>([\s\S]*?)<\/g>/)[1];
-  const lastBrick = materials.lastIndexOf('url(#hatch-diagonal)'), firstAngle = materials.search(/<polygon points="(?:[^ "]+ ){5}[^ "]+" fill="#1b1b1b"/);
+  const lastBrick = materials.lastIndexOf('url(#hatch-diagonal)'), firstAngle = materials.search(/<polygon points="(?:[^ "]+ ){5}[^ "]+" fill="none"/);
   assert.ok(firstAngle > lastBrick, 'angle lintels follow every brick fill');
 
   const plan = model => api.renderPlanSheet(model, 'level-ground').svg;
@@ -524,7 +535,7 @@ test('review regressions: lintel draw order, near-miss corners, unequal miters, 
   const tall = structuredClone(materialFixture);
   tall.foundations[0].depthMm = 20000;
   const tallSheet = api.renderSectionSheet(tall, 'section-aa');
-  assert.ok(!/data-role="earth"/.test(tallSheet.svg) || tallSheet.ratio <= 100);
+  assert.ok(!/data-role="earth"/.test(tallSheet.svg) || tallSheet.ratio <= api.PROFILES.imperial.materialDetailRatio);
 
   const inherited = structuredClone(materialFixture);
   inherited.materials[0].category = 'toString';
@@ -532,4 +543,138 @@ test('review regressions: lintel draw order, near-miss corners, unequal miters, 
   const badHeader = structuredClone(materialFixture);
   badHeader.openings[0].headers[0].kind = 'constructor';
   assert.ok(errorCodes(api, badHeader).includes('opening.header'));
+});
+
+// The hatch contract from references/drafting-standard.md, Materials. Pattern ids or the directional
+// symbol each category must draw, per profile.
+const HATCH_CONTRACT = {
+  earth: [['earth'], ['earth']], gravel: [['gravel'], ['gravel']], sand: [['sand'], ['sand']], concrete: [['concrete'], ['concrete']],
+  'reinforced-concrete': [['concrete'], ['concrete', 'diagonal-wide']], 'concrete-masonry': [['concrete-sparse', 'diagonal-wide'], ['concrete-sparse', 'diagonal-wide']],
+  brick: [['diagonal'], ['diagonal']], gypsum: [['stipple'], ['stipple']], 'insulation-rigid': ['zigzag', ['crosshatch']],
+  steel: ['solid', 'solid'], 'wood-framing': ['grain', 'grain'], 'engineered-wood': ['laminated', 'laminated'], 'insulation-batt': ['batt', 'batt'], generic: ['poche', 'poche']
+};
+
+test('every material category draws its documented hatch in both profiles', () => {
+  const { api } = loadStudio();
+  assert.deepEqual(Object.keys(HATCH_CONTRACT).sort(), [...Object.keys(api.MATERIAL_CATEGORIES)].sort(), 'the contract covers every category');
+  const box = [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 10 }, { x: 0, y: 10 }];
+  const frame = { o: { x: 0, y: 10 }, u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: 20, T: 10 };
+  for (const [index, profile] of [api.PROFILES.imperial, api.PROFILES.metric].entries()) {
+    const model = structuredClone(index ? metricMaterialFixture : materialFixture);
+    for (const [category, expected] of Object.entries(HATCH_CONTRACT)) {
+      const markup = api.materialContext(model, profile, true).region(box, frame, category), label = `${profile.id} ${category}`;
+      const patterns = [...markup.matchAll(/url\(#hatch-([a-z-]+)\)/g)].map(match => match[1]).sort();
+      if (Array.isArray(expected[index])) { assert.deepEqual(patterns, expected[index], label); continue; }
+      assert.equal(patterns.length, 0, label);
+      const symbol = expected[index];
+      if (symbol === 'solid') assert.match(markup, /fill="#1b1b1b"/, label);
+      if (symbol === 'poche') assert.match(markup, /fill="#4d4d4d"/, label);
+      if (symbol === 'batt') assert.match(markup, /<path d="M[^"]+ C/, label);
+      if (symbol === 'zigzag' || symbol === 'grain') assert.equal((markup.match(/<polyline/g) ?? []).length, 2, label);
+      if (symbol === 'laminated') assert.ok((markup.match(/<line/g) ?? []).length >= 2, label);
+    }
+  }
+});
+
+test('thin regions stay unhatched except steel, and material detail follows each profile scale', () => {
+  const { api } = loadStudio();
+  const ctx = api.materialContext(structuredClone(materialFixture), api.PROFILES.imperial, true);
+  const thin = [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 0.5 }, { x: 0, y: 0.5 }];
+  const frame = { o: { x: 0, y: 0.5 }, u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: 20, T: 0.5 };
+  for (const category of ['gypsum', 'concrete', 'insulation-batt', 'wood-framing']) assert.doesNotMatch(ctx.region(thin, frame, category), /url\(|<path|<polyline|<line/, category);
+  assert.match(ctx.region(thin, frame, 'steel'), /fill="#1b1b1b"/);
+  // 5/8" gypsum at 1/4" = 1'-0" is 0.33 mm on paper: outlined, never hatched.
+  const plan = api.renderPlanSheet(structuredClone(materialFixture), 'level-upper').svg;
+  assert.doesNotMatch(plan.match(/<g data-layer="wallFill"[^>]*>([\s\S]*?)<\/g>/)[1], /url\(#hatch-stipple\)/);
+
+  const imperial = structuredClone(materialFixture), metric = structuredClone(metricMaterialFixture);
+  assert.equal(api.materialsActive(imperial, 96), true, '1/8" = 1\'-0"');
+  assert.equal(api.materialsActive(imperial, 128), false, '3/32" = 1\'-0"');
+  assert.equal(api.materialsActive(metric, 100), true, '1:100');
+  assert.equal(api.materialsActive(metric, 200), false, '1:200');
+  assert.equal(api.materialsActive(cloneFixture(), 12), false, 'no catalog, no detail');
+});
+
+test('oblique layered walls hatch, miter, and stay finite', () => {
+  const { api } = loadStudio();
+  const model = structuredClone(metricMaterialFixture);
+  const u1 = { x: Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) }, u2 = { x: -u1.y, y: u1.x };
+  const p = (base, u, d) => ({ x: Math.round(base.x + u.x * d), y: Math.round(base.y + u.y * d) });
+  const a = { x: 0, y: 0 }, b = p(a, u1, 5000), c = p(b, u2, 3000), mid = p(a, u1, 2500);
+  const layers = [{ id: 'veneer', materialId: 'mat-brick', thicknessMm: 115 }, { id: 'studs', materialId: 'mat-batt', thicknessMm: 160 }];
+  const wall = (id, start, end, extra) => ({ id, levelId: 'level-ground', start, end, thicknessMm: 275, heightMm: 2800, kind: 'exterior', layers, evidence: fixture.walls[0].evidence, ...extra });
+  model.walls = [wall('wall-a', a, b), wall('wall-b', b, c), { ...wall('wall-c', mid, p(mid, u2, 2000)), thicknessMm: 130, kind: 'interior', layers: undefined, materialId: 'mat-lumber' }];
+  delete model.walls[2].layers;
+  Object.assign(model, { openings: [], spaces: [], slabs: [], roofs: [], stairs: [], fixtures: [], beams: [], columns: [], foundations: [], surfaces: [], dimensions: [], sections: [] });
+  assert.equal(errorCodes(api, model).length, 0, JSON.stringify(api.validateModel(model)));
+  const sheet = api.renderPlanSheet(model, 'level-ground');
+  assert.doesNotMatch(sheet.svg, /NaN|Infinity/);
+  assert.match(sheet.svg, /url\(#hatch-diagonal\)/);
+  assert.match(sheet.svg, /<path d="M[^"]+ C/, 'batt wave follows the oblique wall');
+  const vertices = id => [...entityGroup(sheet.svg, id).matchAll(/points="([^"]+)"/g)][0][1].split(' ').map(pair => pair.split(',').map(Number));
+  const shared = vertices('wall-a').filter(([x, y]) => vertices('wall-b').some(([x2, y2]) => Math.hypot(x - x2, y - y2) < 0.02));
+  assert.equal(shared.length, 2, 'the 90 degree oblique corner miters on a shared edge');
+});
+
+test('interior-to-exterior layer order survives reversing a wall', () => {
+  const { api } = loadStudio();
+  const original = structuredClone(materialFixture), reversed = structuredClone(materialFixture);
+  const wall = reversed.walls.find(item => item.id === 'wall-g-south'), length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+  [wall.start, wall.end] = [wall.end, wall.start];
+  for (const opening of reversed.openings.filter(item => item.wallId === wall.id)) opening.offsetMm = Math.round(length - opening.offsetMm - opening.widthMm);
+  const layersOf = model => [...api.sectionGeometry(model, model.sections[0]).regions].filter(region => region.id === 'wall-g-south').map(region => `${region.role}:${region.materialId}:${Math.round(region.h0)}:${Math.round(region.h1)}:${region.z0}`).sort();
+  assert.deepEqual(layersOf(reversed), layersOf(original));
+  assert.equal(errorCodes(api, reversed).length, 0);
+});
+
+test('foundations and surfaces may be any simple polygon', () => {
+  const { api } = loadStudio();
+  const u = [{ x: 0, y: 0 }, { x: 3000, y: 0 }, { x: 3000, y: 2000 }, { x: 2000, y: 2000 }, { x: 2000, y: 1000 }, { x: 1000, y: 1000 }, { x: 1000, y: 2000 }, { x: 0, y: 2000 }];
+  const intervals = [...api.segmentPolygonIntervals({ x: -500, y: 1500 }, { x: 3500, y: 1500 }, u)].map(([t0, t1]) => [t0 * 4000 - 500, t1 * 4000 - 500].map(Math.round));
+  assert.deepEqual(intervals, [[0, 1000], [2000, 3000]], 'a U shape is crossed twice');
+  const tris = api.triangulate(u);
+  assert.equal(tris.length, u.length - 2);
+  const triArea = tris.reduce((sum, [i, j, k]) => sum + Math.abs((u[j].x - u[i].x) * (u[k].y - u[i].y) - (u[k].x - u[i].x) * (u[j].y - u[i].y)) / 2, 0);
+  assert.equal(triArea, 5000000);
+  const extruded = [];
+  api.pushExtrusion(extruded, u, 0, 300, [1, 1, 1]);
+  assert.equal(extruded.length, ((u.length - 2) * 2 + u.length * 2) * 3 * 6);
+
+  const model = structuredClone(materialFixture);
+  const walk = model.surfaces.find(item => item.id === 'surface-shop-walk');
+  assert.equal(walk.boundary.length, 6);
+  assert.equal(entityGroup(api.renderPlanSheet(model, 'level-ground').svg, 'surface-shop-walk').match(/points="([^"]+)"/)[1].split(' ').length, 6);
+  assert.ok(api.sectionGeometry(model, model.sections[1]).cut.some(item => item.id === 'surface-shop-walk'));
+});
+
+test('the material key never drops entries silently', () => {
+  const { api } = loadStudio();
+  const model = structuredClone(materialFixture), slab = model.slabs.find(item => item.id === 'slab-upper');
+  slab.layers = Array.from({ length: 23 }, (_, i) => ({ id: `layer-${i}`, materialId: `mat-extra-${i}`, thicknessMm: i < 22 ? 12 : slab.thicknessMm - 12 * 22 }));
+  for (let i = 0; i < 23; i += 1) model.materials.push({ id: `mat-extra-${i}`, name: `Extra finish material number ${i}`, category: 'gypsum', evidence: fixture.walls[0].evidence });
+  const sheet = api.renderSectionSheet(model, 'section-aa');
+  const warning = sheet.warnings.find(item => item.code === 'material.key-overflow');
+  assert.ok(warning, 'overflow is reported');
+  assert.match(warning.message, /Extra finish material number 22/);
+  assert.match(sheet.svg, /drawn but not keyed/);
+});
+
+test('drawings carry no structural detail the model does not author', () => {
+  const { api } = loadStudio();
+  const model = structuredClone(materialFixture);
+  for (const id of ['section-aa', 'section-bb']) {
+    const materials = api.renderSectionSheet(model, id).svg.match(/<g data-role="materials"[^>]*>([\s\S]*?)<\/g>/)[1];
+    assert.doesNotMatch(materials, /<circle/, `${id}: no reinforcing bars without bar data`);
+  }
+  delete model.openings.find(item => item.id === 'opening-overhead-door').headers[0].materialId;
+  assert.match(api.renderSectionSheet(model, 'section-aa').svg, />MATERIAL NOT SPECIFIED</, 'a header without a material is unspecified, not steel by kind');
+});
+
+test('the mixed-material examples are generated and structurally identical', async () => {
+  const generator = await import('../examples/build-mixed-material-workshop.mjs');
+  for (const spec of generator.SPECS) {
+    assert.equal(fs.readFileSync(generator.examplePath(spec), 'utf8').replace(/\r\n/g, '\n'), generator.serialize(generator.buildExample(spec)), `${spec.id} is current`);
+  }
+  const shape = model => JSON.stringify(Object.fromEntries(Object.entries(model).filter(([, value]) => Array.isArray(value)).map(([key, items]) => [key, items.map(item => [item.id, item.kind, (item.layers ?? []).map(layer => layer.id), (item.headers ?? []).map(header => `${header.kind}:${header.layerId}:${header.face ?? ''}`)])])));
+  assert.equal(shape(materialFixture), shape(metricMaterialFixture));
 });

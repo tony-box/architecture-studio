@@ -411,11 +411,14 @@
 
   // Materials, assemblies, headers, members, foundations, and site surfaces. All optional.
   function validateMaterials(model, add, levels, walls, tolerance) {
-    const materials = new Set();
+    const materials = new Set(), unsourced = [];
     for (const material of model.materials ?? []) {
       materials.add(material.id);
       if (!Object.hasOwn(MATERIAL_CATEGORIES, material.category)) add('error', 'material.category', `Unknown material category ${material.category}.`, material.id);
+      if (!material.evidence) unsourced.push(material.id);
     }
+    // A catalog name can carry a precise grade (4000 psi, S355); without evidence nobody can tell where it came from.
+    if (unsourced.length) add('advisory', 'material.evidence', `${unsourced.length} material${unsourced.length === 1 ? ' has' : 's have'} no evidence; record whether each came from the user, a source, or a generated assumption.`, unsourced[0]);
     const checkRef = (materialId, entityId) => { if (materialId != null && !materials.has(materialId)) add('error', 'reference.material', `Unknown material ${materialId}.`, entityId); };
     const positive = value => isFiniteInteger(value) && value > 0;
     const checkAssembly = (entity, depth, label) => {
@@ -423,6 +426,8 @@
       if (!entity.layers) return;
       if (entity.materialId != null) add('error', 'material.conflict', `${label} sets both materialId and layers; use one.`, entity.id);
       if (!Array.isArray(entity.layers) || !entity.layers.length || entity.layers.some(layer => !positive(layer.thicknessMm))) { add('error', 'material.layers', `${label} layers need positive integer thicknesses.`, entity.id); return; }
+      const ids = entity.layers.map(layer => layer.id);
+      if (ids.some(id => typeof id !== 'string' || !/^[a-z][a-z0-9-]*$/.test(id)) || new Set(ids).size !== ids.length) add('error', 'material.layers', `${label} layers each need an id, unique within the ${label.toLowerCase()}.`, entity.id);
       for (const layer of entity.layers) checkRef(layer.materialId, entity.id);
       const total = entity.layers.reduce((sum, layer) => sum + layer.thicknessMm, 0);
       if (Math.abs(total - depth) > tolerance) add('error', 'material.layers', `${label} layers total ${total} mm but the ${label.toLowerCase()} is ${depth} mm thick.`, entity.id);
@@ -438,7 +443,10 @@
         if (2 * shape.wallThicknessMm >= Math.min(shape.widthMm, shape.depthMm)) fail('HSS wall thickness does not fit the shape.');
       } else if (shape.kind !== 'rectangular') fail(`Unknown member shape ${shape.kind}.`);
     };
-    for (const wall of model.walls) checkAssembly(wall, wall.thicknessMm, 'Wall');
+    for (const wall of model.walls) {
+      checkAssembly(wall, wall.thicknessMm, 'Wall');
+      if (wall.layerOrder != null && !['left-to-right', 'interior-to-exterior'].includes(wall.layerOrder)) add('error', 'material.layers', `Unknown layerOrder ${wall.layerOrder}.`, wall.id);
+    }
     for (const slab of model.slabs) checkAssembly(slab, slab.thicknessMm, 'Slab');
     for (const stair of model.stairs) checkRef(stair.materialId, stair.id);
     if (model.site) checkRef(model.site.groundMaterialId, model.project.id);
@@ -448,25 +456,31 @@
       const wall = walls.get(opening.wallId);
       if (!wall || !opening.headers?.length) continue;
       structural ??= opening.id;
-      const layers = assemblyLayers(wall, wall.thicknessMm), length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y), taken = new Set();
+      const bands = wallBands(model, wall), length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y), byLayer = new Map();
       for (const header of opening.headers) {
         const fail = message => add('error', 'opening.header', message, opening.id);
         const kind = Object.hasOwn(HEADER_KINDS, header.kind) ? HEADER_KINDS[header.kind] : null;
         if (!kind) { fail(`Unknown header kind ${header.kind}.`); continue; }
         checkRef(header.materialId, opening.id);
         if (!positive(header.depthMm)) fail('Header depth must be a positive integer.');
-        const index = header.layerIndex ?? coreLayerIndex(layers);
-        if (!Number.isInteger(index) || index < 0 || index >= layers.length) { fail(`Header layerIndex ${header.layerIndex} is outside the wall's ${layers.length} layer(s).`); continue; }
-        if (taken.has(index)) fail(`Two headers share wall layer ${index}.`);
-        taken.add(index);
-        if (header.widthMm != null && (!positive(header.widthMm) || header.widthMm > layers[index].thicknessMm + tolerance)) fail('Header width must fit inside its wall layer.');
+        const band = headerBand(bands, header);
+        if (!band) { fail(header.layerId == null ? 'A header in a layered wall must name its layerId.' : `Header layerId ${header.layerId} is not a layer of ${wall.id}.`); continue; }
+        if (!byLayer.has(band.index)) byLayer.set(band.index, []);
+        byLayer.get(band.index).push(header);
+        if (header.face != null && (header.kind !== 'steel-angle' || !['inner', 'outer'].includes(header.face))) fail('Only steel angle lintels take a face, and it is inner or outer.');
+        if (header.widthMm != null && (!positive(header.widthMm) || header.widthMm > band.layer.thicknessMm + tolerance)) fail('Header width must fit inside its wall layer.');
         if (header.kind === 'built-up-lumber' && !(Number.isInteger(header.plies) && header.plies >= 2)) fail('Built-up headers need plies (2 or more).');
         if (header.kind === 'steel-angle' && !(positive(header.legThicknessMm) && header.legThicknessMm < (header.depthMm ?? 0))) fail('Steel angle lintels need a legThicknessMm smaller than the depth.');
-        if (header.kind === 'steel-beam') checkShape({ kind: 'wide-flange', widthMm: header.widthMm ?? layers[index].thicknessMm, depthMm: header.depthMm, flangeThicknessMm: header.flangeThicknessMm, webThicknessMm: header.webThicknessMm }, opening.id);
+        if (header.kind === 'steel-beam') checkShape({ kind: 'wide-flange', widthMm: header.widthMm ?? band.layer.thicknessMm, depthMm: header.depthMm, flangeThicknessMm: header.flangeThicknessMm, webThicknessMm: header.webThicknessMm }, opening.id);
         const bearing = header.bearingMm ?? 0;
         if (!isFiniteInteger(bearing) || bearing < 0) fail('Header bearing must be a non-negative integer.');
         if (opening.sillMm + opening.heightMm + (header.depthMm ?? 0) > wall.heightMm + tolerance) add('error', 'opening.header-fit', 'Header rises above the top of its wall.', opening.id);
         if (opening.offsetMm - bearing < -tolerance || opening.offsetMm + opening.widthMm + bearing > length + tolerance) add('error', 'opening.header-fit', 'Header bearing runs past the end of its wall.', opening.id);
+      }
+      // One header per layer, except angle lintels, which may pair up on the layer's two faces.
+      for (const [index, headers] of byLayer) {
+        const angles = headers.filter(header => header.kind === 'steel-angle'), faces = angles.map(header => header.face ?? 'inner');
+        if (angles.length !== headers.length ? headers.length > 1 : new Set(faces).size !== faces.length) add('error', 'opening.header', `Wall layer ${bands[index].layer.id ?? index} has conflicting headers; only angle lintels on different faces may share a layer.`, opening.id);
       }
     }
     for (const beam of model.beams ?? []) {
@@ -485,13 +499,15 @@
     }
     for (const foundation of model.foundations ?? []) {
       checkRef(foundation.materialId, foundation.id);
-      if (!rectangleBounds(foundation.boundary)) add('error', 'renderer.unsupported-foundation', 'The studio renders only axis-aligned rectangular foundations.', foundation.id);
+      const issues = polygonIssues(foundation.boundary);
+      if (issues.length) add('error', 'polygon.geometry', `Polygon has ${issues.join(', ')}.`, foundation.id);
       if (!positive(foundation.depthMm) || !isFiniteInteger(foundation.topElevationMm)) add('error', 'foundation.geometry', 'Foundation needs a positive integer depth and an integer top elevation.', foundation.id);
     }
     for (const surface of model.surfaces ?? []) {
       if (!levels.has(surface.levelId)) add('error', 'reference.level', `Unknown level ${surface.levelId}.`, surface.id);
       checkRef(surface.materialId, surface.id);
-      if (!rectangleBounds(surface.boundary)) add('error', 'renderer.unsupported-surface', 'The studio renders only axis-aligned rectangular site surfaces.', surface.id);
+      const issues = polygonIssues(surface.boundary);
+      if (issues.length) add('error', 'polygon.geometry', `Polygon has ${issues.join(', ')}.`, surface.id);
       if (!positive(surface.thicknessMm) || !isFiniteInteger(surface.topElevationMm)) add('error', 'surface.geometry', 'Surface needs a positive integer thickness and an integer top elevation.', surface.id);
     }
     if (structural) add('advisory', 'structure.review', 'Headers, beams, and columns are concept placeholders; member sizes, bearing, and connections need a structural engineer.', structural);
@@ -528,7 +544,7 @@
     ink: '#1b1b1b', paper: '#ffffff', poche: '#4d4d4d', screen: '#9a9a9a', screenText: '#666666', screenPoche: '#e2e2e2',
     font: '"Helvetica Neue", Helvetica, Arial, sans-serif', charWidth: 0.62,
     border: 10, titleBlockWidth: 64, margin: 6, annotationBand: 24, viewTitleBand: 18, cutHeightMm: 1200,
-    materialMaxRatio: 100, hatchMinMm: 0.6
+    hatchMinMm: 0.6
   };
   const DISCIPLINES = {
     plumbing: { label: 'Plumbing', color: '#1d5fa8', dash: null },
@@ -541,7 +557,7 @@
       scales: [[12, '1" = 1\'-0"'], [16, '3/4" = 1\'-0"'], [24, '1/2" = 1\'-0"'], [32, '3/8" = 1\'-0"'], [48, '1/4" = 1\'-0"'], [64, '3/16" = 1\'-0"'], [96, '1/8" = 1\'-0"'], [128, '3/32" = 1\'-0"'], [192, '1/16" = 1\'-0"'], [384, '1/32" = 1\'-0"']],
       pens: { cut: 0.7, profile: 0.5, medium: 0.35, thin: 0.25, fine: 0.18, ground: 1 },
       text: { note: 2.4, room: 3.2, title: 4.8, sheet: 8, label: 1.8 },
-      terminator: 'tick',
+      terminator: 'tick', materialDetailRatio: 96,
       area: mm2 => `${Math.round(mm2 / 92903.04)} SF`,
       steps: [1, 2, 4, 5, 8, 10, 16, 20, 25, 50, 100].map(feet => feet * 304.8),
       stepLabel: mm => `${Math.round(mm / 304.8)}'`,
@@ -553,7 +569,7 @@
       scales: [[20, '1:20'], [25, '1:25'], [50, '1:50'], [100, '1:100'], [200, '1:200'], [500, '1:500'], [1000, '1:1000']],
       pens: { cut: 0.7, profile: 0.5, medium: 0.35, thin: 0.25, fine: 0.13, ground: 1 },
       text: { note: 2.5, room: 3.5, title: 5, sheet: 7, label: 1.8 },
-      terminator: 'arrow',
+      terminator: 'arrow', materialDetailRatio: 100,
       area: mm2 => `${(mm2 / 1e6).toFixed(1)} m²`,
       steps: [500, 1000, 2000, 5000, 10000, 20000, 50000],
       stepLabel: mm => `${+(mm / 1000).toFixed(2)} m`,
@@ -600,8 +616,11 @@
     if (line) lines.push(line);
     return lines;
   }
+  function polygonSignedArea(points) {
+    return points.reduce((sum, p, i) => { const q = points[(i + 1) % points.length]; return sum + p.x * q.y - q.x * p.y; }, 0) / 2;
+  }
   function polygonArea(points) {
-    return Math.abs(points.reduce((sum, p, i) => { const q = points[(i + 1) % points.length]; return sum + p.x * q.y - q.x * p.y; }, 0) / 2);
+    return Math.abs(polygonSignedArea(points));
   }
   function pointInPolygon(p, points) {
     let inside = false;
@@ -749,7 +768,11 @@
         lines.forEach((line, i) => parts.push(svgText(x0 + 19, y + T.note * 0.9 + i * lineGap, line, T.note, { anchor: 'start', upper: false })));
         y += rowHeight + 0.8; shown += 1;
       }
-      if (shown < meta.materials.length) { parts.push(svgText(x0 + 4, y + T.note, `+${meta.materials.length - shown} more in the model`, T.note, { anchor: 'start', upper: false })); y += T.note + 2; }
+      if (shown < meta.materials.length) {
+        const missing = meta.materials.slice(shown).map(item => item.name);
+        parts.push(svgText(x0 + 4, y + T.note, `+${missing.length} drawn but not keyed`, T.note, { anchor: 'start', upper: false })); y += T.note + 2;
+        meta.warnings?.push({ severity: 'warning', code: 'material.key-overflow', message: `${meta.sheetId}: the material key has no room for ${missing.join(', ')}. Reduce the materials on this sheet or split the drawing.`, entityId: null });
+      }
       rule();
     }
     field('Date', ['Undated concept'], T.note);
@@ -875,7 +898,8 @@
   // ---------------------------------------------------------------------------
   // Materials. Spec: references/drafting-standard.md "Materials".
   // Hatches are authored in paper millimetres at the `fine` pen, so they read the same at every
-  // scale. `metric` overrides the shared style where ISO/European practice differs from NCS practice.
+  // scale. `metric` overrides the shared style where the metric profile convention differs; sources
+  // and confidence for each convention are in drafting-standard.md, "Material sources".
   // ---------------------------------------------------------------------------
   const MATERIAL_CATEGORIES = {
     earth: { label: 'Earth', color: '#8b7355', style: { kind: 'pattern', patterns: ['earth'] } },
@@ -893,26 +917,49 @@
     gypsum: { label: 'Gypsum board', color: '#eceae4', style: { kind: 'pattern', patterns: ['stipple'] } },
     generic: { label: 'Material not specified', color: '#d6d0c3', style: { kind: 'poche' } }
   };
+  // Header kinds fix the drawn shape only. A header's material comes from its materialId; without one it
+  // is unspecified and draws in poché, like any other element.
   const HEADER_KINDS = {
-    'sawn-lumber': { label: 'Sawn lumber header', category: 'wood-framing' },
-    'built-up-lumber': { label: 'Built-up lumber header', category: 'wood-framing' },
-    'engineered-lumber': { label: 'Engineered lumber header', category: 'engineered-wood' },
-    'steel-angle': { label: 'Steel angle lintel', category: 'steel' },
-    'steel-beam': { label: 'Steel beam header', category: 'steel' },
-    'concrete-lintel': { label: 'Concrete lintel', category: 'reinforced-concrete', rebar: true },
-    'masonry-bond-beam': { label: 'Masonry bond beam', category: 'concrete-masonry', rebar: true }
+    'sawn-lumber': { label: 'Sawn lumber header' },
+    'built-up-lumber': { label: 'Built-up lumber header' },
+    'engineered-lumber': { label: 'Engineered lumber header' },
+    'steel-angle': { label: 'Steel angle lintel' },
+    'steel-beam': { label: 'Steel beam header' },
+    'concrete-lintel': { label: 'Concrete lintel' },
+    'masonry-bond-beam': { label: 'Masonry bond beam' }
   };
   const SHAPE_LABELS = { rectangular: 'Rectangular', 'wide-flange': 'Wide-flange', hss: 'Hollow structural section' };
   const materialStyle = (category, profile) => {
     const entry = MATERIAL_CATEGORIES[category] ?? MATERIAL_CATEGORIES.generic;
     return (profile.id === 'metric' && entry.metric) || entry.style;
   };
-  // Material detail is drawn at 1:100 (1/8" = 1'-0") and larger. Smaller scales keep solid poché.
-  const materialsActive = (model, ratio) => (model.materials ?? []).length > 0 && ratio <= DRAFT.materialMaxRatio;
-  // Index of the layer a header sits in when it does not name one: the thickest (structural) layer.
+  // Studio plotting policy, not a standard: material detail is drawn at the profile's 1:100-class scale
+  // (1/8" = 1'-0" imperial, 1:100 metric) and larger. Smaller scales keep solid poché.
+  const materialsActive = (model, ratio) => (model.materials ?? []).length > 0 && ratio <= profileFor(model).materialDetailRatio;
+  // Thickest layer; used only to colour 3D massing.
   const coreLayerIndex = layers => layers.reduce((best, layer, index) => layer.thicknessMm > layers[best].thicknessMm ? index : best, 0);
   // Layers of a wall or slab in authored order; a single material or none becomes one full-depth layer.
-  const assemblyLayers = (entity, depth) => entity.layers?.length ? entity.layers : [{ materialId: entity.materialId ?? null, thicknessMm: depth }];
+  const assemblyLayers = (entity, depth) => entity.layers?.length ? entity.layers : [{ id: null, materialId: entity.materialId ?? null, thicknessMm: depth }];
+  // +1 when a wall's interior (the side toward the centre of its level's walls) is its left side.
+  function wallInteriorSign(model, wall) {
+    const walls = model.walls.filter(item => item.levelId === wall.levelId), box = boundsOf(walls.flatMap(item => [item.start, item.end]));
+    const n = perp(unit2(sub(wall.end, wall.start))), mid = mul(add(wall.start, wall.end), 0.5);
+    return dot2(sub({ x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 }, mid), n) >= 0 ? 1 : -1;
+  }
+  // Wall layers as bands across the thickness: s is the offset from the centreline, positive to the
+  // left looking from start to end. `layerOrder: "interior-to-exterior"` starts at the interior face, so
+  // reversing the wall's direction does not flip its assembly.
+  function wallBands(model, wall) {
+    const t = wall.thicknessMm, dir = wall.layerOrder === 'interior-to-exterior' ? wallInteriorSign(model, wall) : 1;
+    let face = dir * t / 2;
+    return assemblyLayers(wall, t).map((layer, index) => {
+      const band = { layer, index, s0: face, s1: face - dir * layer.thicknessMm };
+      face = band.s1;
+      return band;
+    });
+  }
+  // The band a header sits in: the named layer, or the whole wall when the wall has no layers.
+  const headerBand = (bands, header) => header.layerId == null ? (bands.length === 1 && bands[0].layer.id == null ? bands[0] : null) : bands.find(band => band.layer.id === header.layerId) ?? null;
 
   function hatchPattern(id, profile) {
     const pen = profile.pens.fine, ink = DRAFT.ink;
@@ -951,7 +998,7 @@
       },
       // Fills a paper region. `frame` is { o, u, v, L, T }: origin, unit vectors along and across, and
       // lengths along and across in paper mm. It orients the directional symbols (batt, grain, zig-zag).
-      region(points, frame, category) {
+      region(points, frame, category, clipId = null) {
         const style = materialStyle(category, profile), P = profile.pens;
         if (style.kind === 'poche') return svgPoly(points, { fill: DRAFT.poche, width: 0, inert: true });
         if (style.kind === 'solid') return svgPoly(points, { fill: DRAFT.ink, width: 0, inert: true });
@@ -991,9 +1038,11 @@
           const count = Math.max(2, Math.round(T / 0.8));
           for (let i = 1; i < count; i += 1) parts.push(svgLine(at(0, T * i / count), at(L, T * i / count), pen));
         }
+        // Directional symbols follow the frame, so a non-rectangular region clips them to its outline.
+        if (clipId) return `${parts[0]}<clipPath id="${escapeHtml(clipId)}">${svgPoly(points, { width: 0 })}</clipPath><g clip-path="url(#${escapeHtml(clipId)})" pointer-events="none">${parts.slice(1).join('')}</g>`;
         return parts.join('');
       },
-      // End-grain symbol for a sawn member cut across its length: an X (NCS) or growth rings (ISO/DIN).
+      // End-grain symbol for a sawn member cut across its length: an X (imperial) or growth rings (metric).
       woodEnd(frame) {
         const at = (x, y) => add(add(frame.o, mul(frame.u, x)), mul(frame.v, y)), pen = { stroke: DRAFT.ink, width: profile.pens.fine };
         if (profile.id !== 'metric') return svgLine(at(0, 0), at(frame.L, frame.T), pen) + svgLine(at(0, frame.T), at(frame.L, 0), pen);
@@ -1101,14 +1150,13 @@
 
     // Higher surfaces draw over lower ones; a surface wholly under a higher one is not visible in plan.
     const levelSurfaces = (model.surfaces ?? []).filter(item => item.levelId === level.id);
-    const covered = surface => {
-      const box = boundsOf(surface.boundary);
-      return levelSurfaces.some(other => other !== surface && other.topElevationMm > surface.topElevationMm && (o => o.x0 <= box.x0 && o.y0 <= box.y0 && o.x1 >= box.x1 && o.y1 >= box.y1)(boundsOf(other.boundary)));
-    };
+    const covered = surface => levelSurfaces.some(other => other !== surface && other.topElevationMm > surface.topElevationMm
+      && surface.boundary.every(p => pointInPolygon(p, other.boundary) || other.boundary.some(q => samePoint(p, q, tolerance))));
     for (const surface of levelSurfaces.filter(item => !covered(item)).sort((a, b) => a.topElevationMm - b.topElevationMm)) {
-      const box = boundsOf(surface.boundary), corners = [{ x: box.x0, y: box.y0 }, { x: box.x1, y: box.y0 }, { x: box.x1, y: box.y1 }, { x: box.x0, y: box.y1 }].map(map);
-      const fill = mats.active ? mats.region(corners, { o: corners[0], u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: (box.x1 - box.x0) / ratio, T: (box.y1 - box.y0) / ratio }, mats.resolve(surface.materialId)) : '';
-      layers.site.push(`<g data-entity="${escapeHtml(surface.id)}">${fill}${svgPoly(corners, { fill: DRAFT.paper, fillOpacity: 0, stroke: ink, width: P.thin })}</g>`);
+      const box = boundsOf(surface.boundary), outline = surface.boundary.map(map), o = map({ x: box.x0, y: box.y0 });
+      // Fills sit outside the entity group so a clipped directional fill never nests inside it.
+      const fill = mats.active ? mats.region(outline, { o, u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: (box.x1 - box.x0) / ratio, T: (box.y1 - box.y0) / ratio }, mats.resolve(surface.materialId), `clip-${surface.id}`) : '';
+      layers.site.push(`${fill}<g data-entity="${escapeHtml(surface.id)}">${svgPoly(outline, { fill: DRAFT.paper, fillOpacity: 0, stroke: ink, width: P.thin })}</g>`);
     }
     for (const space of model.spaces.filter(item => item.levelId === level.id)) {
       layers.rooms.push(`<g data-entity="${escapeHtml(space.id)}">${svgPoly(space.boundary.map(map), { fill: DRAFT.paper, fillOpacity: 0, width: 0 })}</g>`);
@@ -1189,8 +1237,7 @@
         // Material plan: each layer is its own region; corners miter and tees stop at the face they meet.
         const ends = [wallEndClip(wall, true, walls, tolerance), wallEndClip(wall, false, walls, tolerance)];
         const at = (along, side) => add(add(wall.start, mul(u, along)), mul(n, side));
-        const bands = []; let face = t / 2;
-        for (const layer of assemblyLayers(wall, t)) { bands.push({ s0: face, s1: face - layer.thicknessMm, layer }); face -= layer.thicknessMm; }
+        const bands = wallBands(model, wall);
         const cuts = []; let along = 0;
         for (const opening of openings) { cuts.push([along, opening.offsetMm]); along = opening.offsetMm + opening.widthMm; }
         cuts.push([along, L]);
@@ -1211,10 +1258,10 @@
             const alongOf = q => dot2(sub(q, wall.start), u);
             const coreA = Math.max(alongOf(edges[0][0]), alongOf(edges[1][0])), coreB = Math.min(alongOf(edges[0][1]), alongOf(edges[1][1]));
             const o = map(at(coreA, band.s0));
-            const frame = { o, u: unit2(sub(map(at(coreB, band.s0)), o)), v: unit2(sub(map(at(coreA, band.s1)), o)), L: Math.max(0, coreB - coreA) / ratio, T: (band.s0 - band.s1) / ratio };
+            const frame = { o, u: unit2(sub(map(at(coreB, band.s0)), o)), v: unit2(sub(map(at(coreA, band.s1)), o)), L: Math.max(0, coreB - coreA) / ratio, T: Math.abs(band.s0 - band.s1) / ratio };
             fillParts.push(mats.region(region.map(map), frame, mats.resolve(band.layer.materialId)));
           }
-          for (const side of [t / 2, ...bands.map(band => band.s1)]) {
+          for (const side of [bands[0].s0, ...bands.map(band => band.s1)]) {
             const edge = clipLine(side);
             if (edge) lineParts.push(svgLine(map(edge[0]), map(edge[1]), { stroke: ink, width: P.fine }));
           }
@@ -1364,7 +1411,7 @@
     const body = ['site', 'rooms', 'roof', 'objects', 'stairs', 'wallStroke', 'wallFill', 'wallLines', 'structure', 'openings', 'marks', 'dims', 'tags', 'systems']
       .filter(key => layers[key].length || !['site', 'wallLines', 'structure'].includes(key))
       .map(key => `<g data-layer="${key}"${key === 'wallFill' || key === 'wallLines' ? ' pointer-events="none"' : ''}>${layers[key].join('')}</g>`).join('');
-    const svg = sheetSvg(model, profile, { sheetId, title, scaleLabel, ratio, area, view: screened ? 'systems' : 'plan', northDeg: model.project.coordinates.trueNorthDeg ?? 0, legend, materialContext: mats.active ? mats : null }, body);
+    const svg = sheetSvg(model, profile, { sheetId, title, scaleLabel, ratio, area, view: screened ? 'systems' : 'plan', northDeg: model.project.coordinates.trueNorthDeg ?? 0, legend, materialContext: mats.active ? mats : null, warnings }, body);
     return { svg, sheetId, title, view: screened ? 'systems' : 'plan', ratio, scaleLabel, warnings };
   }
 
@@ -1390,7 +1437,7 @@
     const placer = createPlacer(area), warnings = [];
     const ctx = { map, ratio, profile, placer, warnings, place, materials: null };
     const body = build.draw(ctx);
-    const svg = sheetSvg(model, profile, { ...meta, scaleLabel, ratio, area, view, materialContext: ctx.materials }, body);
+    const svg = sheetSvg(model, profile, { ...meta, scaleLabel, ratio, area, view, materialContext: ctx.materials, warnings }, body);
     return { svg, sheetId: meta.sheetId, title: meta.title, view, ratio, scaleLabel, warnings };
   }
 
@@ -1479,6 +1526,24 @@
     }
     return t1 - t0 > 1e-6 ? [t0, t1] : null;
   }
+  // Parameter intervals of segment p0->p1 inside any simple polygon (even-odd crossings).
+  function segmentPolygonIntervals(p0, p1, polygon) {
+    const d = sub(p1, p0), ts = [0, 1];
+    for (let i = 0; i < polygon.length; i += 1) {
+      const a = polygon[i], b = polygon[(i + 1) % polygon.length], e = sub(b, a), denom = cross2(d, e);
+      if (Math.abs(denom) < 1e-9) continue;
+      const t = cross2(sub(a, p0), e) / denom, s = cross2(sub(a, p0), d) / denom;
+      if (t > 0 && t < 1 && s >= 0 && s <= 1) ts.push(t);
+    }
+    const sorted = [...new Set(ts)].sort((x, y) => x - y), out = [];
+    for (let i = 1; i < sorted.length; i += 1) {
+      const t0 = sorted[i - 1], t1 = sorted[i];
+      if (t1 - t0 > 1e-6 && pointInPolygon(add(p0, mul(d, (t0 + t1) / 2)), polygon)) {
+        if (out.length && Math.abs(out.at(-1)[1] - t0) < 1e-9) out.at(-1)[1] = t1; else out.push([t0, t1]);
+      }
+    }
+    return out;
+  }
   function convexHull(points) {
     const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
     if (sorted.length < 3) return sorted;
@@ -1524,30 +1589,30 @@
         const hit = openings.find(item => along >= item.offsetMm && along <= item.offsetMm + item.widthMm);
         const spans = hit ? [[base, base + hit.sillMm], [base + hit.sillMm + hit.heightMm, base + wall.heightMm]] : [[base, base + wall.heightMm]];
         for (const [z0, z1] of spans) if (z1 - z0 > 1) cut.push({ id: wall.id, kind: 'wall', h0, h1, z0, z1 });
-        const layers = assemblyLayers(wall, t), core = coreLayerIndex(layers);
+        const bands = wallBands(model, wall);
         const headers = openings.flatMap(opening => (opening.headers ?? []).filter(header => {
           const bearing = header.bearingMm ?? 0;
           return along >= opening.offsetMm - bearing && along <= opening.offsetMm + opening.widthMm + bearing;
-        }).map(header => ({ header, opening, index: header.layerIndex ?? core })));
-        let face = t / 2;
-        layers.forEach((layer, index) => {
-          const s0 = face, s1 = face - layer.thicknessMm; face = s1;
+        }).map(header => ({ header, opening, band: headerBand(bands, header) })));
+        for (const { layer, s0, s1 } of bands) {
           const band = [add(wall.start, mul(nw, s0)), add(wall.end, mul(nw, s0)), add(wall.end, mul(nw, s1)), add(wall.start, mul(nw, s1))];
           const c = clipSegmentToConvex(section.start, section.end, band);
-          if (!c) return;
+          if (!c) continue;
           const [lh0, lh1] = hRange([at(c[0]), at(c[1])]);
-          // The layer face nearer the wall centreline, measured where the plane actually crosses it.
-          const sInner = Math.abs(s0) < Math.abs(s1) ? s0 : s1, faceOf = q => Math.abs(dot2(sub(q, wall.start), nw) - sInner);
-          const hInner = hOf(faceOf(at(c[0])) <= faceOf(at(c[1])) ? at(c[0]) : at(c[1]));
+          // h of a layer face, measured where the plane actually crosses it (correct for oblique cuts).
+          const hAtFace = s => { const off = q => Math.abs(dot2(sub(q, wall.start), nw) - s); return hOf(off(at(c[0])) <= off(at(c[1])) ? at(c[0]) : at(c[1])); };
+          const sInner = Math.abs(s0) < Math.abs(s1) ? s0 : s1, sOuter = sInner === s0 ? s1 : s0;
           let zSpans = spans.filter(([z0, z1]) => z1 - z0 > 1);
-          for (const { header, opening } of headers.filter(item => item.index === index)) {
+          for (const { header, opening } of headers.filter(item => item.band?.layer === layer)) {
             const z0 = base + opening.sillMm + opening.heightMm, z1 = z0 + header.depthMm;
-            regions.push({ id: wall.id, role: 'header', h0: lh0, h1: lh1, z0, z1, hInner, header, openingId: opening.id, materialId: header.materialId ?? null });
+            // An angle's vertical leg sits on its face of the layer; its horizontal leg reaches across.
+            const legFace = header.face === 'outer' ? sOuter : sInner;
+            regions.push({ id: wall.id, role: 'header', h0: lh0, h1: lh1, z0, z1, hFace: hAtFace(legFace), hOther: hAtFace(legFace === sInner ? sOuter : sInner), header, openingId: opening.id, materialId: header.materialId ?? null });
             // An angle lintel carries the layer it sits in; every other header replaces its layer over its depth.
             if (header.kind !== 'steel-angle') zSpans = zSpans.flatMap(([a, b]) => [[a, Math.min(b, z0)], [Math.max(a, z1), b]]).filter(([a, b]) => b - a > 1);
           }
-          for (const [z0, z1] of zSpans) regions.push({ id: wall.id, role: 'layer', h0: lh0, h1: lh1, z0, z1, materialId: layer.materialId ?? null });
-        });
+          for (const [z0, z1] of zSpans) regions.push({ id: wall.id, role: 'layer', h0: lh0, h1: lh1, z0, z1, layerId: layer.id, materialId: layer.materialId ?? null });
+        }
         continue;
       }
       const clipped = clipHalfPlane(rect, sOf);
@@ -1569,16 +1634,17 @@
         const [h0, h1] = hRange([at(crossing[0]), at(crossing[1])]);
         cut.push({ id: slab.id, kind: 'slab', h0, h1, z0: bottom, z1: top });
         let z = top;
-        for (const layer of assemblyLayers(slab, slab.thicknessMm)) { regions.push({ id: slab.id, role: 'layer', h0, h1, z0: z - layer.thicknessMm, z1: z, materialId: layer.materialId ?? null }); z -= layer.thicknessMm; }
+        for (const layer of assemblyLayers(slab, slab.thicknessMm)) { regions.push({ id: slab.id, role: 'layer', h0, h1, z0: z - layer.thicknessMm, z1: z, layerId: layer.id, materialId: layer.materialId ?? null }); z -= layer.thicknessMm; }
       }
     }
+    // Foundations and surfaces may be any simple polygon, so the plane can cross them more than once.
     for (const item of [...(model.foundations ?? []).map(entity => ({ entity, kind: 'foundation', z1: entity.topElevationMm, z0: entity.topElevationMm - entity.depthMm })),
       ...(model.surfaces ?? []).map(entity => ({ entity, kind: 'surface', z1: entity.topElevationMm, z0: entity.topElevationMm - entity.thicknessMm }))]) {
-      const crossing = clipSegmentToConvex(section.start, section.end, item.entity.boundary);
-      if (!crossing) continue;
-      const [h0, h1] = hRange([at(crossing[0]), at(crossing[1])]);
-      cut.push({ id: item.entity.id, kind: item.kind, h0, h1, z0: item.z0, z1: item.z1 });
-      regions.push({ id: item.entity.id, role: 'layer', h0, h1, z0: item.z0, z1: item.z1, materialId: item.entity.materialId ?? null });
+      for (const [t0, t1] of segmentPolygonIntervals(section.start, section.end, item.entity.boundary)) {
+        const [h0, h1] = hRange([at(t0), at(t1)]);
+        cut.push({ id: item.entity.id, kind: item.kind, h0, h1, z0: item.z0, z1: item.z1 });
+        regions.push({ id: item.entity.id, role: 'layer', h0, h1, z0: item.z0, z1: item.z1, materialId: item.entity.materialId ?? null });
+      }
     }
     // A beam crossing the plane at a steep angle is cut across and shows its profile. Beams cut along
     // their length, columns, and members beyond the plane draw in outline, as a member in elevation does.
@@ -1735,26 +1801,24 @@
               lines.push(svgPoly(box, { width: P.fine, inert: true }));
               continue;
             }
-            const header = region.header, kind = HEADER_KINDS[header.kind], category = mats.resolve(region.materialId, kind.category);
+            const header = region.header, category = mats.resolve(region.materialId);
             const z0 = region.z0, depth = region.z1 - region.z0, layerWidth = region.h1 - region.h0, width = Math.min(header.widthMm ?? layerWidth, layerWidth);
-            const outward = Math.abs(region.h0 - region.hInner) < Math.abs(region.h1 - region.hInner) ? 1 : -1;
+            const across = Math.sign(region.hOther - region.hFace) || 1;
             if (header.kind === 'steel-angle') {
-              const hi = region.hInner, lt = header.legThicknessMm, at = (dh, z) => map(hi + outward * dh, z);
-              fills.push(svgPoly([at(0, z0), at(width, z0), at(width, z0 + lt), at(lt, z0 + lt), at(lt, z0 + depth), at(0, z0 + depth)], { fill: DRAFT.ink, width: P.fine, inert: true }));
+              const hf = region.hFace, lt = header.legThicknessMm, at = (dh, z) => map(hf + across * dh, z);
+              const angle = [at(0, z0), at(width, z0), at(width, z0 + lt), at(lt, z0 + lt), at(lt, z0 + depth), at(0, z0 + depth)];
+              fills.push(mats.member(angle, null, frame, category), svgPoly(angle, { width: P.fine, inert: true }));
             } else if (header.kind === 'steel-beam') {
               const shape = memberShape({ kind: 'wide-flange', widthMm: width, depthMm: depth, flangeThicknessMm: header.flangeThicknessMm, webThicknessMm: header.webThicknessMm }, (region.h0 + region.h1) / 2, z0);
-              fills.push(svgPoly(box, { fill: DRAFT.paper, width: 0, inert: true }), mats.member(shape.outline, null, shape.frame, category));
+              fills.push(svgPoly(box, { fill: DRAFT.paper, width: 0, inert: true }), mats.member(shape.outline, null, shape.frame, category), svgPoly(shape.outline, { width: P.fine, inert: true }));
             } else {
+              // Reinforcement is never drawn: the model carries no bar sizes, counts, or cover.
               const plies = header.kind === 'built-up-lumber' ? header.plies : 1;
               for (let i = 0; i < plies; i += 1) {
                 const ply = { h0: region.h0 + layerWidth * i / plies, h1: region.h0 + layerWidth * (i + 1) / plies, z0, z1: region.z1 };
                 const plyFrame = { o: map(ply.h0, z0), u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: (ply.h1 - ply.h0) / ratio, T: depth / ratio };
                 fills.push(mats.member(rect(ply), null, plyFrame, category));
                 lines.push(svgPoly(rect(ply), { width: P.thin, inert: true }));
-              }
-              if (kind.rebar) {
-                const r = Math.max(0.3, 8 / ratio), zBar = z0 + Math.min(60, depth / 4);
-                for (const k of [1 / 3, 2 / 3]) fills.push(svgCircle(map(region.h0 + layerWidth * k, zBar), r, { fill: DRAFT.ink, width: 0 }));
               }
             }
           }
@@ -2056,7 +2120,8 @@
 
   const FINDING_TOPICS = {
     'evidence.review': 'Evidence to confirm', 'stair.code': 'Stair', 'code.status': 'Code research', 'system.review': 'Systems',
-    'label.placement': 'Drawing label', 'section.empty': 'Section', 'webgl.unavailable': '3D view', 'structure.review': 'Structure'
+    'label.placement': 'Drawing label', 'section.empty': 'Section', 'webgl.unavailable': '3D view', 'structure.review': 'Structure',
+    'material.key-overflow': 'Material key', 'material.evidence': 'Material sources'
   };
   // Groups findings by code so repeated notes (one per system, say) read as one entry.
   function reviewQueue(findings) {
@@ -2154,6 +2219,41 @@
   }
 
   function pushLine(target, a, b, color) { target.push(a[0],a[1],a[2],...color,b[0],b[1],b[2],...color); }
+  // Ear-clipping triangulation of a simple polygon; returns index triples in counter-clockwise order.
+  function triangulate(points) {
+    const ccw = polygonSignedArea(points) > 0, idx = points.map((_, i) => i);
+    if (!ccw) idx.reverse();
+    const tris = [], inTri = (p, a, b, c) => cross2(sub(b, a), sub(p, a)) >= 0 && cross2(sub(c, b), sub(p, b)) >= 0 && cross2(sub(a, c), sub(p, c)) >= 0;
+    let guard = idx.length * idx.length;
+    while (idx.length > 3 && guard-- > 0) {
+      for (let i = 0; i < idx.length; i += 1) {
+        const [ia, ib, ic] = [idx[(i + idx.length - 1) % idx.length], idx[i], idx[(i + 1) % idx.length]], [a, b, c] = [points[ia], points[ib], points[ic]];
+        if (cross2(sub(b, a), sub(c, b)) <= 0) continue;
+        if (idx.some(j => j !== ia && j !== ib && j !== ic && inTri(points[j], a, b, c))) continue;
+        tris.push([ia, ib, ic]); idx.splice(i, 1); break;
+      }
+    }
+    if (idx.length === 3) tris.push(idx.slice());
+    return tris;
+  }
+  // Vertical extrusion of a plan polygon between two elevations, faces wound outward.
+  function pushExtrusion(target, polygon, z0, z1, color) {
+    const w = (p, z) => [p.x / 1000, z / 1000, -p.y / 1000];
+    const tri = (a, b, c, hint) => {
+      const n = cross([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]);
+      for (const p of dot(n, hint) >= 0 ? [a, b, c] : [a, c, b]) target.push(...p, ...color);
+    };
+    for (const [i, j, k] of triangulate(polygon)) {
+      tri(w(polygon[i], z1), w(polygon[j], z1), w(polygon[k], z1), [0, 1, 0]);
+      tri(w(polygon[i], z0), w(polygon[j], z0), w(polygon[k], z0), [0, -1, 0]);
+    }
+    const sign = polygonSignedArea(polygon) > 0 ? 1 : -1;
+    polygon.forEach((a, i) => {
+      const b = polygon[(i + 1) % polygon.length], hint = [sign * (b.y - a.y), 0, sign * (b.x - a.x)];
+      tri(w(a, z0), w(b, z0), w(b, z1), hint);
+      tri(w(a, z0), w(b, z1), w(a, z1), hint);
+    });
+  }
   const worldPoint = point => [point.x / 1000, point.z / 1000, -point.y / 1000];
 
   function buildScene(gls) {
@@ -2174,8 +2274,8 @@
       const level = levelMap.get(slab.levelId); const bounds = rectangleBounds(slab.boundary);
       box(bounds, (level?.elevationMm ?? 0) - slab.thicknessMm, level?.elevationMm ?? 0, assemblyColor(slab, slab.thicknessMm, '#b9b8b0'));
     }
-    for (const foundation of model.foundations ?? []) box(rectangleBounds(foundation.boundary), foundation.topElevationMm - foundation.depthMm, foundation.topElevationMm, materialColor(foundation.materialId, '#b9b8b0'));
-    for (const surface of model.surfaces ?? []) box(rectangleBounds(surface.boundary), surface.topElevationMm - surface.thicknessMm, surface.topElevationMm, materialColor(surface.materialId, '#b9b8b0'));
+    for (const foundation of model.foundations ?? []) pushExtrusion(gls.triangles, foundation.boundary, foundation.topElevationMm - foundation.depthMm, foundation.topElevationMm, rgb(materialColor(foundation.materialId, '#b9b8b0')));
+    for (const surface of model.surfaces ?? []) pushExtrusion(gls.triangles, surface.boundary, surface.topElevationMm - surface.thicknessMm, surface.topElevationMm, rgb(materialColor(surface.materialId, '#b9b8b0')));
     for (const beam of model.beams ?? []) {
       const dx = beam.end.x - beam.start.x, dy = beam.end.y - beam.start.y;
       pushPrism(gls.triangles, (beam.start.x + dx / 2) / 1000, (beam.topElevationMm - beam.shape.depthMm / 2) / 1000, -(beam.start.y + dy / 2) / 1000, Math.hypot(dx, dy) / 1000, beam.shape.depthMm / 1000, beam.shape.widthMm / 1000, Math.atan2(-dy, dx), rgb(materialColor(beam.materialId, '#7d858c')));
@@ -2618,7 +2718,7 @@
   }
 
   const studioApi = {
-    state, PROFILES, DISCIPLINES, MATERIAL_CATEGORIES, HEADER_KINDS, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
+    state, PROFILES, DISCIPLINES, MATERIAL_CATEGORIES, HEADER_KINDS, materialContext, materialsActive, wallBands, segmentPolygonIntervals, triangulate, pushExtrusion, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
     renderPlanSheet, renderElevationSheet, renderSectionSheet, sectionGeometry, renderDrawingSet, modelFingerprint,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport
   };

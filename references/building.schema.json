@@ -233,8 +233,13 @@
         "kind": { "enum": ["exterior", "interior", "service", "railing"] },
         "material": { "type": "string", "description": "Free-text description. Drawings use materialId or layers." },
         "materialId": { "$ref": "#/$defs/id" },
+        "layerOrder": {
+          "enum": ["left-to-right", "interior-to-exterior"],
+          "default": "left-to-right",
+          "description": "left-to-right lists layers from the wall's left face, looking from start to end. interior-to-exterior starts at the face toward the centre of the level's walls, so reversing the wall does not flip the assembly."
+        },
         "layers": {
-          "description": "Assembly from the wall's left face to its right face, looking from start to end. For exterior walls traced counter-clockwise that is interior to exterior. Thicknesses sum to thicknessMm.",
+          "description": "Assembly in layerOrder. Thicknesses sum to thicknessMm.",
           "type": "array",
           "minItems": 1,
           "items": { "$ref": "#/$defs/layer" }
@@ -245,8 +250,9 @@
     "layer": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["materialId", "thicknessMm"],
+      "required": ["id", "materialId", "thicknessMm"],
       "properties": {
+        "id": { "$ref": "#/$defs/id", "description": "Stable within its wall or slab; headers reference it." },
         "materialId": { "$ref": "#/$defs/id" },
         "thicknessMm": { "type": "integer", "minimum": 1 }
       }
@@ -262,7 +268,7 @@
           "enum": ["earth", "gravel", "sand", "concrete", "reinforced-concrete", "concrete-masonry", "brick", "steel", "wood-framing", "engineered-wood", "insulation-batt", "insulation-rigid", "gypsum", "generic"]
         },
         "description": { "type": "string" },
-        "evidence": { "$ref": "#/$defs/evidence" }
+        "evidence": { "$ref": "#/$defs/evidence", "description": "Where the material choice came from. Without it validation raises a material.evidence advisory." }
       }
     },
     "header": {
@@ -272,7 +278,8 @@
       "properties": {
         "kind": { "enum": ["sawn-lumber", "built-up-lumber", "engineered-lumber", "steel-angle", "steel-beam", "concrete-lintel", "masonry-bond-beam"] },
         "depthMm": { "type": "integer", "minimum": 1 },
-        "layerIndex": { "type": "integer", "minimum": 0, "description": "Wall layer the header sits in. Defaults to the thickest layer." },
+        "layerId": { "$ref": "#/$defs/id", "description": "Wall layer the header sits in. Required when the wall has layers." },
+        "face": { "enum": ["inner", "outer"], "default": "inner", "description": "Steel angles only: the layer face carrying the vertical leg. Two angles on different faces may share a layer." },
         "widthMm": { "type": "integer", "minimum": 1, "description": "Defaults to the layer thickness. For steel-angle, the horizontal leg." },
         "bearingMm": { "type": "integer", "minimum": 0, "default": 0, "description": "Run past each jamb." },
         "plies": { "type": "integer", "minimum": 2, "description": "Required for built-up-lumber." },
@@ -280,7 +287,7 @@
         "flangeThicknessMm": { "type": "integer", "minimum": 1, "description": "Required for steel-beam." },
         "webThicknessMm": { "type": "integer", "minimum": 1, "description": "Required for steel-beam." },
         "designation": { "type": "string", "description": "Concept size label, for example 3-2x10 or HEA 160." },
-        "materialId": { "$ref": "#/$defs/id", "description": "Defaults to the kind's category." }
+        "materialId": { "$ref": "#/$defs/id", "description": "Without one the header is unspecified and draws in poché; the kind sets only its shape." }
       }
     },
     "memberShape": {

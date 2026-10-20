@@ -28,77 +28,167 @@
     {
       "id": "mat-earth",
       "name": "Undisturbed earth",
-      "category": "earth"
+      "category": "earth",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-gravel",
       "name": "Crushed stone, 3/4\" clean",
-      "category": "gravel"
+      "category": "gravel",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-concrete",
       "name": "Concrete, 4000 psi",
-      "category": "concrete"
+      "category": "concrete",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-concrete-reinforced",
       "name": "Reinforced concrete",
-      "category": "reinforced-concrete"
+      "category": "reinforced-concrete",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-cmu",
       "name": "Concrete masonry unit, 8\"",
-      "category": "concrete-masonry"
+      "category": "concrete-masonry",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-brick",
       "name": "Brick veneer",
-      "category": "brick"
+      "category": "brick",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-steel",
       "name": "Structural steel",
-      "category": "steel"
+      "category": "steel",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-lumber",
       "name": "Sawn lumber, SPF",
-      "category": "wood-framing"
+      "category": "wood-framing",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-glulam",
       "name": "Glued laminated timber",
-      "category": "engineered-wood"
+      "category": "engineered-wood",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-lvl",
       "name": "Laminated veneer lumber",
-      "category": "engineered-wood"
+      "category": "engineered-wood",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-sheathing",
       "name": "OSB sheathing",
-      "category": "engineered-wood"
+      "category": "engineered-wood",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-subfloor",
       "name": "Plywood subfloor",
-      "category": "engineered-wood"
+      "category": "engineered-wood",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-batt",
       "name": "Fiberglass batt insulation",
-      "category": "insulation-batt"
+      "category": "insulation-batt",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-rigid",
       "name": "XPS rigid insulation",
-      "category": "insulation-rigid"
+      "category": "insulation-rigid",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     },
     {
       "id": "mat-gypsum",
       "name": "Gypsum board",
-      "category": "gypsum"
+      "category": "gypsum",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material; any grade in the name is illustrative, not specified."
+      }
     }
   ],
   "site": {
@@ -275,16 +365,20 @@
       "thicknessMm": 248,
       "heightMm": 3200,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
       "layers": [
         {
+          "id": "gypsum",
           "materialId": "mat-gypsum",
           "thicknessMm": 16
         },
         {
+          "id": "insulation",
           "materialId": "mat-rigid",
           "thicknessMm": 38
         },
         {
+          "id": "cmu",
           "materialId": "mat-cmu",
           "thicknessMm": 194
         }
@@ -310,16 +404,20 @@
       "thicknessMm": 248,
       "heightMm": 3200,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
       "layers": [
         {
+          "id": "gypsum",
           "materialId": "mat-gypsum",
           "thicknessMm": 16
         },
         {
+          "id": "insulation",
           "materialId": "mat-rigid",
           "thicknessMm": 38
         },
         {
+          "id": "cmu",
           "materialId": "mat-cmu",
           "thicknessMm": 194
         }
@@ -345,16 +443,20 @@
       "thicknessMm": 248,
       "heightMm": 3200,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
       "layers": [
         {
+          "id": "gypsum",
           "materialId": "mat-gypsum",
           "thicknessMm": 16
         },
         {
+          "id": "insulation",
           "materialId": "mat-rigid",
           "thicknessMm": 38
         },
         {
+          "id": "cmu",
           "materialId": "mat-cmu",
           "thicknessMm": 194
         }
@@ -380,16 +482,20 @@
       "thicknessMm": 248,
       "heightMm": 3200,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
       "layers": [
         {
+          "id": "gypsum",
           "materialId": "mat-gypsum",
           "thicknessMm": 16
         },
         {
+          "id": "insulation",
           "materialId": "mat-rigid",
           "thicknessMm": 38
         },
         {
+          "id": "cmu",
           "materialId": "mat-cmu",
           "thicknessMm": 194
         }
@@ -417,14 +523,17 @@
       "kind": "interior",
       "layers": [
         {
+          "id": "gypsum-left",
           "materialId": "mat-gypsum",
           "thicknessMm": 13
         },
         {
+          "id": "studs",
           "materialId": "mat-lumber",
           "thicknessMm": 89
         },
         {
+          "id": "gypsum-right",
           "materialId": "mat-gypsum",
           "thicknessMm": 13
         }
@@ -450,24 +559,30 @@
       "thicknessMm": 284,
       "heightMm": 2438,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
       "layers": [
         {
+          "id": "gypsum",
           "materialId": "mat-gypsum",
           "thicknessMm": 16
         },
         {
+          "id": "studs",
           "materialId": "mat-batt",
           "thicknessMm": 140
         },
         {
+          "id": "sheathing",
           "materialId": "mat-sheathing",
           "thicknessMm": 11
         },
         {
+          "id": "insulation",
           "materialId": "mat-rigid",
           "thicknessMm": 25
         },
         {
+          "id": "veneer",
           "materialId": "mat-brick",
           "thicknessMm": 92
         }
@@ -493,24 +608,30 @@
       "thicknessMm": 284,
       "heightMm": 2438,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
       "layers": [
         {
+          "id": "gypsum",
           "materialId": "mat-gypsum",
           "thicknessMm": 16
         },
         {
+          "id": "studs",
           "materialId": "mat-batt",
           "thicknessMm": 140
         },
         {
+          "id": "sheathing",
           "materialId": "mat-sheathing",
           "thicknessMm": 11
         },
         {
+          "id": "insulation",
           "materialId": "mat-rigid",
           "thicknessMm": 25
         },
         {
+          "id": "veneer",
           "materialId": "mat-brick",
           "thicknessMm": 92
         }
@@ -536,24 +657,30 @@
       "thicknessMm": 284,
       "heightMm": 2438,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
       "layers": [
         {
+          "id": "gypsum",
           "materialId": "mat-gypsum",
           "thicknessMm": 16
         },
         {
+          "id": "studs",
           "materialId": "mat-batt",
           "thicknessMm": 140
         },
         {
+          "id": "sheathing",
           "materialId": "mat-sheathing",
           "thicknessMm": 11
         },
         {
+          "id": "insulation",
           "materialId": "mat-rigid",
           "thicknessMm": 25
         },
         {
+          "id": "veneer",
           "materialId": "mat-brick",
           "thicknessMm": 92
         }
@@ -579,24 +706,30 @@
       "thicknessMm": 284,
       "heightMm": 2438,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
       "layers": [
         {
+          "id": "gypsum",
           "materialId": "mat-gypsum",
           "thicknessMm": 16
         },
         {
+          "id": "studs",
           "materialId": "mat-batt",
           "thicknessMm": 140
         },
         {
+          "id": "sheathing",
           "materialId": "mat-sheathing",
           "thicknessMm": 11
         },
         {
+          "id": "insulation",
           "materialId": "mat-rigid",
           "thicknessMm": 25
         },
         {
+          "id": "veneer",
           "materialId": "mat-brick",
           "thicknessMm": 92
         }
@@ -624,14 +757,17 @@
       "kind": "interior",
       "layers": [
         {
+          "id": "gypsum-left",
           "materialId": "mat-gypsum",
           "thicknessMm": 13
         },
         {
+          "id": "studs",
           "materialId": "mat-lumber",
           "thicknessMm": 89
         },
         {
+          "id": "gypsum-right",
           "materialId": "mat-gypsum",
           "thicknessMm": 13
         }
@@ -659,14 +795,17 @@
       "kind": "interior",
       "layers": [
         {
+          "id": "gypsum-left",
           "materialId": "mat-gypsum",
           "thicknessMm": 13
         },
         {
+          "id": "studs",
           "materialId": "mat-lumber",
           "thicknessMm": 89
         },
         {
+          "id": "gypsum-right",
           "materialId": "mat-gypsum",
           "thicknessMm": 13
         }
@@ -692,20 +831,31 @@
       "headers": [
         {
           "kind": "steel-angle",
-          "layerIndex": 2,
+          "layerId": "cmu",
           "depthMm": 102,
           "widthMm": 89,
           "legThicknessMm": 8,
           "bearingMm": 203,
           "materialId": "mat-steel",
           "designation": "L4x3-1/2x5/16 pair"
+        },
+        {
+          "kind": "steel-angle",
+          "layerId": "cmu",
+          "depthMm": 102,
+          "widthMm": 89,
+          "legThicknessMm": 8,
+          "bearingMm": 203,
+          "materialId": "mat-steel",
+          "designation": "L4x3-1/2x5/16 pair",
+          "face": "outer"
         }
       ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept office window with angle lintels in the block."
+        "note": "Concept office window with a pair of angle lintels in the block."
       }
     },
     {
@@ -720,7 +870,7 @@
       "headers": [
         {
           "kind": "steel-beam",
-          "layerIndex": 2,
+          "layerId": "cmu",
           "depthMm": 207,
           "widthMm": 133,
           "flangeThicknessMm": 8,
@@ -749,7 +899,7 @@
       "headers": [
         {
           "kind": "concrete-lintel",
-          "layerIndex": 2,
+          "layerId": "cmu",
           "depthMm": 194,
           "bearingMm": 203,
           "materialId": "mat-concrete-reinforced",
@@ -775,7 +925,7 @@
       "headers": [
         {
           "kind": "masonry-bond-beam",
-          "layerIndex": 2,
+          "layerId": "cmu",
           "depthMm": 203,
           "bearingMm": 406,
           "materialId": "mat-cmu",
@@ -817,7 +967,7 @@
       "headers": [
         {
           "kind": "sawn-lumber",
-          "layerIndex": 1,
+          "layerId": "studs",
           "depthMm": 140,
           "bearingMm": 38,
           "materialId": "mat-lumber",
@@ -843,7 +993,7 @@
       "headers": [
         {
           "kind": "built-up-lumber",
-          "layerIndex": 1,
+          "layerId": "studs",
           "depthMm": 235,
           "plies": 3,
           "bearingMm": 76,
@@ -852,7 +1002,7 @@
         },
         {
           "kind": "steel-angle",
-          "layerIndex": 4,
+          "layerId": "veneer",
           "depthMm": 102,
           "widthMm": 89,
           "legThicknessMm": 8,
@@ -880,7 +1030,7 @@
       "headers": [
         {
           "kind": "built-up-lumber",
-          "layerIndex": 1,
+          "layerId": "studs",
           "depthMm": 184,
           "plies": 2,
           "bearingMm": 38,
@@ -889,7 +1039,7 @@
         },
         {
           "kind": "steel-angle",
-          "layerIndex": 4,
+          "layerId": "veneer",
           "depthMm": 102,
           "widthMm": 89,
           "legThicknessMm": 8,
@@ -917,7 +1067,7 @@
       "headers": [
         {
           "kind": "sawn-lumber",
-          "layerIndex": 1,
+          "layerId": "studs",
           "depthMm": 184,
           "bearingMm": 38,
           "materialId": "mat-lumber",
@@ -925,7 +1075,7 @@
         },
         {
           "kind": "steel-angle",
-          "layerIndex": 4,
+          "layerId": "veneer",
           "depthMm": 102,
           "widthMm": 89,
           "legThicknessMm": 8,
@@ -953,7 +1103,7 @@
       "headers": [
         {
           "kind": "engineered-lumber",
-          "layerIndex": 1,
+          "layerId": "studs",
           "depthMm": 235,
           "bearingMm": 38,
           "materialId": "mat-lvl",
@@ -961,7 +1111,7 @@
         },
         {
           "kind": "steel-angle",
-          "layerIndex": 4,
+          "layerId": "veneer",
           "depthMm": 102,
           "widthMm": 89,
           "legThicknessMm": 8,
@@ -1005,7 +1155,7 @@
       "headers": [
         {
           "kind": "sawn-lumber",
-          "layerIndex": 1,
+          "layerId": "studs",
           "depthMm": 140,
           "bearingMm": 38,
           "materialId": "mat-lumber",
@@ -1045,14 +1195,17 @@
       "thicknessMm": 305,
       "layers": [
         {
+          "id": "slab",
           "materialId": "mat-concrete",
           "thicknessMm": 102
         },
         {
+          "id": "insulation",
           "materialId": "mat-rigid",
           "thicknessMm": 51
         },
         {
+          "id": "base",
           "materialId": "mat-gravel",
           "thicknessMm": 152
         }
@@ -1088,14 +1241,17 @@
       "thicknessMm": 276,
       "layers": [
         {
+          "id": "subfloor",
           "materialId": "mat-subfloor",
           "thicknessMm": 19
         },
         {
+          "id": "joists",
           "materialId": "mat-lumber",
           "thicknessMm": 241
         },
         {
+          "id": "ceiling",
           "materialId": "mat-gypsum",
           "thicknessMm": 16
         }
@@ -1784,6 +1940,46 @@
         "status": "needs-review",
         "note": "Concept gravel strip along the south wall."
       }
+    },
+    {
+      "id": "surface-shop-walk",
+      "name": "Shop Door Walk",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": 9268,
+          "y": 3658
+        },
+        {
+          "x": 10183,
+          "y": 3658
+        },
+        {
+          "x": 10183,
+          "y": -124
+        },
+        {
+          "x": 11097,
+          "y": -124
+        },
+        {
+          "x": 11097,
+          "y": 4876
+        },
+        {
+          "x": 9268,
+          "y": 4876
+        }
+      ],
+      "topElevationMm": 0,
+      "thicknessMm": 127,
+      "materialId": "mat-concrete",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept L-shaped walk from the shop door to the drive."
+      }
     }
   ],
   "dimensions": [
@@ -1815,7 +2011,7 @@
         "y": 6096,
         "z": 0
       },
-      "offsetMm": 900
+      "offsetMm": 2353
     },
     {
       "id": "dimension-upper-width",
@@ -1870,7 +2066,7 @@
         "y": 4191
       },
       "end": {
-        "x": 9744,
+        "x": 11697,
         "y": 4191
       },
       "lookDirection": "right"
