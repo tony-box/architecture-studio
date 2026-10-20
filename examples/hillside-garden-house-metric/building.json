@@ -1517,40 +1517,28 @@
       "id": "surface-walk",
       "name": "Entry Walk",
       "levelId": "level-ground",
-      "boundary": [
-        {
-          "x": 8550,
-          "y": 8820,
-          "c1": {
-            "x": 8550,
+      "path": {
+        "centerline": [
+          {
+            "x": 9075,
+            "y": 8820
+          },
+          {
+            "x": 9075,
             "y": 6000
           },
-          "c2": {
-            "x": 6000,
-            "y": 4200
-          }
-        },
-        {
-          "x": 6300,
-          "y": 1200
-        },
-        {
-          "x": 7800,
-          "y": 1200,
-          "c1": {
-            "x": 7200,
-            "y": 4200
+          {
+            "x": 7050,
+            "y": 3900
           },
-          "c2": {
-            "x": 9600,
-            "y": 6000
+          {
+            "x": 7050,
+            "y": 1200
           }
-        },
-        {
-          "x": 9600,
-          "y": 8820
-        }
-      ],
+        ],
+        "widthMm": 1200,
+        "cornerRadiusMm": 2400
+      },
       "followsGrade": true,
       "gradeOffsetMm": 0,
       "thicknessMm": 100,
@@ -1559,7 +1547,7 @@
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept curved concrete walk from the street to the door."
+        "note": "Concept 4 ft concrete walk from the door to the street, two 8 ft radius curves."
       }
     },
     {
@@ -1631,40 +1619,24 @@
       "id": "surface-stepping-path",
       "name": "Stepping-Stone Path",
       "levelId": "level-ground",
-      "boundary": [
-        {
-          "x": 3000,
-          "y": 14700,
-          "c1": {
-            "x": 3000,
-            "y": 16800
+      "path": {
+        "centerline": [
+          {
+            "x": 3450,
+            "y": 14700
           },
-          "c2": {
-            "x": 4200,
-            "y": 18600
-          }
-        },
-        {
-          "x": 5400,
-          "y": 21000
-        },
-        {
-          "x": 6300,
-          "y": 21000,
-          "c1": {
-            "x": 4800,
-            "y": 18300
+          {
+            "x": 3450,
+            "y": 17400
           },
-          "c2": {
-            "x": 3900,
-            "y": 16500
+          {
+            "x": 5850,
+            "y": 21000
           }
-        },
-        {
-          "x": 3900,
-          "y": 14700
-        }
-      ],
+        ],
+        "widthMm": 900,
+        "cornerRadiusMm": 3000
+      },
       "followsGrade": true,
       "gradeOffsetMm": 0,
       "thicknessMm": 100,
@@ -1673,7 +1645,7 @@
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept flagstone path from the patio to the back lawn."
+        "note": "Concept 3 ft flagstone path from the patio to the back lawn, one 10 ft radius curve."
       }
     },
     {

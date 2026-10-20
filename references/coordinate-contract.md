@@ -60,6 +60,29 @@ counter-clockwise model arc is an SVG arc with sweep flag 0. Tessellated points
 remember the authored edge they lie on, so per-edge data (setbacks, property
 line labels) always refers to the model's edges.
 
+## Paths
+
+A surface may have a `path` instead of a `boundary`: a `centerline` of at
+least two points, a `widthMm`, and a `cornerRadiusMm` (default 0) that each
+interior point may override with its own `radiusMm`.
+
+- The centreline is straight between its points. At an interior point that
+  turns by `θ` (signed, positive to the left) with radius `R > 0`, it follows
+  a circular fillet tangent to both straights, starting `R × tan(|θ| / 2)`
+  before the point and ending the same distance after it. `R = 0` is a sharp
+  corner, and collinear points have no fillet.
+- The outline is the centreline offset by half the width to each side: lines
+  stay lines, and each fillet becomes two concentric arcs with the same sweep
+  (radius `R - w/2` inside the turn, `R + w/2` outside). The ends are square
+  to the centreline at its first and last points. Derived vertices round to
+  the millimetre, and the arcs are written as `bulge` vertices, so the outline
+  obeys every rule in Curves and renders, cuts, and extrudes like any other
+  boundary.
+- Errors: fewer than two points, coincident consecutive points, a turn of
+  nearly 180°, a radius under half the width, or neighbouring fillets that
+  need more of a straight than it has. The messages give the largest radius
+  that fits.
+
 ## Arc Walls
 
 A wall with `bulge` follows a circular arc from `start` to `end`, with

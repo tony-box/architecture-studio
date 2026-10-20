@@ -57,6 +57,17 @@
         "exports/site/site-plan.svg exists and the manifest lists L-101",
         "The handoff asks for a boundary and topographic survey and a tree survey"
       ]
+    },
+    {
+      "id": "curve-edit-walk",
+      "prompt": "Using the hillside garden house example, make the front walk curve more gently and swing it about 3 feet further east, keeping it 4 feet wide.",
+      "expected_output": "A predictable edit of the walk's centreline path, checked with inspect.mjs.",
+      "assertions": [
+        "The walk stays a surface path; widthMm stays 1219, and the door and street lead-in points stay in line with their ends",
+        "The bend moves east by about 914 mm through a point between the lead-ins, and the corner radii increase within the largest radius validation allows",
+        "inspect.mjs reports the new width, radii, and bounds, unchanged end headings, and a non-negative clearance to the building and the property line",
+        "The reply states the change in the user's terms (radius and direction), not as raw coordinates"
+      ]
     }
   ]
 }

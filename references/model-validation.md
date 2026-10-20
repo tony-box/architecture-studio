@@ -46,6 +46,9 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
   thickness that fits. Beams have length; columns have a top above the base.
 - Foundation and site surface boundaries are simple polygons, curved or not
   (the same checks as spaces), with positive depth or thickness. A surface has
+  exactly one of `boundary` and `path`; a path passes the checks in
+  `coordinate-contract.md` (Paths) and its derived outline is a simple
+  polygon. A surface has
   an integer `topElevationMm` unless `followsGrade` is `true`; `gradeOffsetMm`
   is an integer.
 - Setbacks name an existing property line edge and a positive distance.
@@ -71,6 +74,10 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
   (`material.key-overflow`).
 - The plant schedule on L-101 has no room for every row
   (`site.schedule-overflow`).
+- A ground-level surface or proposed planting extends past the property line
+  (`site.outside-lot`), or a surface runs under, or a proposed planting sits
+  inside, the building footprint (`surface.under-building`,
+  `planting.under-building`).
 - A contour segment could not be kept as a terrain edge
   (`terrain.constraint-failed`).
 - The contours and spot elevations lie on one line, so no ground surface can

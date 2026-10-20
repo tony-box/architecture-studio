@@ -563,8 +563,16 @@
     for (const surface of model.surfaces ?? []) {
       if (!levels.has(surface.levelId)) add('error', 'reference.level', `Unknown level ${surface.levelId}.`, surface.id);
       checkRef(surface.materialId, surface.id);
-      const issues = curveIssues(surface.boundary);
-      if (issues.length) add('error', 'polygon.geometry', `Polygon has ${issues.join(', ')}.`, surface.id);
+      // A surface is drawn either from an outline or from a centreline path (walks, drives).
+      if ((surface.boundary == null) === (surface.path == null)) add('error', 'surface.geometry', 'A surface has either a boundary or a path, not both and not neither.', surface.id);
+      else if (surface.path) {
+        const issues = centerlineIssues(surface.path);
+        if (issues.length) add('error', 'surface.path', `Path: ${issues.join('; ')}.`, surface.id);
+        else { const outline = curveIssues(pathOutline(surface.path)); if (outline.length) add('error', 'surface.path', `The path outline has ${outline.join(', ')}; move centerline points apart or reduce the width.`, surface.id); }
+      } else {
+        const issues = curveIssues(surface.boundary);
+        if (issues.length) add('error', 'polygon.geometry', `Polygon has ${issues.join(', ')}.`, surface.id);
+      }
       if (surface.followsGrade != null && typeof surface.followsGrade !== 'boolean') add('error', 'surface.geometry', 'followsGrade must be true or false.', surface.id);
       if (surface.followsGrade === true) {
         if (!positive(surface.thicknessMm) || (surface.gradeOffsetMm != null && !isFiniteInteger(surface.gradeOffsetMm))) add('error', 'surface.geometry', 'A surface that follows grade needs a positive integer thickness and an integer gradeOffsetMm.', surface.id);
@@ -643,6 +651,23 @@
       }
     }
     for (const issue of terrainOf(model)?.issues ?? []) add(['terrain.constraint-failed', 'terrain.degenerate'].includes(issue.code) ? 'warning' : 'error', issue.code, issue.message, issue.entityId ?? model.project.id);
+    // Placement checks that catch a reshaped walk or bed landing somewhere it should not.
+    const tol = model.project.coordinates.toleranceMm ?? 3;
+    const distanceToRing = (p, ring) => Math.min(...ring.map((a, i) => { const b = ring[(i + 1) % ring.length], d = sub(b, a), t = Math.max(0, Math.min(1, dot2(sub(p, a), d) / (dot2(d, d) || 1))); return Math.hypot(p.x - a.x - d.x * t, p.y - a.y - d.y * t); }));
+    const strictlyInside = (p, ring) => pointInPolygon(p, ring) && distanceToRing(p, ring) > tol + CURVE_TOLERANCE_MM;
+    const lot = site.propertyLine && !curveIssues(site.propertyLine.boundary, { bezier: false }).length ? ringOf(site.propertyLine.boundary) : null;
+    const lowest = sortedLevels(model)[0], footprints = model.slabs.filter(slab => slab.levelId === lowest?.id && !curveIssues(slab.boundary).length).map(slab => ringOf(slab.boundary));
+    for (const surface of (model.surfaces ?? []).filter(item => item.levelId === lowest?.id)) {
+      const outline = outlineOf(surface); if (!outline || curveIssues(outline).length) continue;
+      const ring = ringOf(outline);
+      if (lot && ring.some(p => !pointInPolygon(p, lot) && distanceToRing(p, lot) > tol + CURVE_TOLERANCE_MM)) add('warning', 'site.outside-lot', `${surface.name ?? surface.id} extends past the property line.`, surface.id);
+      if (footprints.some(foot => ring.some(p => strictlyInside(p, foot)) || foot.some(p => strictlyInside(p, ring)))) add('warning', 'surface.under-building', `${surface.name ?? surface.id} runs under the building footprint.`, surface.id);
+    }
+    for (const planting of (model.plantings ?? []).filter(item => item.position && item.status === 'proposed')) {
+      if (lot && !pointInPolygon(planting.position, lot)) add('warning', 'site.outside-lot', `${planting.id} is planted outside the property line.`, planting.id);
+      if (footprints.some(foot => pointInPolygon(planting.position, foot))) add('warning', 'planting.under-building', `${planting.id} is planted inside the building footprint.`, planting.id);
+    }
+
     const plants = new Map();
     for (const plant of model.plants ?? []) {
       idOf(plant, 'Plant'); evidenceOf(plant, 'Plant');
@@ -913,6 +938,88 @@
     if (!hasCurves(vertices)) return svgPoly(vertices.map(map), o);
     return `<path d="${curvePathD(vertices, true, map, ratio)}" fill="${o.fill ?? 'none'}"${o.fillOpacity != null ? ` fill-opacity="${o.fillOpacity}"` : ''}${o.inert ? ' pointer-events="none"' : ''} ${strokeAttrs(o)}/>`;
   }
+
+  // ---------------------------------------------------------------------------
+  // Paths. Spec: references/coordinate-contract.md "Paths" and references/curves.md.
+  // A walk, drive, or path is authored as a centreline, a width, and corner radii. Each interior
+  // centreline point is rounded with a circular fillet of its radius, so the centreline is straights
+  // and arcs, and both edges are exact offsets: the width never varies. Ends are square.
+  // ---------------------------------------------------------------------------
+  const pathCache = new WeakMap();
+  // Fillets along a centreline: for each interior point, its turn, radius, tangent length, and tangent points.
+  function pathFillets(path) {
+    const pts = path.centerline, out = [];
+    for (let i = 1; i < pts.length - 1; i += 1) {
+      const d1 = unit2(sub(pts[i], pts[i - 1])), d2 = unit2(sub(pts[i + 1], pts[i]));
+      const turn = Math.atan2(cross2(d1, d2), dot2(d1, d2)), r = pts[i].radiusMm ?? path.cornerRadiusMm ?? 0;
+      const tangent = Math.abs(turn) < 1e-9 ? 0 : r * Math.tan(Math.abs(turn) / 2);
+      out.push({ index: i, d1, d2, turn, r, tangent, t1: sub(pts[i], mul(d1, tangent)), t2: add(pts[i], mul(d2, tangent)) });
+    }
+    return out;
+  }
+  // Problems that would make the outline wrong, each with the fix an author can apply directly.
+  function centerlineIssues(path) {
+    const issues = [], pts = path?.centerline, w = path?.widthMm;
+    if (!Array.isArray(pts) || pts.length < 2 || !pts.every(isModelPoint)) return ['a centerline needs at least two points with integer x and y'];
+    if (!isFiniteInteger(w) || w < 1) return ['widthMm must be a positive integer'];
+    for (const key of ['cornerRadiusMm']) if (path[key] != null && !(isFiniteInteger(path[key]) && path[key] >= 0)) issues.push(`${key} must be a non-negative integer`);
+    pts.forEach((p, i) => {
+      if (p.radiusMm != null && !(isFiniteInteger(p.radiusMm) && p.radiusMm >= 0)) issues.push(`centerline point ${i} has an invalid radiusMm`);
+      if (i && p.x === pts[i - 1].x && p.y === pts[i - 1].y) issues.push(`centerline points ${i - 1} and ${i} coincide`);
+    });
+    if (issues.length) return issues;
+    const fillets = pathFillets(path);
+    for (const f of fillets) {
+      if (Math.abs(Math.abs(f.turn) - Math.PI) < 0.05) issues.push(`centerline point ${f.index} doubles back on itself`);
+      else if (f.r > 0 && f.r < w / 2) issues.push(`the radius at centerline point ${f.index} is ${f.r} mm, under half the width (${Math.ceil(w / 2)} mm), so the inner edge would fold; use at least ${Math.ceil(w / 2)} mm`);
+    }
+    // Neighbouring fillets share the straight between them; together they must fit on it.
+    for (let i = 0; i < pts.length - 1; i += 1) {
+      const length = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+      const used = (fillets.find(f => f.index === i)?.tangent ?? 0) + (fillets.find(f => f.index === i + 1)?.tangent ?? 0);
+      if (used > length + 1) {
+        const scale = length / used, worst = [i, i + 1].map(k => fillets.find(f => f.index === k)).filter(f => f && f.r > 0);
+        issues.push(`the corner radii at centerline point${worst.length > 1 ? 's' : ''} ${worst.map(f => f.index).join(' and ')} need ${Math.round(used)} mm of the ${Math.round(length)} mm straight between points ${i} and ${i + 1}; reduce ${worst.map(f => `point ${f.index} to ${Math.floor(f.r * scale)} mm`).join(' and ')}, or move the points apart`);
+      }
+    }
+    return issues;
+  }
+  // The closed outline of a path as curve vertices: the left edge from start to end, then the right edge back.
+  function pathOutline(path) {
+    if (pathCache.has(path)) return pathCache.get(path);
+    const pts = path.centerline, h = path.widthMm / 2, fillets = pathFillets(path), round = p => ({ x: Math.round(p.x), y: Math.round(p.y) });
+    const edge = side => {
+      const n = d => mul(perp(d), side * h), first = unit2(sub(pts[1], pts[0])), last = unit2(sub(pts.at(-1), pts.at(-2)));
+      const vertices = [round(add(pts[0], n(first)))];
+      for (const f of fillets) {
+        if (f.r === 0 || f.tangent === 0) {
+          // A sharp corner: the two offset edges meet at their intersection.
+          const a = add(pts[f.index], n(f.d1)), b = add(pts[f.index], n(f.d2)), den = cross2(f.d1, f.d2);
+          vertices.push(round(Math.abs(den) < 1e-9 ? a : add(a, mul(f.d1, cross2(sub(b, a), f.d2) / den))));
+          continue;
+        }
+        // The arc keeps its sweep on both edges; only its radius changes, so the bulge is the same.
+        vertices.push({ ...round(add(f.t1, n(f.d1))), bulge: Math.tan(f.turn / 4) }, round(add(f.t2, n(f.d2))));
+      }
+      vertices.push(round(add(pts.at(-1), n(last))));
+      return vertices;
+    };
+    const left = edge(1), right = edge(-1);
+    // Reverse the right edge: each arc's bulge moves to the vertex that now starts it, with its sign flipped.
+    const back = right.map((v, i) => ({ x: v.x, y: v.y, ...(i > 0 && right[i - 1].bulge ? { bulge: -right[i - 1].bulge } : {}) })).reverse();
+    const outline = [...left.map(({ x, y, bulge }) => bulge ? { x, y, bulge } : { x, y }), ...back];
+    pathCache.set(path, outline);
+    return outline;
+  }
+  // Centreline length along straights and fillet arcs.
+  function centerlineLength(path) {
+    const pts = path.centerline, fillets = pathFillets(path);
+    let length = pts.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - pts[i].x, p.y - pts[i].y), 0);
+    for (const f of fillets) length += f.r * Math.abs(f.turn) - 2 * f.tangent;
+    return length;
+  }
+  // The plan outline of a surface: its authored boundary, or the outline derived from its path.
+  const outlineOf = entity => entity.boundary ?? (entity.path && !centerlineIssues(entity.path).length ? pathOutline(entity.path) : null);
 
   // ---------------------------------------------------------------------------
   // Terrain. Spec: references/coordinate-contract.md "Terrain".
@@ -1357,7 +1464,7 @@
       ...model.stairs.flatMap(stairCorners),
       ...[...model.fixtures, ...model.equipment].flatMap(object => rotatedRect(object.position, object.size.x, object.size.y, object.rotationDeg)),
       ...(model.sections ?? []).flatMap(section => [section.start, section.end]),
-      ...(model.surfaces ?? []).flatMap(surface => ringOf(surface.boundary)),
+      ...(model.surfaces ?? []).filter(outlineOf).flatMap(surface => ringOf(outlineOf(surface))),
       ...(model.beams ?? []).flatMap(beamCorners),
       ...(model.columns ?? []).map(column => column.position)
     ];
@@ -1747,15 +1854,15 @@
 
     // Higher surfaces draw over lower ones; a surface wholly under a higher one is not visible in plan.
     // Draped surfaces lie on the ground under every flat one.
-    const levelSurfaces = (model.surfaces ?? []).filter(item => item.levelId === level.id);
+    const levelSurfaces = (model.surfaces ?? []).filter(item => item.levelId === level.id && outlineOf(item));
     const flat = item => item.followsGrade !== true;
-    const covered = surface => { const ring = ringOf(surface.boundary); return levelSurfaces.some(other => { const otherRing = ringOf(other.boundary); return other !== surface && flat(other) && flat(surface) && other.topElevationMm > surface.topElevationMm
+    const covered = surface => { const ring = ringOf(outlineOf(surface)); return levelSurfaces.some(other => { const otherRing = ringOf(outlineOf(other)); return other !== surface && flat(other) && flat(surface) && other.topElevationMm > surface.topElevationMm
       && ring.every(p => pointInPolygon(p, otherRing) || otherRing.some(q => samePoint(p, q, tolerance))); }); };
     for (const surface of levelSurfaces.filter(item => !covered(item)).sort((a, b) => flat(a) - flat(b) || (a.topElevationMm ?? 0) - (b.topElevationMm ?? 0))) {
-      const ring = ringOf(surface.boundary), box = boundsOf(ring), outline = ring.map(map), o = map({ x: box.x0, y: box.y0 });
+      const ring = ringOf(outlineOf(surface)), box = boundsOf(ring), outline = ring.map(map), o = map({ x: box.x0, y: box.y0 });
       // Fills sit outside the entity group so a clipped directional fill never nests inside it.
       const fill = mats.active ? mats.region(outline, { o, u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: (box.x1 - box.x0) / ratio, T: (box.y1 - box.y0) / ratio }, mats.resolve(surface.materialId), `clip-${surface.id}`) : '';
-      layers.site.push(`${fill}<g data-entity="${escapeHtml(surface.id)}">${svgRing(surface.boundary, map, ratio, { fill: DRAFT.paper, fillOpacity: 0, stroke: ink, width: P.thin })}</g>`);
+      layers.site.push(`${fill}<g data-entity="${escapeHtml(surface.id)}">${svgRing(outlineOf(surface), map, ratio, { fill: DRAFT.paper, fillOpacity: 0, stroke: ink, width: P.thin })}</g>`);
     }
     for (const space of model.spaces.filter(item => item.levelId === level.id)) {
       layers.rooms.push(`<g data-entity="${escapeHtml(space.id)}">${svgRing(space.boundary, map, ratio, { fill: DRAFT.paper, fillOpacity: 0, width: 0 })}</g>`);
@@ -2392,7 +2499,7 @@
     const terrain = terrainOf(model);
     for (const item of [...(model.foundations ?? []).map(entity => ({ entity, kind: 'foundation', z1: entity.topElevationMm, z0: entity.topElevationMm - entity.depthMm })),
       ...(model.surfaces ?? []).map(entity => ({ entity, kind: 'surface', z1: entity.topElevationMm, z0: entity.topElevationMm - entity.thicknessMm }))]) {
-      for (const [t0, t1] of segmentPolygonIntervals(section.start, section.end, ringOf(item.entity.boundary))) {
+      for (const [t0, t1] of segmentPolygonIntervals(section.start, section.end, ringOf(outlineOf(item.entity)))) {
         const [h0, h1] = hRange([at(t0), at(t1)]);
         if (item.kind === 'surface' && item.entity.followsGrade === true) {
           // A draped surface is a band of vertical thickness under the finished grade.
@@ -2760,12 +2867,12 @@
     const paperDir = (a, b) => unit2(sub(map(b), map(a)));
 
     // Surfaces on the ground level: draped surfaces first, then flat ones from low to high.
-    const surfaces = (model.surfaces ?? []).filter(item => item.levelId === ground.id && shows('surfaces'))
+    const surfaces = (model.surfaces ?? []).filter(item => item.levelId === ground.id && shows('surfaces') && outlineOf(item))
       .sort((a, b) => (b.followsGrade === true) - (a.followsGrade === true) || (a.topElevationMm ?? 0) - (b.topElevationMm ?? 0));
     for (const surface of surfaces) {
-      const ring = ringOf(surface.boundary), box = boundsOf(ring), outline = ring.map(map);
+      const ring = ringOf(outlineOf(surface)), box = boundsOf(ring), outline = ring.map(map);
       const fill = mats.region(outline, { o: map({ x: box.x0, y: box.y0 }), u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: (box.x1 - box.x0) / ratio, T: (box.y1 - box.y0) / ratio }, mats.resolve(surface.materialId), `clip-site-${surface.id}`);
-      layers.surfaces.push(`${fill}<g data-entity="${escapeHtml(surface.id)}">${svgRing(surface.boundary, map, ratio, { fill: DRAFT.paper, fillOpacity: 0, stroke: ink, width: P.thin })}</g>`);
+      layers.surfaces.push(`${fill}<g data-entity="${escapeHtml(surface.id)}">${svgRing(outlineOf(surface), map, ratio, { fill: DRAFT.paper, fillOpacity: 0, stroke: ink, width: P.thin })}</g>`);
     }
     for (const planting of visiblePlantings.filter(item => item.boundary)) {
       layers.plantingAreas.push(`<g data-entity="${escapeHtml(planting.id)}">${svgRing(planting.boundary, map, ratio, { fill: mats.pattern('planting'), stroke: ink, width: P.thin, dash: planting.status === 'proposed' ? null : '1 0.6' })}</g>`);
@@ -3181,7 +3288,7 @@
     } else if (type === 'System route') {
       const endpoint = id => entityTitle(locateEntity(model, id)?.entity ?? { id }, 'System point');
       context = `${capitalize(found.system.discipline)} route`;
-      dims.push(['Length', L(pathLength(entity.path))], ['Nominal size', entity.nominalSize ?? 'Not set'], ['From', endpoint(entity.from)], ['To', endpoint(entity.to)]);
+      dims.push(['Length', L(centerlineLength(entity.path))], ['Nominal size', entity.nominalSize ?? 'Not set'], ['From', endpoint(entity.from)], ['To', endpoint(entity.to)]);
     } else if (type === 'System point') {
       context = found.system.name;
       dims.push(['Kind', capitalize(entity.kind.replace(/-/g, ' '))], ['Elevation', L(entity.position.z)]);
@@ -3210,9 +3317,14 @@
       context = capitalize(entity.kind.replace(/-/g, ' '));
       dims.push(['Width', L(Math.min(box.x1 - box.x0, box.y1 - box.y0))], ['Length', L(Math.max(box.x1 - box.x0, box.y1 - box.y0))], ['Depth', L(entity.depthMm)], ['Top', L(entity.topElevationMm)], ['Bottom', L(entity.topElevationMm - entity.depthMm)], ['Material', materialName(entity.materialId)]);
     } else if (type === 'Surface') {
-      context = `Site surface, ${levelName(entity.levelId)}`;
-      dims.push(['Area', profileFor(model).area(polygonArea(ringOf(entity.boundary)))], ['Thickness', L(entity.thicknessMm)], entity.followsGrade === true ? ['Top', `Follows grade${entity.gradeOffsetMm ? `, ${L(entity.gradeOffsetMm)} above` : ''}`] : ['Top', L(entity.topElevationMm)], ['Material', materialName(entity.materialId)]);
-      if (hasCurves(entity.boundary)) dims.push(['Perimeter', L(curveLength(entity.boundary, true))]);
+      context = `Site surface${entity.path ? ' (path)' : ''}, ${levelName(entity.levelId)}`;
+      const outline = outlineOf(entity);
+      if (outline) dims.push(['Area', profileFor(model).area(polygonArea(ringOf(outline)))]);
+      dims.push(['Thickness', L(entity.thicknessMm)], entity.followsGrade === true ? ['Top', `Follows grade${entity.gradeOffsetMm ? `, ${L(entity.gradeOffsetMm)} above` : ''}`] : ['Top', L(entity.topElevationMm)], ['Material', materialName(entity.materialId)]);
+      if (entity.path && outline) {
+        const radii = pathFillets(entity.path).filter(f => f.tangent > 0).map(f => L(f.r));
+        dims.push(['Width', L(entity.path.widthMm)], ['Centreline length', L(centerlineLength(entity.path))], ['Corner radii', radii.length ? radii.join(', ') : 'None (straight or sharp corners)']);
+      } else if (outline && hasCurves(outline)) dims.push(['Perimeter', L(curveLength(outline, true))]);
     } else if (type === 'Property line' || type === 'Grading limit') {
       const ring = ringOf(entity.boundary);
       dims.push(['Enclosed area', profileFor(model).area(polygonArea(ring))], ['Perimeter', L(curveLength(entity.boundary, true))], ['Edges', String(entity.boundary.length)]);
@@ -3273,7 +3385,7 @@
     'evidence.review': 'Evidence to confirm', 'stair.code': 'Stair', 'code.status': 'Code research', 'system.review': 'Systems',
     'label.placement': 'Drawing label', 'section.empty': 'Section', 'webgl.unavailable': '3D view', 'structure.review': 'Structure',
     'material.key-overflow': 'Material key', 'material.evidence': 'Material sources', 'material.category-use': 'Material use',
-    'site.survey': 'Survey', 'site.schedule-overflow': 'Plant schedule', 'terrain.constraint-failed': 'Terrain', 'terrain.degenerate': 'Terrain', 'scene.reduced-detail': '3D view', 'wall.join-fallback': 'Wall join'
+    'site.survey': 'Survey', 'site.schedule-overflow': 'Plant schedule', 'site.outside-lot': 'Outside the lot', 'surface.under-building': 'Surface placement', 'planting.under-building': 'Planting placement', 'surface.path': 'Path geometry', 'terrain.constraint-failed': 'Terrain', 'terrain.degenerate': 'Terrain', 'scene.reduced-detail': '3D view', 'wall.join-fallback': 'Wall join'
   };
   // Groups findings by code so repeated notes (one per system, say) read as one entry.
   function reviewQueue(findings) {
@@ -3440,8 +3552,8 @@
       drape(box, SCENE_LIMITS.terrainCells, p => terrain.at(p), (c, q) => (!lot || pointInPolygon(c, lot)) && !underBuilding(q), rgb('#9aa77f'));
     }
     // Draped surfaces float 30 mm over the terrain mesh, whose grid differs, so the two never interleave.
-    for (const surface of (model.surfaces ?? []).filter(item => item.followsGrade === true)) {
-      const ring = ringOf(surface.boundary), offset = (surface.gradeOffsetMm ?? 0) + 30;
+    for (const surface of (model.surfaces ?? []).filter(item => item.followsGrade === true && outlineOf(item))) {
+      const ring = ringOf(outlineOf(surface)), offset = (surface.gradeOffsetMm ?? 0) + 30;
       drape(boundsOf(ring), SCENE_LIMITS.drapeCells, p => (terrain ? terrain.at(p) : (model.project.coordinates.siteDatumMm ?? 0)) + offset, c => pointInPolygon(c, ring), rgb(materialColor(surface.materialId, '#b9b8b0')));
     }
     // Plantings: trunk prisms with low-poly canopies (spheres for broadleaf plants, cones for conifers).
@@ -3496,7 +3608,7 @@
       else pushExtrusion(gls.triangles, ringOf(slab.boundary), top - slab.thicknessMm, top, rgb(color));
     }
     for (const foundation of model.foundations ?? []) pushExtrusion(gls.triangles, ringOf(foundation.boundary), foundation.topElevationMm - foundation.depthMm, foundation.topElevationMm, rgb(materialColor(foundation.materialId, '#b9b8b0')));
-    for (const surface of (model.surfaces ?? []).filter(item => item.followsGrade !== true)) pushExtrusion(gls.triangles, ringOf(surface.boundary), surface.topElevationMm - surface.thicknessMm, surface.topElevationMm, rgb(materialColor(surface.materialId, '#b9b8b0')));
+    for (const surface of (model.surfaces ?? []).filter(item => item.followsGrade !== true && outlineOf(item))) pushExtrusion(gls.triangles, ringOf(outlineOf(surface)), surface.topElevationMm - surface.thicknessMm, surface.topElevationMm, rgb(materialColor(surface.materialId, '#b9b8b0')));
     pushSite(gls, model, materialColor);
     for (const beam of model.beams ?? []) {
       const dx = beam.end.x - beam.start.x, dy = beam.end.y - beam.start.y;
@@ -3957,7 +4069,7 @@
 
   const studioApi = {
     state, PROFILES, DISCIPLINES, MATERIAL_CATEGORIES, HEADER_KINDS, materialContext, materialsActive, wallBands, segmentPolygonIntervals, triangulate, pushExtrusion, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
-    bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, polygonArea, pointInPolygon, wallGeometry, wallLength, wallEndClip, terrainOf, siteExtent,
+    bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, centerlineIssues, pathOutline, pathFillets, centerlineLength, outlineOf, polygonArea, pointInPolygon, wallGeometry, wallLength, wallEndClip, terrainOf, siteExtent,
     renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, siteCategories, parseSiteHidden, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport
   };

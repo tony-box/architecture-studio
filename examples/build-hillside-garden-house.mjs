@@ -49,16 +49,18 @@ function build(s) {
     { id: 'slab-deck', levelId: 'level-ground', boundary: [P(22, 60 + h), P(40, 60 + h), P(40, 66, { bulge: 0.35 }), P(22, 66)], thicknessMm: sum(s.deck), layers: s.deck, evidence: ev('Concept timber deck with a curved north edge, level with the floor.') }
   ];
   const roofs = [{ id: 'roof-main', levelId: 'level-ground', kind: 'gable', footprint: rect(18, 30, 42, 60), eaveElevationMm: s.wallHeight, ridgeElevationMm: s.ridge, ridgeAxis: 'y', overhangMm: s.overhang, evidence: ev('Concept gable roof; the bay has its own low roof, not modelled.') }];
-  const surface = (id, name, boundary, materialId, extra, note) => ({ id, name, levelId: 'level-ground', boundary, ...extra, materialId, evidence: ev(note) });
+  // A surface takes an outline (an array of vertices) or a centreline path ({ centerline, widthMm, cornerRadiusMm }).
+  const surface = (id, name, shape, materialId, extra, note) => ({ id, name, levelId: 'level-ground', ...(Array.isArray(shape) ? { boundary: shape } : { path: shape }), ...extra, materialId, evidence: ev(note) });
+  const path = (points, width, radius) => ({ centerline: points.map(([x, y]) => P(x, y)), widthMm: U(width), cornerRadiusMm: U(radius) });
   const draped = thicknessMm => ({ followsGrade: true, gradeOffsetMm: 0, thicknessMm });
   const surfaces = [
     surface('surface-front-lawn', 'Front Lawn', [P(1, 4), P(45, 4), C(45, 27, [36, 29], [26, 25]), P(16, 27), P(1, 27)], 'mat-lawn', draped(s.lawn), 'Concept lawn on the existing slope.'),
     surface('surface-back-lawn', 'Back Lawn', [C(1, 72, [20, 68], [40, 76]), P(59, 71), P(59, 99), P(1, 99)], 'mat-lawn', draped(s.lawn), 'Concept rear lawn.'),
     surface('surface-front-bed', 'Front Planting Bed', [C(17, 25.5, [24, 23], [36, 23]), P(43, 26), P(43, 29.4), P(17, 29.4)], 'mat-mulch', draped(s.mulch), 'Concept mulch bed along the entry.'),
-    surface('surface-walk', 'Entry Walk', [C(28.5, 29.4, [28.5, 20], [20, 14]), P(21, 4), C(26, 4, [24, 14], [32, 20]), P(32, 29.4)], 'mat-concrete', draped(s.walk), 'Concept curved concrete walk from the street to the door.'),
+    surface('surface-walk', 'Entry Walk', path([[30.25, 29.4], [30.25, 20], [23.5, 13], [23.5, 4]], 4, 8), 'mat-concrete', draped(s.walk), 'Concept 4 ft concrete walk from the door to the street, two 8 ft radius curves.'),
     surface('surface-drive', 'Driveway', rect(46, 1, 56, 34), 'mat-asphalt', draped(s.drive), 'Concept asphalt drive.'),
     surface('surface-patio', 'Paver Patio', rect(8, 36, 17.4, 49), 'mat-pavers', { topElevationMm: -s.step, thicknessMm: s.patio }, 'Concept paver patio one step below the floor.'),
-    surface('surface-stepping-path', 'Stepping-Stone Path', [C(10, 49, [10, 56], [14, 62]), P(18, 70), C(21, 70, [16, 61], [13, 55]), P(13, 49)], 'mat-flagstone', draped(s.walk), 'Concept flagstone path from the patio to the back lawn.'),
+    surface('surface-stepping-path', 'Stepping-Stone Path', path([[11.5, 49], [11.5, 58], [19.5, 70]], 3, 10), 'mat-flagstone', draped(s.walk), 'Concept 3 ft flagstone path from the patio to the back lawn, one 10 ft radius curve.'),
     surface('surface-pond', 'Pond', [P(6, 14, { bulge: 1 }), P(14, 14, { bulge: 1 })], 'mat-water', { topElevationMm: s.pondTop, thicknessMm: s.pondDepth }, 'Concept lined pond; the water level is held flat.')
   ];
   const interval = s.interval, contour = (k, status, path, extra = {}) => ({ id: `contour-${status === 'existing' ? 'ex' : 'pr'}-${k < 0 ? `m${-k}` : k}`, elevationMm: Math.round(k * interval), status, path, ...extra, evidence: status === 'existing' ? ev('Concept contour sketched for the fixture; no topographic survey.', 0.4) : ev('Concept finished grade around the house pad.') });

@@ -500,12 +500,13 @@
     "surface": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "levelId", "boundary", "thicknessMm", "evidence"],
+      "required": ["id", "name", "levelId", "thicknessMm", "evidence"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "name": { "type": "string" },
         "levelId": { "$ref": "#/$defs/id" },
         "boundary": { "$ref": "#/$defs/curvePolygon" },
+        "path": { "$ref": "#/$defs/surfacePath", "description": "Walks, drives, and paths: a centreline, a width, and corner radii instead of a boundary. Prefer this for anything of constant width (see curves.md)." },
         "topElevationMm": { "type": "integer", "description": "Flat top. Required unless the surface follows grade." },
         "thicknessMm": { "type": "integer", "minimum": 1, "description": "Vertical thickness below the top." },
         "followsGrade": { "type": "boolean", "default": false, "description": "Drape the top on the finished grade (lawn, beds, sloping walks)." },
@@ -514,7 +515,29 @@
         "evidence": { "$ref": "#/$defs/evidence" }
       },
       "if": { "not": { "required": ["followsGrade"], "properties": { "followsGrade": { "const": true } } } },
-      "then": { "required": ["topElevationMm"] }
+      "then": { "required": ["topElevationMm"] },
+      "oneOf": [{ "required": ["boundary"] }, { "required": ["path"] }]
+    },
+    "centerlinePoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "radiusMm": { "type": "integer", "minimum": 0, "description": "Fillet radius at this corner; overrides the path's cornerRadiusMm. 0 is a sharp corner." }
+      }
+    },
+    "surfacePath": {
+      "description": "A constant-width surface along a centreline. Straights between centreline points are joined by circular fillets; ends are square to the centreline. See coordinate-contract.md, Paths.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["centerline", "widthMm"],
+      "properties": {
+        "centerline": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/centerlinePoint" } },
+        "widthMm": { "type": "integer", "minimum": 1 },
+        "cornerRadiusMm": { "type": "integer", "minimum": 0, "default": 0, "description": "Fillet radius at every interior point without its own radiusMm. At least half the width." }
+      }
     },
     "opening": {
       "type": "object",

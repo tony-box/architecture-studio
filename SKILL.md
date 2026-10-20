@@ -39,7 +39,8 @@ survey accurate, or professionally engineered.
    require at least one trusted calibration dimension.
 3. **Read the contracts.** Read `references/coordinate-contract.md`,
    `references/building.schema.json`, `references/model-validation.md`, and
-   `references/drafting-standard.md` before authoring geometry.
+   `references/drafting-standard.md` before authoring geometry, and
+   `references/curves.md` before authoring anything curved.
 4. **Write the model.** Write one active model to `models/building.json`.
    Store complete alternative concepts under `models/variants/`; do not
    maintain separate plan, elevation, or 3D geometry sources. Add section
@@ -47,9 +48,12 @@ survey accurate, or professionally engineered.
    add a `materials` catalog and assign wall and slab `layers`, opening
    `headers`, `beams`, `columns`, `foundations`, and site `surfaces` so the
    drawings hatch by material; never invent a material the brief does not
-   support, and leave unknown elements without one. Draw curved walks, beds,
-   decks, and rooms with curve vertices (`bulge` arcs or Bezier controls) and
-   curved walls with a wall `bulge`. When the site matters, add the property
+   support, and leave unknown elements without one. Draw walks, paths, and
+   drives as surface `path`s (a centreline, a width, and corner radii), bowed
+   edges and curved decks, rooms, and walls with `bulge`, and only free-form
+   beds with Bezier controls. Follow `references/curves.md` for every curved
+   shape and every curve edit: it turns requests like "curve it more" or "move
+   it east" into numbers. When the site matters, add the property
    line, setbacks, contours, a grading limit, and `plants` with `plantings`;
    the model then draws a site plan, L-101. Lot lines, setbacks, and existing
    trees come from a survey or the user, never from imagery or a guess.
@@ -57,7 +61,10 @@ survey accurate, or professionally engineered.
    datums, stairs, and system connectivity. `export-drawings.mjs` (step 9)
    prints every validation error and writes nothing until they are fixed.
    Resolve every error before handoff. Preserve warnings and advisories in the
-   diagnostics and assumptions outputs.
+   diagnostics and assumptions outputs. After adding or changing a curved
+   element, run `node <skill>/scripts/inspect.mjs --project <project> --id <id>`
+   and check its width, radii, bounds, and clearances as numbers; never judge a
+   curve by guessing how it looks.
 6. **Research the code.** If the user allowed network research, research
    adopted building codes and local amendments from official sources
    following `references/code-research.md`. Otherwise inspect user-provided
