@@ -555,7 +555,9 @@ const HATCH_CONTRACT = {
   earth: [['earth'], ['earth']], gravel: [['gravel'], ['gravel']], sand: [['sand'], ['sand']], concrete: [['concrete'], ['concrete']],
   'reinforced-concrete': [['concrete'], ['concrete', 'diagonal-wide']], 'concrete-masonry': [['concrete-sparse', 'diagonal-wide'], ['concrete-sparse', 'diagonal-wide']],
   brick: [['diagonal'], ['diagonal']], gypsum: [['stipple'], ['stipple']], 'insulation-rigid': ['zigzag', ['crosshatch']],
-  steel: ['solid', 'solid'], 'wood-framing': ['grain', 'grain'], 'engineered-wood': ['laminated', 'laminated'], 'insulation-batt': ['batt', 'batt'], generic: ['poche', 'poche']
+  steel: ['solid', 'solid'], 'wood-framing': ['grain', 'grain'], 'engineered-wood': ['laminated', 'laminated'], 'insulation-batt': ['batt', 'batt'], generic: ['poche', 'poche'],
+  lawn: [['lawn'], ['lawn']], mulch: [['mulch'], ['mulch']], asphalt: [['asphalt'], ['asphalt']], 'unit-pavers': [['pavers'], ['pavers']],
+  flagstone: [['flagstone'], ['flagstone']], water: [['water'], ['water']], decking: [['boards'], ['boards']]
 };
 
 test('every material category draws its documented hatch in both profiles', () => {

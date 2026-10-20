@@ -120,11 +120,30 @@
       "default": []
     },
     "site": {
+      "description": "Site context. Any entry other than groundMaterialId makes the model draw a site plan, L-101 (drafting-standard.md, Site and landscape).",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "groundMaterialId": { "$ref": "#/$defs/id", "description": "Material drawn below the ground line in sections." }
+        "groundMaterialId": { "$ref": "#/$defs/id", "description": "Material drawn below the ground line in sections." },
+        "propertyLine": { "$ref": "#/$defs/siteBoundary", "description": "Lot boundary. Straight edges and arcs only, so every edge has a bearing or a radius." },
+        "setbacks": { "type": "array", "items": { "$ref": "#/$defs/setback" }, "default": [] },
+        "gradingLimit": { "$ref": "#/$defs/siteBoundary", "description": "Limit of grading. Proposed contours and spot elevations lie inside it; outside it the existing ground stays." },
+        "contourIntervalMm": { "type": "number", "exclusiveMinimum": 0, "description": "Contour interval; not necessarily whole millimetres (1 ft is 304.8 mm). Every fifth interval is an index contour." },
+        "contours": { "type": "array", "items": { "$ref": "#/$defs/contour" }, "default": [] },
+        "spotElevations": { "type": "array", "items": { "$ref": "#/$defs/spotElevation" }, "default": [] }
       }
+    },
+    "plants": {
+      "description": "Plant catalog. Plantings reference entries by id; the key labels plants on the site plan and in the plant schedule.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/plant" },
+      "default": []
+    },
+    "plantings": {
+      "description": "Individual plants (position) and massed plantings (boundary) on the site.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/planting" },
+      "default": []
     },
     "beams": {
       "type": "array",
@@ -237,6 +256,88 @@
       "minItems": 2,
       "items": { "$ref": "#/$defs/curveVertex" }
     },
+    "siteBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "boundary", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "boundary": { "$ref": "#/$defs/arcPolygon" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "setback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "edgeIndex", "distanceMm", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "edgeIndex": { "type": "integer", "minimum": 0, "description": "Property line edge, numbered from the segment that starts at vertex 0." },
+        "distanceMm": { "type": "integer", "minimum": 1 },
+        "label": { "type": "string", "description": "For example Front setback." },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "contour": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "elevationMm", "status", "path", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "elevationMm": { "type": "integer" },
+        "status": { "enum": ["existing", "proposed"] },
+        "path": { "$ref": "#/$defs/curvePath" },
+        "closed": { "type": "boolean", "default": false },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "spotElevation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "position", "elevationMm", "status", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "position": { "$ref": "#/$defs/point2" },
+        "elevationMm": { "type": "integer" },
+        "status": { "enum": ["existing", "proposed"] },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "plant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "key", "botanicalName", "commonName", "kind", "matureHeightMm", "matureSpreadMm", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "key": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{0,4}$" },
+        "botanicalName": { "type": "string", "minLength": 1 },
+        "commonName": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["deciduous-tree", "evergreen-tree", "shrub", "groundcover", "perennial", "ornamental-grass"] },
+        "size": { "type": "string", "description": "Planting size as specified, for example 2-1/2\" cal., #5 cont., or C5." },
+        "matureHeightMm": { "type": "integer", "minimum": 1 },
+        "matureSpreadMm": { "type": "integer", "minimum": 1 },
+        "spacingMm": { "type": "integer", "minimum": 1, "description": "On-centre spacing for massed plantings; quantities use triangular spacing." },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "planting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "plantId", "status", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "plantId": { "$ref": "#/$defs/id" },
+        "status": { "enum": ["existing", "proposed", "remove"] },
+        "position": { "$ref": "#/$defs/point2", "description": "One plant." },
+        "boundary": { "$ref": "#/$defs/curvePolygon", "description": "A massed planting." },
+        "canopyDiameterMm": { "type": "integer", "minimum": 1, "description": "Drawn canopy; defaults to the plant's mature spread." },
+        "trunkDiameterMm": { "type": "integer", "minimum": 1 },
+        "heightMm": { "type": "integer", "minimum": 1, "description": "Height in elevations, sections, and 3D; defaults to the plant's mature height." },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "anyOf": [{ "required": ["position"] }, { "required": ["boundary"] }],
+      "not": { "required": ["position", "boundary"] }
+    },
     "level": {
       "type": "object",
       "additionalProperties": false,
@@ -272,6 +373,7 @@
         "levelId": { "$ref": "#/$defs/id" },
         "start": { "$ref": "#/$defs/point2" },
         "end": { "$ref": "#/$defs/point2" },
+        "bulge": { "type": "number", "description": "Arc wall: the centreline is a circular arc from start to end, tan(sweep / 4), positive counter-clockwise; at most 1 (a semicircle) in magnitude. Openings are measured along the centreline arc." },
         "thicknessMm": { "type": "integer", "minimum": 1 },
         "heightMm": { "type": "integer", "minimum": 1 },
         "baseOffsetMm": { "type": "integer", "default": 0 },
@@ -310,7 +412,7 @@
         "id": { "$ref": "#/$defs/id" },
         "name": { "type": "string", "minLength": 1, "description": "Shown in the sheet's material key." },
         "category": {
-          "enum": ["earth", "gravel", "sand", "concrete", "reinforced-concrete", "concrete-masonry", "brick", "steel", "wood-framing", "engineered-wood", "insulation-batt", "insulation-rigid", "gypsum", "generic"]
+          "enum": ["earth", "gravel", "sand", "concrete", "reinforced-concrete", "concrete-masonry", "brick", "steel", "wood-framing", "engineered-wood", "insulation-batt", "insulation-rigid", "gypsum", "generic", "lawn", "mulch", "asphalt", "unit-pavers", "flagstone", "water", "decking"]
         },
         "description": { "type": "string" },
         "evidence": { "$ref": "#/$defs/evidence", "description": "Where the material choice came from. Without it validation raises a material.evidence advisory." }
@@ -398,17 +500,21 @@
     "surface": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "levelId", "boundary", "topElevationMm", "thicknessMm", "evidence"],
+      "required": ["id", "name", "levelId", "boundary", "thicknessMm", "evidence"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "name": { "type": "string" },
         "levelId": { "$ref": "#/$defs/id" },
         "boundary": { "$ref": "#/$defs/curvePolygon" },
-        "topElevationMm": { "type": "integer" },
-        "thicknessMm": { "type": "integer", "minimum": 1 },
+        "topElevationMm": { "type": "integer", "description": "Flat top. Required unless the surface follows grade." },
+        "thicknessMm": { "type": "integer", "minimum": 1, "description": "Vertical thickness below the top." },
+        "followsGrade": { "type": "boolean", "default": false, "description": "Drape the top on the finished grade (lawn, beds, sloping walks)." },
+        "gradeOffsetMm": { "type": "integer", "default": 0, "description": "Top above finished grade when the surface follows grade." },
         "materialId": { "$ref": "#/$defs/id" },
         "evidence": { "$ref": "#/$defs/evidence" }
-      }
+      },
+      "if": { "not": { "required": ["followsGrade"], "properties": { "followsGrade": { "const": true } } } },
+      "then": { "required": ["topElevationMm"] }
     },
     "opening": {
       "type": "object",

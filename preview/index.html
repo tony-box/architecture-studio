@@ -50,6 +50,7 @@
     transition: background-color 160ms var(--ease), color 160ms var(--ease);
   }
   .tab:hover { color: var(--ink); background: #f1eee6; }
+  .tab[hidden] { display: none; }
   .tab[aria-selected="true"] { color: var(--ink); background: var(--paper); }
   .tab[aria-selected="true"]::after { content: ""; position: absolute; inset: auto 0 -1px; height: 3px; background: var(--accent); }
   .tab:focus-visible { outline-offset: -3px; }
@@ -187,6 +188,7 @@
         <button class="tab" role="tab" id="tab-elevation" data-view="elevation" aria-selected="false" aria-controls="stage" tabindex="-1">Elevations</button>
         <button class="tab" role="tab" id="tab-section" data-view="section" aria-selected="false" aria-controls="stage" tabindex="-1">Sections</button>
         <button class="tab" role="tab" id="tab-systems" data-view="systems" aria-selected="false" aria-controls="stage" tabindex="-1">Systems</button>
+        <button class="tab" role="tab" id="tab-site" data-view="site" aria-selected="false" aria-controls="stage" tabindex="-1" hidden>Site</button>
       </div>
       <div class="tab-cluster tab-cluster--review">
         <button class="tab" role="tab" id="tab-model" data-view="model" aria-selected="false" aria-controls="stage" tabindex="-1">3D model</button>
@@ -250,9 +252,12 @@
     cameraMode: 'orbit',
     approvals: {}
   };
-  const SHEET_VIEWS = ['plan', 'elevation', 'section', 'systems'];
+  const SHEET_VIEWS = ['plan', 'elevation', 'section', 'systems', 'site'];
   const DOCUMENT_VIEWS = ['code', 'assumptions'];
-  const ALL_VIEWS = ['plan', 'elevation', 'section', 'systems', 'model', 'code', 'assumptions'];
+  const ALL_VIEWS = ['plan', 'elevation', 'section', 'systems', 'site', 'model', 'code', 'assumptions'];
+  // Views a model offers, in tab order. The site plan exists only for models with site content.
+  const availableViews = model => ALL_VIEWS.filter(view => view !== 'site' || hasSiteContent(model));
+  const resolveView = (requested, model) => availableViews(model).includes(requested) ? requested : 'plan';
   const $ = selector => document.querySelector(selector);
   const viewport = $('#sheet-viewport');
   const sheetStage = $('#sheet-stage');
@@ -283,12 +288,20 @@
   }
 
   function allEntityIds(model) {
-    const groups = ['levels', 'spaces', 'walls', 'openings', 'slabs', 'roofs', 'stairs', 'fixtures', 'equipment', 'systems', 'dimensions', 'sections', 'viewpoints', 'assumptions', 'materials', 'beams', 'columns', 'foundations', 'surfaces'];
+    const groups = ['levels', 'spaces', 'walls', 'openings', 'slabs', 'roofs', 'stairs', 'fixtures', 'equipment', 'systems', 'dimensions', 'sections', 'viewpoints', 'assumptions', 'materials', 'beams', 'columns', 'foundations', 'surfaces', 'plants', 'plantings'];
     const entities = model?.project ? [model.project] : [];
     for (const group of groups) entities.push(...(model[group] ?? []));
     for (const system of model?.systems ?? []) entities.push(...(system.nodes ?? []), ...(system.edges ?? []));
+    entities.push(...siteEntities(model));
     return entities;
   }
+  // Site records that carry their own ids: property line, grading limit, setbacks, contours, spots.
+  function siteEntities(model) {
+    const site = model?.site ?? {};
+    return [site.propertyLine, site.gradingLimit, ...(site.setbacks ?? []), ...(site.contours ?? []), ...(site.spotElevations ?? [])].filter(Boolean);
+  }
+  // A model draws a site plan (L-101) when it records anything beyond the building and its ground material.
+  const hasSiteContent = model => siteEntities(model).length > 0 || (model?.plantings ?? []).length > 0;
 
   const isFiniteInteger = value => Number.isInteger(value) && Number.isFinite(value);
   const samePoint = (a, b, tolerance = 0) => Math.hypot(a.x - b.x, a.y - b.y, (a.z ?? 0) - (b.z ?? 0)) <= tolerance;
@@ -544,9 +557,108 @@
       checkRef(surface.materialId, surface.id);
       const issues = curveIssues(surface.boundary);
       if (issues.length) add('error', 'polygon.geometry', `Polygon has ${issues.join(', ')}.`, surface.id);
-      if (!positive(surface.thicknessMm) || !isFiniteInteger(surface.topElevationMm)) add('error', 'surface.geometry', 'Surface needs a positive integer thickness and an integer top elevation.', surface.id);
+      if (surface.followsGrade != null && typeof surface.followsGrade !== 'boolean') add('error', 'surface.geometry', 'followsGrade must be true or false.', surface.id);
+      if (surface.followsGrade === true) {
+        if (!positive(surface.thicknessMm) || (surface.gradeOffsetMm != null && !isFiniteInteger(surface.gradeOffsetMm))) add('error', 'surface.geometry', 'A surface that follows grade needs a positive integer thickness and an integer gradeOffsetMm.', surface.id);
+      } else if (!positive(surface.thicknessMm) || !isFiniteInteger(surface.topElevationMm)) add('error', 'surface.geometry', 'Surface needs a positive integer thickness and an integer top elevation.', surface.id);
     }
+    // Landscape categories describe ground cover; inside a wall, header, or member they are almost certainly a slip.
+    const siteCategory = materialId => MATERIAL_CATEGORIES[(model.materials ?? []).find(item => item.id === materialId)?.category]?.site;
+    const misused = [...model.walls.flatMap(wall => [wall.materialId, ...(wall.layers ?? []).map(layer => layer.materialId)].map(id => [id, wall.id])),
+      ...model.openings.flatMap(opening => (opening.headers ?? []).map(header => [header.materialId, opening.id])),
+      ...[...(model.beams ?? []), ...(model.columns ?? [])].map(member => [member.materialId, member.id])].find(([id]) => id && siteCategory(id));
+    if (misused) add('advisory', 'material.category-use', `A landscape material (${misused[0]}) is used in a building assembly or member.`, misused[1]);
+    validateSite(model, add);
     if (structural) add('advisory', 'structure.review', 'Headers, beams, and columns are concept placeholders; member sizes, bearing, and connections need a structural engineer.', structural);
+  }
+
+  const PLANT_KINDS = {
+    'deciduous-tree': { label: 'Deciduous tree', tree: true },
+    'evergreen-tree': { label: 'Evergreen tree', tree: true },
+    shrub: { label: 'Shrub' },
+    groundcover: { label: 'Groundcover' },
+    perennial: { label: 'Perennial' },
+    'ornamental-grass': { label: 'Ornamental grass' }
+  };
+  const PLANTING_STATUS = { existing: 'Existing to remain', proposed: 'Proposed', remove: 'Existing to remove' };
+  // Property line, setbacks, grading, contours, spot elevations, plants, and plantings. All optional.
+  function validateSite(model, add) {
+    const site = model.site ?? {}, positive = value => isFiniteInteger(value) && value > 0;
+    const evidenceOf = (entity, label) => { if (!entity.evidence) add('error', 'site.evidence', `${label} needs an evidence record.`, entity.id); };
+    const idOf = (entity, label) => { if (typeof entity?.id !== 'string') add('error', 'entity.id', `${label} is missing its stable ID.`); };
+    for (const [key, label] of [['propertyLine', 'Property line'], ['gradingLimit', 'Grading limit']]) {
+      const entity = site[key]; if (!entity) continue;
+      idOf(entity, label); evidenceOf(entity, label);
+      const issues = curveIssues(entity.boundary, { bezier: false });
+      if (issues.length) add('error', 'polygon.geometry', `${label} has ${issues.join(', ')}.`, entity.id);
+    }
+    // Legal lines come from a survey or a recorded plat, never from imagery or a guess.
+    const line = site.propertyLine;
+    if (line?.evidence && (line.evidence.status !== 'accepted' || !['user', 'attachment', 'code-source'].includes(line.evidence.source))) add('advisory', 'site.survey', 'The property line is not from an accepted survey or plat; lot lines and setbacks need a boundary survey.', line.id);
+    const edges = line?.boundary?.length ?? 0;
+    for (const setback of site.setbacks ?? []) {
+      idOf(setback, 'Setback'); evidenceOf(setback, 'Setback');
+      if (!line) add('error', 'site.setback', 'Setbacks need a property line.', setback.id);
+      else if (!Number.isInteger(setback.edgeIndex) || setback.edgeIndex < 0 || setback.edgeIndex >= edges) add('error', 'site.setback', `Setback edgeIndex must name a property line edge, 0 to ${edges - 1}.`, setback.id);
+      if (!positive(setback.distanceMm)) add('error', 'site.setback', 'Setback distance must be a positive integer.', setback.id);
+    }
+    const interval = site.contourIntervalMm, tolerance = model.project.coordinates.toleranceMm ?? 3;
+    // Imperial intervals (1' = 304.8 mm) are not whole millimetres, so the interval may be any positive number.
+    const intervalOk = typeof interval === 'number' && Number.isFinite(interval) && interval > 0;
+    if (interval != null && !intervalOk) add('error', 'site.contour', 'contourIntervalMm must be a positive number.', model.project.id);
+    for (const contour of site.contours ?? []) {
+      idOf(contour, 'Contour'); evidenceOf(contour, 'Contour');
+      const issues = pathIssues(contour.path, Boolean(contour.closed));
+      if (issues.length) add('error', 'site.contour', `Contour has ${issues.join(', ')}.`, contour.id);
+      if (!isFiniteInteger(contour.elevationMm)) add('error', 'site.contour', 'Contour elevation must be an integer.', contour.id);
+      else if (intervalOk && Math.abs(contour.elevationMm - Math.round(contour.elevationMm / interval) * interval) > tolerance) add('error', 'site.contour', `Contour elevation ${contour.elevationMm} is not on the ${interval} mm interval.`, contour.id);
+      if (!['existing', 'proposed'].includes(contour.status)) add('error', 'site.contour', 'Contour status must be existing or proposed.', contour.id);
+    }
+    for (const spot of site.spotElevations ?? []) {
+      idOf(spot, 'Spot elevation'); evidenceOf(spot, 'Spot elevation');
+      if (!isModelPoint(spot.position) || !isFiniteInteger(spot.elevationMm) || !['existing', 'proposed'].includes(spot.status)) add('error', 'site.spot', 'Spot elevations need an integer position, an integer elevation, and an existing or proposed status.', spot.id);
+    }
+    // Proposed grading happens inside the limit of grading; outside it the existing ground stays.
+    const proposed = [...(site.contours ?? []).filter(item => item.status === 'proposed'), ...(site.spotElevations ?? []).filter(item => item.status === 'proposed')];
+    if (proposed.length && !site.gradingLimit) add('error', 'site.grading-limit', 'Proposed contours and spot elevations need a gradingLimit.', proposed[0].id);
+    else if (proposed.length && !curveIssues(site.gradingLimit.boundary, { bezier: false }).length) {
+      const limit = ringOf(site.gradingLimit.boundary);
+      const onLimit = p => limit.some((a, i) => { const b = limit[(i + 1) % limit.length], d = sub(b, a), t = Math.max(0, Math.min(1, dot2(sub(p, a), d) / (dot2(d, d) || 1))); return Math.hypot(p.x - a.x - d.x * t, p.y - a.y - d.y * t) <= tolerance + CURVE_TOLERANCE_MM; });
+      for (const item of proposed) {
+        const points = item.path && !pathIssues(item.path, Boolean(item.closed)).length ? curvePoints(item.path, Boolean(item.closed)) : item.position ? [item.position] : [];
+        if (points.some(p => !pointInPolygon(p, limit) && !onLimit(p))) add('error', 'site.grading-limit', `${item.id} runs outside the grading limit.`, item.id);
+        // An open proposed contour ties back into existing grade where it meets the limit.
+        else if (item.path && !item.closed) {
+          const terrain = terrainOf(model);
+          for (const end of [points[0], points.at(-1)]) if (terrain?.existing && Math.abs(terrain.existing.at(end) - item.elevationMm) > Math.max(tolerance, 50)) add('error', 'site.grading-limit', `${item.id} ends at ${Math.round(terrain.existing.at(end))} mm existing grade but is drawn at ${item.elevationMm} mm; close it or end it where existing grade matches.`, item.id);
+        }
+      }
+    }
+    for (const issue of terrainOf(model)?.issues ?? []) add(issue.code === 'terrain.constraint-failed' ? 'warning' : 'error', issue.code, issue.message, issue.entityId ?? model.project.id);
+    const plants = new Map();
+    for (const plant of model.plants ?? []) {
+      idOf(plant, 'Plant'); evidenceOf(plant, 'Plant');
+      plants.set(plant.id, plant);
+      if (typeof plant.key !== 'string' || !/^[A-Z][A-Z0-9]{0,4}$/.test(plant.key)) add('error', 'plant.key', 'Plant key must be 1 to 5 uppercase letters or digits, starting with a letter.', plant.id);
+      if (!Object.hasOwn(PLANT_KINDS, plant.kind)) add('error', 'plant.kind', `Unknown plant kind ${plant.kind}.`, plant.id);
+      if (!positive(plant.matureHeightMm) || !positive(plant.matureSpreadMm) || (plant.spacingMm != null && !positive(plant.spacingMm))) add('error', 'plant.size', 'Plant mature height and spread (and spacing, when set) must be positive integers.', plant.id);
+    }
+    const keys = (model.plants ?? []).map(plant => plant.key);
+    if (new Set(keys).size !== keys.length) add('error', 'plant.key', 'Plant keys must be unique.', model.plants.find((plant, i) => keys.indexOf(plant.key) !== i)?.id);
+    for (const planting of model.plantings ?? []) {
+      idOf(planting, 'Planting'); evidenceOf(planting, 'Planting');
+      const plant = plants.get(planting.plantId);
+      if (!plant) { add('error', 'reference.plant', `Unknown plant ${planting.plantId}.`, planting.id); continue; }
+      if (!Object.hasOwn(PLANTING_STATUS, planting.status)) add('error', 'planting.status', 'Planting status must be existing, proposed, or remove.', planting.id);
+      if ((planting.position == null) === (planting.boundary == null)) { add('error', 'planting.geometry', 'A planting has either a position (one plant) or a boundary (a massed area), not both.', planting.id); continue; }
+      if (planting.position && !isModelPoint(planting.position)) add('error', 'planting.geometry', 'Planting position needs integer x and y.', planting.id);
+      if (planting.boundary) {
+        const issues = curveIssues(planting.boundary);
+        if (issues.length) add('error', 'polygon.geometry', `Planting area has ${issues.join(', ')}.`, planting.id);
+        if (!positive(plant.spacingMm)) add('error', 'planting.spacing', `Massed plantings need spacingMm on ${plant.id} to count plants.`, planting.id);
+      }
+      for (const key of ['canopyDiameterMm', 'trunkDiameterMm', 'heightMm']) if (planting[key] != null && !positive(planting[key])) add('error', 'planting.size', `${key} must be a positive integer.`, planting.id);
+    }
   }
 
   function modelBounds(model) {
@@ -631,7 +743,7 @@
   function svgText(x, y, value, size, o = {}) {
     const rotate = o.rotate ? ` transform="rotate(${num(o.rotate)} ${num(x)} ${num(y)})"` : '';
     const text = o.upper === false ? String(value) : String(value).toUpperCase();
-    return `<text x="${num(x)}" y="${num(y)}" font-size="${num(size)}" text-anchor="${o.anchor ?? 'middle'}"${o.weight ? ` font-weight="${o.weight}"` : ''} fill="${o.fill ?? DRAFT.ink}"${rotate}>${escapeHtml(text)}</text>`;
+    return `<text x="${num(x)}" y="${num(y)}" font-size="${num(size)}" text-anchor="${o.anchor ?? 'middle'}"${o.weight ? ` font-weight="${o.weight}"` : ''}${o.italic ? ' font-style="italic"' : ''} fill="${o.fill ?? DRAFT.ink}"${rotate}>${escapeHtml(text)}</text>`;
   }
   const textWidth = (value, size) => String(value).length * size * DRAFT.charWidth;
   const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
@@ -746,6 +858,183 @@
   function svgRing(vertices, map, ratio, o = {}) {
     if (!hasCurves(vertices)) return svgPoly(vertices.map(map), o);
     return `<path d="${curvePathD(vertices, true, map, ratio)}" fill="${o.fill ?? 'none'}"${o.fillOpacity != null ? ` fill-opacity="${o.fillOpacity}"` : ''}${o.inert ? ' pointer-events="none"' : ''} ${strokeAttrs(o)}/>`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Terrain. Spec: references/coordinate-contract.md "Terrain".
+  // Contours and spot elevations become a triangulated surface (Delaunay, with contour segments
+  // recovered as edges by flips). Existing and proposed ground are separate surfaces: inside the
+  // grading limit the proposed contours replace the existing ones; outside it nothing changes.
+  // ---------------------------------------------------------------------------
+  const TERRAIN = { spacingMm: 1000, maxSamples: 2500, maxFlips: 4000 };
+  const terrainCache = new Map();
+  // Orientation and in-circle tests with a relative epsilon, so cocircular and collinear inputs
+  // resolve the same way every time.
+  function orient2d(a, b, c) { const v = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x); return Math.abs(v) < 1e-9 * (Math.abs(b.x - a.x) + Math.abs(c.y - a.y) + 1) ** 2 ? 0 : Math.sign(v); }
+  function circumcircle(a, b, c) {
+    const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+    if (Math.abs(d) < 1e-12) return { x: 0, y: 0, r2: Infinity };
+    const a2 = a.x * a.x + a.y * a.y, b2 = b.x * b.x + b.y * b.y, c2 = c.x * c.x + c.y * c.y;
+    const x = (a2 * (b.y - c.y) + b2 * (c.y - a.y) + c2 * (a.y - b.y)) / d, y = (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d;
+    return { x, y, r2: (a.x - x) ** 2 + (a.y - y) ** 2 };
+  }
+  // Bowyer-Watson over points pre-sorted by (x, y). Returns counter-clockwise index triples.
+  function delaunay(points) {
+    const box = boundsOf(points), span = Math.max(box.x1 - box.x0, box.y1 - box.y0, 1) * 20, cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2, n = points.length;
+    const pts = [...points, { x: cx - span, y: cy - span }, { x: cx + span, y: cy - span }, { x: cx, y: cy + span }];
+    const make = (i, j, k) => { const t = orient2d(pts[i], pts[j], pts[k]) < 0 ? [i, k, j] : [i, j, k]; t.circle = circumcircle(pts[t[0]], pts[t[1]], pts[t[2]]); return t; };
+    let tris = [make(n, n + 1, n + 2)];
+    for (let i = 0; i < n; i += 1) {
+      const p = pts[i], keep = [], edges = new Map();
+      for (const t of tris) {
+        const dx = p.x - t.circle.x, dy = p.y - t.circle.y;
+        if (dx * dx + dy * dy < t.circle.r2 * (1 - 1e-12)) {
+          for (const [u, v] of [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]]) { const key = u < v ? `${u},${v}` : `${v},${u}`; edges.set(key, edges.has(key) ? null : [u, v]); }
+        } else keep.push(t);
+      }
+      tris = keep;
+      for (const edge of edges.values()) if (edge) tris.push(make(edge[0], edge[1], i));
+    }
+    return tris.filter(t => t.every(index => index < n)).map(t => [t[0], t[1], t[2]]);
+  }
+  const edgeKey = (u, v) => u < v ? `${u},${v}` : `${v},${u}`;
+  const properCross = (a, b, c, d) => orient2d(a, b, c) * orient2d(a, b, d) < 0 && orient2d(c, d, a) * orient2d(c, d, b) < 0;
+  // Recovers constraint edges by flipping the edges that cross them, in constraint order.
+  function recoverConstraints(points, tris, constraints) {
+    let flips = 0, failed = 0;
+    const edgeMap = () => { const m = new Map(); tris.forEach((t, i) => { for (const [u, v] of [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]]) { const key = edgeKey(u, v); if (!m.has(key)) m.set(key, []); m.get(key).push(i); } }); return m; };
+    let edges = edgeMap();
+    for (const [a, b] of constraints) {
+      let done = edges.has(edgeKey(a, b));
+      while (!done && flips < TERRAIN.maxFlips) {
+        let flipped = false;
+        for (const [key, owners] of edges) {
+          if (owners.length !== 2) continue;
+          const [u, v] = key.split(',').map(Number);
+          if (u === a || u === b || v === a || v === b || !properCross(points[a], points[b], points[u], points[v])) continue;
+          const [t1, t2] = owners.map(i => tris[i]), w = t1.find(i => i !== u && i !== v), x = t2.find(i => i !== u && i !== v);
+          if (!properCross(points[w], points[x], points[u], points[v])) continue;
+          const orient = (i, j, k) => orient2d(points[i], points[j], points[k]) < 0 ? [i, k, j] : [i, j, k];
+          tris[owners[0]] = orient(w, x, u); tris[owners[1]] = orient(w, x, v);
+          flips += 1; flipped = true; edges = edgeMap(); break;
+        }
+        done = edges.has(edgeKey(a, b));
+        if (!flipped) break;
+      }
+      if (!done) failed += 1;
+    }
+    return { flips, failed };
+  }
+  // Samples along a contour (or limit) at the terrain spacing, keeping both ends of an open path.
+  function samplePath(vertices, closed, spacing) {
+    const dense = curvePoints(vertices, closed), list = closed ? [...dense, dense[0]] : dense, out = [{ x: list[0].x, y: list[0].y }];
+    let since = 0;
+    for (let i = 1; i < list.length; i += 1) {
+      const a = list[i - 1], b = list[i], length = Math.hypot(b.x - a.x, b.y - a.y);
+      let t = spacing - since;
+      for (; t <= length; t += spacing) out.push({ x: a.x + (b.x - a.x) * t / length, y: a.y + (b.y - a.y) * t / length });
+      since = length - (t - spacing);
+    }
+    const last = list.at(-1), gap = Math.hypot(out.at(-1).x - last.x, out.at(-1).y - last.y);
+    if (closed) { if (gap < spacing * 0.25) out.pop(); }
+    else if (gap > spacing * 0.25) out.push({ x: last.x, y: last.y }); else out[out.length - 1] = { x: last.x, y: last.y };
+    return out;
+  }
+  // A triangulated surface with a uniform-grid locator.
+  function makeTin(samples, constraints, issues) {
+    const keyed = new Map();
+    for (const s of samples) {
+      const key = `${Math.round(s.x)},${Math.round(s.y)}`, prior = keyed.get(key);
+      if (!prior) keyed.set(key, { x: Math.round(s.x), y: Math.round(s.y), z: s.z, refs: [s.ref] });
+      else { prior.refs.push(s.ref); if (Math.abs(prior.z - s.z) > 3) issues.push({ code: 'terrain.conflicting-sample', message: `Two terrain samples at (${key}) disagree: ${Math.round(prior.z)} and ${Math.round(s.z)} mm.`, entityId: s.ref }); }
+    }
+    const points = [...keyed.values()].sort((a, b) => a.x - b.x || a.y - b.y);
+    if (points.length < 3) return null;
+    const index = new Map(points.map((p, i) => [`${p.x},${p.y}`, i])), idx = p => index.get(`${Math.round(p.x)},${Math.round(p.y)}`);
+    const tris = delaunay(points);
+    const pairs = constraints.map(([p, q]) => [idx(p), idx(q)]).filter(([i, j]) => i != null && j != null && i !== j);
+    const { failed } = recoverConstraints(points, tris, pairs);
+    if (failed) issues.push({ code: 'terrain.constraint-failed', message: `${failed} contour segment${failed === 1 ? '' : 's'} could not be kept as triangle edges; the ground between them is interpolated without them.`, entityId: null });
+    const box = boundsOf(points), cells = Math.max(1, Math.round(Math.sqrt(tris.length / 2))), cw = (box.x1 - box.x0) / cells || 1, ch = (box.y1 - box.y0) / cells || 1, grid = new Map();
+    tris.forEach((t, i) => {
+      const b = boundsOf(t.map(k => points[k]));
+      for (let gx = Math.floor((b.x0 - box.x0) / cw); gx <= Math.floor((b.x1 - box.x0) / cw); gx += 1) for (let gy = Math.floor((b.y0 - box.y0) / ch); gy <= Math.floor((b.y1 - box.y0) / ch); gy += 1) {
+        const key = `${gx},${gy}`; if (!grid.has(key)) grid.set(key, []); grid.get(key).push(i);
+      }
+    });
+    const hull = []; { const counts = new Map(); for (const t of tris) for (const [u, v] of [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]]) counts.set(edgeKey(u, v), (counts.get(edgeKey(u, v)) ?? 0) + 1); for (const [key, count] of counts) if (count === 1) hull.push(key.split(',').map(Number)); }
+    function at(p) {
+      const key = `${Math.floor((p.x - box.x0) / cw)},${Math.floor((p.y - box.y0) / ch)}`;
+      for (const i of grid.get(key) ?? []) {
+        const [a, b, c] = tris[i].map(k => points[k]), d = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
+        const l1 = ((b.y - c.y) * (p.x - c.x) + (c.x - b.x) * (p.y - c.y)) / d, l2 = ((c.y - a.y) * (p.x - c.x) + (a.x - c.x) * (p.y - c.y)) / d, l3 = 1 - l1 - l2;
+        if (l1 >= -1e-9 && l2 >= -1e-9 && l3 >= -1e-9) return l1 * a.z + l2 * b.z + l3 * c.z;
+      }
+      // Outside the triangulated area the ground holds the value of the nearest hull edge.
+      let best = null;
+      for (const [u, v] of hull) {
+        const a = points[u], b = points[v], d = sub(b, a), t = Math.max(0, Math.min(1, dot2(sub(p, a), d) / (dot2(d, d) || 1)));
+        const dist = Math.hypot(p.x - a.x - d.x * t, p.y - a.y - d.y * t);
+        if (!best || dist < best.dist) best = { dist, z: a.z + (b.z - a.z) * t };
+      }
+      return best?.z ?? 0;
+    }
+    return { points, tris, at };
+  }
+  // Existing and proposed ground for a model, or null when it records no contours or spot elevations.
+  function terrainOf(model) {
+    const site = model?.site ?? {}, contours = site.contours ?? [], spots = site.spotElevations ?? [];
+    if (!contours.length && !spots.length) return null;
+    const key = JSON.stringify([contours, spots, site.gradingLimit ?? null]);
+    if (terrainCache.has(key)) return terrainCache.get(key);
+    const issues = [], spacing = (() => {
+      const length = contours.reduce((total, c) => total + (pathIssues(c.path, Boolean(c.closed)).length ? 0 : curveLength(c.path, Boolean(c.closed))), 0) + (site.gradingLimit ? curveLength(site.gradingLimit.boundary, true) : 0);
+      return Math.max(TERRAIN.spacingMm, length / TERRAIN.maxSamples);
+    })();
+    const valid = contours.filter(c => !pathIssues(c.path, Boolean(c.closed)).length && isFiniteInteger(c.elevationMm));
+    const dataset = status => {
+      const samples = [], constraints = [];
+      for (const contour of valid.filter(c => c.status === status)) {
+        const pts = samplePath(contour.path, Boolean(contour.closed), spacing).map(p => ({ ...p, z: contour.elevationMm, ref: contour.id }));
+        samples.push(...pts);
+        for (let i = 1; i < pts.length; i += 1) constraints.push([pts[i - 1], pts[i]]);
+        if (contour.closed && pts.length > 2) constraints.push([pts.at(-1), pts[0]]);
+      }
+      for (const spot of spots.filter(s => s.status === status && isModelPoint(s.position))) samples.push({ ...spot.position, z: spot.elevationMm, ref: spot.id });
+      return { samples, constraints };
+    };
+    const existingData = dataset('existing'), proposedData = dataset('proposed');
+    crossingContours(valid, issues);
+    const existing = existingData.samples.length >= 3 ? makeTin(existingData.samples, existingData.constraints, issues) : null;
+    let proposed = existing;
+    if (proposedData.samples.length && site.gradingLimit && !curveIssues(site.gradingLimit.boundary, { bezier: false }).length) {
+      const limit = ringOf(site.gradingLimit.boundary), outside = p => !pointInPolygon(p, limit);
+      const edge = samplePath(site.gradingLimit.boundary, true, spacing).map(p => ({ ...p, z: existing ? existing.at(p) : (model.project.coordinates.siteDatumMm ?? 0), ref: site.gradingLimit.id }));
+      const samples = [...existingData.samples.filter(outside), ...edge, ...proposedData.samples];
+      const constraints = [...existingData.constraints.filter(([p, q]) => outside(p) && outside(q)), ...edge.map((p, i) => [p, edge[(i + 1) % edge.length]]), ...proposedData.constraints];
+      proposed = makeTin(samples, constraints, issues);
+    }
+    const datum = model.project.coordinates.siteDatumMm ?? 0;
+    const result = {
+      existing, proposed, issues,
+      // Ground elevation at a plan point; `which` is 'proposed' (finished grade, the default) or 'existing'.
+      at(p, which = 'proposed') { const tin = which === 'existing' ? existing ?? proposed : proposed ?? existing; return tin ? tin.at(p) : datum; }
+    };
+    if (terrainCache.size > 8) terrainCache.delete(terrainCache.keys().next().value);
+    terrainCache.set(key, result);
+    return result;
+  }
+  // Contours of different elevation in the same dataset may not cross.
+  function crossingContours(contours, issues) {
+    for (const status of ['existing', 'proposed']) {
+      const lines = contours.filter(c => c.status === status).map(c => ({ c, pts: curvePoints(c.path, Boolean(c.closed), 50) })).map(item => ({ ...item, box: boundsOf(item.pts) }));
+      for (let i = 0; i < lines.length; i += 1) for (let j = i + 1; j < lines.length; j += 1) {
+        const A = lines[i], B = lines[j];
+        if (A.c.elevationMm === B.c.elevationMm || A.box.x1 < B.box.x0 || B.box.x1 < A.box.x0 || A.box.y1 < B.box.y0 || B.box.y1 < A.box.y0) continue;
+        const hit = A.pts.slice(1).some((p, a) => B.pts.slice(1).some((q, b) => properCross(A.pts[a], p, B.pts[b], q)));
+        if (hit) issues.push({ code: 'terrain.crossing-contours', message: `Contours ${A.c.id} and ${B.c.id} cross but have different elevations.`, entityId: B.c.id });
+      }
+    }
   }
 
   // Deterministic label placement: fixed font metrics, explicit obstacles, ordered candidates.
@@ -1029,6 +1318,15 @@
     'insulation-batt': { label: 'Batt insulation', color: '#e9d58c', style: { kind: 'batt' } },
     'insulation-rigid': { label: 'Rigid insulation', color: '#dfe5bf', style: { kind: 'zigzag' }, metric: { kind: 'pattern', patterns: ['crosshatch'] } },
     gypsum: { label: 'Gypsum board', color: '#eceae4', style: { kind: 'pattern', patterns: ['stipple'] } },
+    // Site and landscape surfaces (drafting-standard.md "Site and landscape"). `site` marks categories
+    // that describe ground cover, not building assemblies.
+    lawn: { label: 'Lawn', color: '#8fb36a', site: true, style: { kind: 'pattern', patterns: ['lawn'] } },
+    mulch: { label: 'Mulch planting bed', color: '#7d5b3e', site: true, style: { kind: 'pattern', patterns: ['mulch'] } },
+    asphalt: { label: 'Asphalt paving', color: '#55585a', site: true, style: { kind: 'pattern', patterns: ['asphalt'] } },
+    'unit-pavers': { label: 'Unit pavers', color: '#b98b6e', site: true, style: { kind: 'pattern', patterns: ['pavers'] } },
+    flagstone: { label: 'Flagstone', color: '#a8a291', site: true, style: { kind: 'pattern', patterns: ['flagstone'] } },
+    water: { label: 'Water', color: '#7fa7c4', site: true, style: { kind: 'pattern', patterns: ['water'] } },
+    decking: { label: 'Wood decking', color: '#b88b5a', site: true, style: { kind: 'pattern', patterns: ['boards'] } },
     generic: { label: 'Material not specified', color: '#d6d0c3', style: { kind: 'poche' } }
   };
   // Header kinds fix the drawn shape only. A header's material comes from its materialId; without one it
@@ -1090,7 +1388,16 @@
       sand: { w: 2.5, h: 2.5, body: dots(0.1, [[0.4, 0.5], [1.6, 0.3], [1.1, 1.2], [2.1, 1.5], [0.5, 2], [1.5, 2.2]]) },
       stipple: { w: 2, h: 2, body: dots(0.08, [[0.5, 0.5], [1.5, 1], [0.8, 1.6]]) },
       concrete: { w: 6, h: 6, body: dots(0.13, [[0.7, 0.8], [2.6, 0.5], [4.6, 1.2], [1.5, 2.4], [3.6, 2.9], [5.3, 3.6], [0.6, 4.2], [2.5, 5.1], [4.4, 5.3]]) + tri(3, 2, 0.8) + tri(1, 3.6, 0.7) + tri(4.8, 5.6, 0.7) },
-      'concrete-sparse': { w: 6, h: 6, body: dots(0.12, [[1.2, 1.4], [4.2, 2.2], [2.4, 4.4], [5.1, 5]]) + tri(0.8, 5.6, 0.6) }
+      'concrete-sparse': { w: 6, h: 6, body: dots(0.12, [[1.2, 1.4], [4.2, 2.2], [2.4, 4.4], [5.1, 5]]) + tri(0.8, 5.6, 0.6) },
+      // Landscape tiles. Grass tufts, bark, aggregate, coursed units, crazy paving, ripples, boards.
+      lawn: { w: 5, h: 5, body: [[1, 2], [3.5, 4.5]].map(([x, y]) => line(x - 0.5, y, x - 0.75, y - 0.9) + line(x, y, x, y - 1.05) + line(x + 0.5, y, x + 0.75, y - 0.9)).join('') },
+      mulch: { w: 4, h: 4, body: line(0.4, 0.8, 1.2, 1.1) + line(2.4, 0.4, 2.8, 1.1) + line(1.4, 2.4, 2.2, 2.2) + line(3.1, 2.9, 3.6, 3.6) + line(0.5, 3.2, 0.8, 3.8) + dots(0.12, [[3.4, 1.6], [1.1, 1.8], [2.4, 3.5]]) },
+      asphalt: { w: 1.8, h: 1.8, body: dots(0.13, [[0.3, 0.4], [1.2, 0.2], [0.8, 0.9], [1.5, 1.3], [0.4, 1.5]]) },
+      pavers: { w: 4, h: 4, body: line(0, 0.01, 4, 0.01) + line(0, 2, 4, 2) + line(0.01, 0, 0.01, 2) + line(2, 2, 2, 4) },
+      flagstone: { w: 8, h: 8, body: [[0, 1.5, 3.2, 0.6], [3.2, 0.6, 5.4, 2.2], [5.4, 2.2, 8, 1.5], [3.2, 0.6, 3.6, 0], [3.2, 0.6, 2.6, 3.8], [5.4, 2.2, 5.9, 5], [2.6, 3.8, 5.9, 5], [2.6, 3.8, 0, 4.4], [5.9, 5, 8, 4.4], [0, 4.4, 1.6, 8], [5.9, 5, 4.6, 8]].map(([x1, y1, x2, y2]) => line(x1, y1, x2, y2)).join('') },
+      water: { w: 6, h: 3, body: `<path d="M0.4,1.5 Q1.15,0.9 1.9,1.5 T3.4,1.5" fill="none" stroke="${ink}" stroke-width="${pen}"/>` },
+      boards: { w: 4, h: 1.4, body: line(0, 0.7, 4, 0.7) },
+      planting: { w: 3.2, h: 3.2, body: rings([[0.8, 0.8, 0.45], [2.4, 2.4, 0.45]]) }
     };
     const tile = tiles[id];
     return `<pattern id="hatch-${id}" patternUnits="userSpaceOnUse" width="${tile.w}" height="${tile.h}"${tile.rotate ? ` patternTransform="rotate(${tile.rotate})"` : ''}>${tile.body}</pattern>`;
@@ -1175,6 +1482,8 @@
       defs() {
         return patterns.size ? `<defs>${[...patterns].sort().map(id => hatchPattern(id, profile)).join('')}</defs>` : '';
       },
+      // A hatch tile that is not a material (the massed-planting texture), registered for <defs>.
+      pattern(id) { patterns.add(id); return `url(#hatch-${id})`; },
       key() { return [...used.values()]; },
       swatch(x, y, w, h, category) {
         const frame = { o: { x, y: y + h }, u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: w, T: h };
@@ -1555,11 +1864,11 @@
     return { svg, sheetId: meta.sheetId, title: meta.title, view, ratio, scaleLabel, warnings };
   }
 
-  function verticalAnnotations(model, ctx, minH, maxH, roof) {
+  function verticalAnnotations(model, ctx, minH, maxH, roof, options = {}) {
     const { map, profile, placer } = ctx, P = profile.pens, parts = [];
     const ground = model.project.coordinates.siteDatumMm ?? 0;
     const left = map(minH, 0).x, right = map(maxH, 0).x;
-    parts.push(svgLine({ x: left - 8, y: map(minH, ground).y }, { x: right + 8, y: map(minH, ground).y }, { width: P.ground }));
+    if (options.groundLine !== false) parts.push(svgLine({ x: left - 8, y: map(minH, ground).y }, { x: right + 8, y: map(minH, ground).y }, { width: P.ground }));
     const datums = sortedLevels(model).map(level => ({ name: level.name, z: level.elevationMm }));
     if (roof) datums.push({ name: 'Eave', z: roof.eaveElevationMm }, { name: 'Ridge', z: roof.ridgeElevationMm });
     for (const item of datums) parts.push(datum(left - 4, right + 6, map(minH, item.z).y, item.name, item.z, profile));
@@ -1753,10 +2062,22 @@
       }
     }
     // Foundations and surfaces may be any simple polygon, so the plane can cross them more than once.
+    const terrain = terrainOf(model);
     for (const item of [...(model.foundations ?? []).map(entity => ({ entity, kind: 'foundation', z1: entity.topElevationMm, z0: entity.topElevationMm - entity.depthMm })),
       ...(model.surfaces ?? []).map(entity => ({ entity, kind: 'surface', z1: entity.topElevationMm, z0: entity.topElevationMm - entity.thicknessMm }))]) {
       for (const [t0, t1] of segmentPolygonIntervals(section.start, section.end, ringOf(item.entity.boundary))) {
         const [h0, h1] = hRange([at(t0), at(t1)]);
+        if (item.kind === 'surface' && item.entity.followsGrade === true) {
+          // A draped surface is a band of vertical thickness under the finished grade.
+          const steps = Math.max(2, Math.ceil((t1 - t0) * lengthAlong / 250)), offset = item.entity.gradeOffsetMm ?? 0, top = [];
+          for (let i = 0; i <= steps; i += 1) { const p = at(t0 + (t1 - t0) * i / steps); top.push({ h: hOf(p), z: (terrain ? terrain.at(p) : (model.project.coordinates.siteDatumMm ?? 0)) + offset }); }
+          top.sort((a, b) => a.h - b.h);
+          const poly = [...top, ...[...top].reverse().map(p => ({ h: p.h, z: p.z - item.entity.thicknessMm }))], zs = poly.map(p => p.z);
+          const band = { h0, h1, z0: Math.min(...zs), z1: Math.max(...zs), poly };
+          cut.push({ id: item.entity.id, kind: item.kind, ...band });
+          regions.push({ id: item.entity.id, role: 'layer', ...band, materialId: item.entity.materialId ?? null });
+          continue;
+        }
         cut.push({ id: item.entity.id, kind: item.kind, h0, h1, z0: item.z0, z1: item.z1 });
         regions.push({ id: item.entity.id, role: 'layer', h0, h1, z0: item.z0, z1: item.z1, materialId: item.entity.materialId ?? null });
       }
@@ -1832,7 +2153,20 @@
       }
       if (kept.length >= 3) beyond.push({ id: roof.id, kind: 'roof', hull: convexHull(kept.map(p => ({ x: hOf(p), y: p.z }))), depth: Infinity });
     }
-    return { cut, beyond, roofCut, hOf, regions, members };
+    // Ground profile along the cut. Under the lowest level's slabs the ground meets the slab underside.
+    let ground = null;
+    if (terrain) {
+      const lowest = sortedLevels(model)[0], slabs = model.slabs.filter(slab => slab.levelId === lowest.id);
+      const inside = slabs.map(slab => ({ under: lowest.elevationMm - slab.thicknessMm, intervals: segmentPolygonIntervals(section.start, section.end, ringOf(slab.boundary)) }));
+      const steps = Math.max(2, Math.ceil(lengthAlong / 250));
+      ground = [];
+      for (let i = 0; i <= steps; i += 1) {
+        const t = i / steps, p = at(t), hit = inside.find(item => item.intervals.some(([t0, t1]) => t > t0 - 1e-9 && t < t1 + 1e-9));
+        ground.push({ h: hOf(p), z: terrain.at(p), existing: terrain.at(p, 'existing'), under: hit ? Math.min(hit.under, terrain.at(p)) : null });
+      }
+      ground.sort((a, b) => a.h - b.h);
+    }
+    return { cut, beyond, roofCut, hOf, regions, members, ground };
   }
 
   function renderSectionSheet(model, sectionId) {
@@ -1848,11 +2182,14 @@
       else { hs.push(item.h0, item.h1); zs.push(item.z0, item.z1); }
     }
     for (const piece of geometry.roofCut) { hs.push(...piece.points.map(p => p.h)); zs.push(...piece.points.map(p => p.z)); }
+    // With terrain the drawing spans the whole cut line, so the ground reads across the site.
+    const groundProfile = geometry.ground;
+    if (groundProfile) { hs.push(...groundProfile.map(p => p.h)); zs.push(...groundProfile.map(p => p.z), ...groundProfile.map(p => p.existing)); }
     // With a site ground material the section shows earth below the ground line, to 300 mm under the
     // deepest cut element (at least 600 mm). The earth only joins the extent when the sheet would still
     // carry material detail with it, so it never shrinks the scale for a band it cannot draw.
     const minH = Math.min(...hs), maxH = Math.max(...hs);
-    const earthBottom = Math.min(ground - 600, Math.min(...zs) - 300);
+    const earthBottom = Math.min((groundProfile ? Math.min(...groundProfile.map(p => p.under ?? p.z)) : ground) - 600, Math.min(...zs) - 300);
     const fitsDetail = minZ => materialsActive(model, selectScale(profileFor(model), maxH - minH, Math.max(...zs) - minZ, drawingArea(profileFor(model)), VERTICAL_EXTRA).ratio);
     const earthId = model.site?.groundMaterialId && fitsDetail(earthBottom) ? model.site.groundMaterialId : null;
     if (earthId) zs.push(earthBottom);
@@ -1863,7 +2200,7 @@
         const { map, profile, warnings, ratio } = ctx, P = profile.pens, parts = [];
         const mats = materialContext(model, profile, materialsActive(model, ratio));
         ctx.materials = mats.active ? mats : null;
-        const rect = item => [map(item.h0, item.z1), map(item.h1, item.z1), map(item.h1, item.z0), map(item.h0, item.z0)];
+        const rect = item => item.poly ? item.poly.map(p => map(p.h, p.z)) : [map(item.h0, item.z1), map(item.h1, item.z1), map(item.h1, item.z0), map(item.h0, item.z0)];
         // Directional symbols run along the longer side of a region.
         const frameOf = item => {
           const w = (item.h1 - item.h0) / ratio, h = (item.z1 - item.z0) / ratio, o = map(item.h0, item.z0);
@@ -1875,7 +2212,9 @@
         };
         if (mats.active && earthId) {
           const box = { h0: minH, h1: maxH, z0: earthBottom, z1: ground };
-          parts.push(`<g data-role="earth" pointer-events="none">${mats.region(rect(box), frameOf(box), mats.resolve(earthId))}</g>`);
+          // With terrain the earth follows the ground profile, up to the slab underside under the building.
+          const points = groundProfile ? [...groundProfile.map(p => map(p.h, p.under ?? p.z)), map(groundProfile.at(-1).h, earthBottom), map(groundProfile[0].h, earthBottom)] : rect(box);
+          parts.push(`<g data-role="earth" pointer-events="none">${mats.region(points, frameOf(box), mats.resolve(earthId), profile ? `clip-earth-${section.id}` : null)}</g>`);
         }
         for (const item of [...geometry.beyond].sort((a, b) => b.depth - a.depth)) {
           const pen = item.depth < 1000 ? P.medium : P.thin;
@@ -1948,16 +2287,320 @@
         }
         for (const piece of geometry.roofCut) parts.push(`<g data-entity="${escapeHtml(piece.id)}">${svgPoly(piece.points.map(p => map(p.h, p.z)), { open: true, width: P.cut, join: 'miter' })}</g>`);
         if (!geometry.cut.length && !geometry.roofCut.length && !geometry.members.length) warnings.push({ severity: 'warning', code: 'section.empty', message: `${section.name} does not cut any modelled element.`, entityId: section.id });
-        parts.push(verticalAnnotations(model, ctx, minH, maxH, roof));
+        if (groundProfile) {
+          // Finished grade at the ground pen, broken where the building stands; existing grade dashed where it differs.
+          const runs = [], existingRuns = [];
+          let run = [], prior = [];
+          for (const p of groundProfile) {
+            if (p.under == null) run.push(map(p.h, p.z)); else { if (run.length > 1) runs.push(run); run = []; }
+            if (Math.abs(p.existing - p.z) > 30) prior.push(map(p.h, p.existing)); else { if (prior.length > 1) existingRuns.push(prior); prior = []; }
+          }
+          if (run.length > 1) runs.push(run);
+          if (prior.length > 1) existingRuns.push(prior);
+          parts.push(`<g data-role="ground">${runs.map(points => svgPoly(points, { open: true, width: P.ground, join: 'round' })).join('')}${existingRuns.map(points => svgPoly(points, { open: true, width: P.fine, dash: '3 1.5' })).join('')}</g>`);
+        }
+        parts.push(verticalAnnotations(model, ctx, minH, maxH, roof, { groundLine: !groundProfile }));
         return parts.join('');
       }
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Site plan, L-101. Spec: references/drafting-standard.md "Site and landscape".
+  // ---------------------------------------------------------------------------
+  // Engineer's scales (imperial) and the ISO 5455 site range (metric). Building sheets keep their ladders.
+  const SITE_SCALES = {
+    imperial: [[120, '1" = 10\''], [240, '1" = 20\''], [360, '1" = 30\''], [480, '1" = 40\''], [600, '1" = 50\''], [720, '1" = 60\''], [1200, '1" = 100\'']],
+    metric: [[100, '1:100'], [200, '1:200'], [250, '1:250'], [500, '1:500'], [1000, '1:1000']]
+  };
+  const SITE_SCHEDULE_WIDTH = 88;
+  // Survey-style lengths: decimal feet imperial, metres metric.
+  const siteLength = (mm, profile) => profile.id === 'metric' ? `${(mm / 1000).toFixed(2)} m` : `${(mm / 304.8).toFixed(2)}'`;
+  const contourLabel = (mm, profile) => profile.id === 'metric' ? String(+(mm / 1000).toFixed(2)) : String(+(mm / 304.8).toFixed(1));
+  // Site elevations: decimal feet imperial (civil practice), signed metres metric.
+  const siteDatum = (mm, profile) => profile.id === 'metric' ? profile.datum(mm) : `${(mm / 304.8).toFixed(2)}'`;
+  // Quadrant bearing of a direction, measured from true north (trueNorthDeg clockwise from project north).
+  function bearingLabel(d, northDeg) {
+    const az = ((Math.atan2(d.x, d.y) * 180 / Math.PI - northDeg) % 360 + 360) % 360;
+    const [ns, ew, angle] = az <= 90 ? ['N', 'E', az] : az <= 180 ? ['S', 'E', 180 - az] : az <= 270 ? ['S', 'W', az - 180] : ['N', 'W', 360 - az];
+    let seconds = Math.round(angle * 3600);
+    const degrees = Math.floor(seconds / 3600); seconds -= degrees * 3600;
+    const minutes = Math.floor(seconds / 60); seconds -= minutes * 60;
+    return `${ns} ${degrees}°${String(minutes).padStart(2, '0')}'${String(seconds).padStart(2, '0')}" ${ew}`;
+  }
+  const plantOf = (model, planting) => (model.plants ?? []).find(plant => plant.id === planting.plantId);
+  const plantingCanopy = (model, planting) => planting.canopyDiameterMm ?? plantOf(model, planting)?.matureSpreadMm ?? 1000;
+  // One plant per position; a massed area at triangular spacing.
+  function plantingQuantity(model, planting) {
+    if (planting.position) return 1;
+    const spacing = plantOf(model, planting)?.spacingMm;
+    return spacing ? Math.ceil(polygonArea(ringOf(planting.boundary)) / (spacing * spacing * Math.sqrt(3) / 2)) : 0;
+  }
+  // Schedule rows: one per plant and status, ordered by kind, key, then status.
+  function plantSchedule(model) {
+    const rows = new Map(), kinds = Object.keys(PLANT_KINDS), statuses = Object.keys(PLANTING_STATUS);
+    for (const planting of model.plantings ?? []) {
+      const plant = plantOf(model, planting); if (!plant) continue;
+      const key = `${plant.id}|${planting.status}`;
+      if (!rows.has(key)) rows.set(key, { plant, status: planting.status, quantity: 0, plantingIds: [] });
+      const row = rows.get(key); row.quantity += plantingQuantity(model, planting); row.plantingIds.push(planting.id);
+    }
+    return [...rows.values()].sort((a, b) => kinds.indexOf(a.plant.kind) - kinds.indexOf(b.plant.kind) || a.plant.key.localeCompare(b.plant.key) || statuses.indexOf(a.status) - statuses.indexOf(b.status));
+  }
+  function siteExtent(model) {
+    const site = model.site ?? {}, points = [];
+    for (const entity of [site.propertyLine, site.gradingLimit]) if (entity) points.push(...ringOf(entity.boundary));
+    for (const contour of site.contours ?? []) points.push(...curvePoints(contour.path, Boolean(contour.closed)));
+    for (const spot of site.spotElevations ?? []) points.push(spot.position);
+    for (const planting of model.plantings ?? []) {
+      if (planting.boundary) { points.push(...ringOf(planting.boundary)); continue; }
+      const r = plantingCanopy(model, planting) / 2;
+      points.push({ x: planting.position.x - r, y: planting.position.y - r }, { x: planting.position.x + r, y: planting.position.y + r });
+    }
+    const building = planExtent(model);
+    points.push({ x: building.minX, y: building.minY }, { x: building.maxX, y: building.maxY });
+    const box = boundsOf(points);
+    return { minX: box.x0, minY: box.y0, maxX: box.x1, maxY: box.y1 };
+  }
+  // Plan symbol of a planting, in paper mm. Proposed plants draw solid; existing plants to remain draw
+  // dashed with an open trunk; plants to remove draw dashed and crossed out.
+  function plantSymbol(c, r, plant, status, P, trunkR = 0) {
+    const kind = Object.hasOwn(PLANT_KINDS, plant.kind) ? plant.kind : 'shrub', tree = PLANT_KINDS[kind].tree;
+    const pen = { stroke: DRAFT.ink, width: tree ? P.thin : P.fine, dash: status === 'proposed' ? null : '1 0.6' }, parts = [];
+    if (kind === 'evergreen-tree') {
+      const n = Math.max(10, Math.min(28, Math.round(r * 3)));
+      parts.push(svgPoly(Array.from({ length: n * 2 }, (_, i) => { const a = i * Math.PI / n, k = i % 2 ? 0.78 : 1; return { x: c.x + r * k * Math.cos(a), y: c.y + r * k * Math.sin(a) }; }), { fill: DRAFT.paper, fillOpacity: 0, ...pen }));
+    } else if (kind === 'deciduous-tree' || kind === 'shrub') {
+      // Scalloped canopy: lobes bulge outward while the path runs clockwise on paper (sweep 1).
+      const n = Math.max(7, Math.min(16, Math.round(r * 2))), ring = Array.from({ length: n }, (_, i) => ({ x: c.x + r * 0.9 * Math.cos(i * 2 * Math.PI / n), y: c.y + r * 0.9 * Math.sin(i * 2 * Math.PI / n) }));
+      const lobe = r * 0.9 * Math.sin(Math.PI / n) * 1.08;
+      const d = ring.map((p, i) => i === 0 ? `M${num(p.x)},${num(p.y)}` : `A${num(lobe)},${num(lobe)} 0 0 1 ${num(p.x)},${num(p.y)}`).join(' ') + ` A${num(lobe)},${num(lobe)} 0 0 1 ${num(ring[0].x)},${num(ring[0].y)} Z`;
+      parts.push(`<path d="${d}" fill="${DRAFT.paper}" fill-opacity="0" ${strokeAttrs(pen)}/>`);
+    } else parts.push(svgCircle(c, r, { ...pen }));
+    if (tree) parts.push(status === 'proposed' ? svgCircle(c, Math.max(0.35, trunkR), { fill: DRAFT.ink, width: 0 }) : svgCircle(c, Math.max(0.5, trunkR), { width: P.fine }));
+    else parts.push(svgCircle(c, 0.3, { fill: DRAFT.ink, width: 0 }));
+    if (status === 'remove') { const k = r * 0.7; parts.push(svgLine({ x: c.x - k, y: c.y - k }, { x: c.x + k, y: c.y + k }, { width: P.thin }), svgLine({ x: c.x - k, y: c.y + k }, { x: c.x + k, y: c.y - k }, { width: P.thin })); }
+    return parts.join('');
+  }
+  // Text along a paper line, kept readable from the bottom or right of the sheet. `side` +1 sets the
+  // text on the side the paper normal `n` points to, -1 on the other side.
+  function textAlong(mid, dir, n, side, value, size, o = {}) {
+    let angle = Math.atan2(dir.y, dir.x) * 180 / Math.PI;
+    if (angle > 90) angle -= 180; else if (angle <= -90) angle += 180;
+    const up = { x: Math.sin(angle * Math.PI / 180), y: -Math.cos(angle * Math.PI / 180) }, toward = mul(n, side);
+    const anchor = dot2(toward, up) > 0 ? add(mid, mul(toward, 1)) : add(mid, mul(toward, 1 + size * 0.8));
+    return { svg: svgText(anchor.x, anchor.y, value, size, { ...o, rotate: angle }), box: centeredBox(add(mid, mul(toward, 1 + size * 0.5)), Math.max(textWidth(value, size), size) * Math.abs(Math.cos(angle * Math.PI / 180)) + size, size * 1.6) };
+  }
+  const fitText = (value, size, width) => { let text = String(value); while (text.length > 3 && textWidth(text, size) > width) text = text.slice(0, -1); return text === String(value) ? text : `${text.slice(0, -2)}..`; };
+
+  function renderSitePlanSheet(model) {
+    const profile = profileFor(model), P = profile.pens, T = profile.text, site = model.site ?? {};
+    const ink = DRAFT.ink, area = drawingArea(profile), northDeg = model.project.coordinates.trueNorthDeg ?? 0, warnings = [];
+    const rows = plantSchedule(model), extra = { x: rows.length ? SITE_SCHEDULE_WIDTH + 8 : 0, y: 0 };
+    const ext = siteExtent(model), ladder = { ...profile, scales: SITE_SCALES[profile.id] };
+    const { ratio, label: scaleLabel } = selectScale(ladder, ext.maxX - ext.minX, ext.maxY - ext.minY, area, extra);
+    const place = placeExtent(area, ratio, ext.maxX - ext.minX, ext.maxY - ext.minY, extra);
+    const map = p => ({ x: place.x + (p.x - ext.minX) / ratio, y: place.y + (ext.maxY - p.y) / ratio });
+    const placer = createPlacer({ x0: area.x0, y0: area.y0, x1: area.x1 - extra.x, y1: area.y1 });
+    // Site surfaces are hatched at every site scale; the patterns are paper-sized, so they stay legible.
+    const mats = materialContext(model, profile, true);
+    const ground = sortedLevels(model)[0], layers = { surfaces: [], plantingAreas: [], contours: [], building: [], lines: [], plants: [], spots: [], labels: [], tags: [], schedule: [] };
+    const paperDir = (a, b) => unit2(sub(map(b), map(a)));
+
+    // Surfaces on the ground level: draped surfaces first, then flat ones from low to high.
+    const surfaces = (model.surfaces ?? []).filter(item => item.levelId === ground.id)
+      .sort((a, b) => (b.followsGrade === true) - (a.followsGrade === true) || (a.topElevationMm ?? 0) - (b.topElevationMm ?? 0));
+    for (const surface of surfaces) {
+      const ring = ringOf(surface.boundary), box = boundsOf(ring), outline = ring.map(map);
+      const fill = mats.region(outline, { o: map({ x: box.x0, y: box.y0 }), u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: (box.x1 - box.x0) / ratio, T: (box.y1 - box.y0) / ratio }, mats.resolve(surface.materialId), `clip-site-${surface.id}`);
+      layers.surfaces.push(`${fill}<g data-entity="${escapeHtml(surface.id)}">${svgRing(surface.boundary, map, ratio, { fill: DRAFT.paper, fillOpacity: 0, stroke: ink, width: P.thin })}</g>`);
+    }
+    for (const planting of (model.plantings ?? []).filter(item => item.boundary)) {
+      layers.plantingAreas.push(`<g data-entity="${escapeHtml(planting.id)}">${svgRing(planting.boundary, map, ratio, { fill: mats.pattern('planting'), stroke: ink, width: P.thin, dash: planting.status === 'proposed' ? null : '1 0.6' })}</g>`);
+    }
+
+    // Contours: existing dashed, proposed solid; every fifth interval is an index contour one pen heavier.
+    // The building is reserved first so contour labels never land on it.
+    const roof = model.roofs[0], groundSlabs = model.slabs.filter(item => item.levelId === ground.id);
+    const footprintBox = roof ? (() => { const box = boundsOf(roof.footprint), ov = roof.overhangMm ?? 0; return boundsOf([{ x: box.x0 - ov, y: box.y0 - ov }, { x: box.x1 + ov, y: box.y1 + ov }].map(map)); })()
+      : groundSlabs.length ? boundsOf(groundSlabs.flatMap(slab => ringOf(slab.boundary)).map(map)) : null;
+    if (footprintBox) placer.reserve(footprintBox);
+    const interval = site.contourIntervalMm;
+    for (const contour of site.contours ?? []) {
+      const index = interval > 0 && Math.round(contour.elevationMm / interval) % 5 === 0;
+      const existing = contour.status === 'existing', width = existing ? (index ? P.thin : P.fine) : (index ? P.medium : P.thin);
+      layers.contours.push(`<g data-entity="${escapeHtml(contour.id)}"><path d="${curvePathD(contour.path, Boolean(contour.closed), map, ratio)}" fill="none" ${strokeAttrs({ stroke: ink, width, dash: existing ? '2 1' : null })}/></g>`);
+      // Label near the middle of the line, on a paper ground so the line reads as broken under it.
+      const points = curvePoints(contour.path, Boolean(contour.closed)).map(map);
+      let total = 0; const lengths = points.slice(1).map((p, i) => (total += Math.hypot(p.x - points[i].x, p.y - points[i].y)));
+      if (total < 12) continue;
+      const value = contourLabel(contour.elevationMm, profile), w = textWidth(value, T.label) + 1.2;
+      for (const fraction of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.1, 0.9]) {
+        const i = Math.max(0, lengths.findIndex(item => item >= total * fraction)), a = points[i], b = points[i + 1];
+        if (!b) continue;
+        const mid = mul(add(a, b), 0.5), dir = unit2(sub(b, a));
+        let angle = Math.atan2(dir.y, dir.x) * 180 / Math.PI; if (angle > 90) angle -= 180; else if (angle <= -90) angle += 180;
+        const u = { x: Math.cos(angle * Math.PI / 180), y: Math.sin(angle * Math.PI / 180) }, v = perp(u);
+        const back = [add(add(mid, mul(u, -w / 2)), mul(v, -T.label * 0.75)), add(add(mid, mul(u, w / 2)), mul(v, -T.label * 0.75)), add(add(mid, mul(u, w / 2)), mul(v, T.label * 0.75)), add(add(mid, mul(u, -w / 2)), mul(v, T.label * 0.75))];
+        if (!placer.fits(boundsOf(back))) continue;
+        const baseline = add(mid, mul(v, T.label * 0.36));
+        layers.labels.push(`<g data-role="contour-label">${svgPoly(back, { fill: DRAFT.paper, width: 0, inert: true })}${svgText(baseline.x, baseline.y, value, T.label, { rotate: angle, upper: false, weight: index ? 700 : null })}</g>`);
+        placer.reserve(boundsOf(back));
+        break;
+      }
+    }
+
+    // Building footprint: the roof outline over the ground-level slabs, in light poché, with the floor level.
+    const footprintParts = [];
+    for (const slab of groundSlabs) footprintParts.push(`<g data-entity="${escapeHtml(slab.id)}">${svgRing(slab.boundary, map, ratio, { fill: DRAFT.screenPoche, stroke: ink, width: P.thin })}</g>`);
+    if (roof) {
+      const box = boundsOf(roof.footprint), ov = roof.overhangMm ?? 0, corners = [{ x: box.x0 - ov, y: box.y0 - ov }, { x: box.x1 + ov, y: box.y0 - ov }, { x: box.x1 + ov, y: box.y1 + ov }, { x: box.x0 - ov, y: box.y1 + ov }].map(map);
+      footprintParts.push(`<g data-entity="${escapeHtml(roof.id)}">${svgPoly(corners, { fill: DRAFT.screenPoche, stroke: ink, width: P.profile, join: 'miter' })}</g>`);
+    }
+    if (footprintBox) {
+      const c = { x: (footprintBox.x0 + footprintBox.x1) / 2, y: (footprintBox.y0 + footprintBox.y1) / 2 }, label = `${profile.id === 'metric' ? 'FFL' : 'FF EL.'} ${siteDatum(ground.elevationMm, profile)}`;
+      footprintParts.push(svgText(c.x, c.y + T.note * 0.36, label, T.note, { weight: 700, upper: false }));
+    }
+    layers.building.push(footprintParts.join(''));
+
+    // Property line with bearings and distances; arcs carry radius and length.
+    const line = site.propertyLine;
+    if (line) {
+      const ring = ringOf(line.boundary), orient = polygonSignedArea(ring) > 0 ? 1 : -1, v = line.boundary;
+      const parts = [`<path d="${curvePathD(v, true, map, ratio)}" fill="none" ${strokeAttrs({ stroke: ink, width: P.profile, dash: '12 1.5 2 1.5 2 1.5' })}/>`];
+      v.forEach((a, i) => {
+        const b = v[(i + 1) % v.length];
+        let mid, dir, labels;
+        if (a.bulge) {
+          const arc = bulgeArc(a, b, a.bulge), t = arc.start + arc.sweep / 2;
+          mid = arcPointAt(arc, 0.5); dir = mul({ x: -Math.sin(t), y: Math.cos(t) }, Math.sign(arc.sweep));
+          labels = [`R=${siteLength(arc.radius, profile)}`, `L=${siteLength(arc.length, profile)}`];
+        } else {
+          mid = mul(add(a, b), 0.5); dir = unit2(sub(b, a));
+          labels = [bearingLabel(sub(b, a), northDeg), siteLength(Math.hypot(b.x - a.x, b.y - a.y), profile)];
+        }
+        // Model outward normal is to the right of travel on a counter-clockwise ring.
+        const outward = mul({ x: dir.y, y: -dir.x }, orient), pm = map(mid), pd = paperDir(mid, add(mid, dir)), pn = unit2({ x: outward.x, y: -outward.y });
+        for (const [text, side] of [[labels[0], 1], [labels[1], -1]]) { const placed = textAlong(pm, pd, pn, side, text, T.label, { upper: false }); parts.push(placed.svg); placer.reserve(placed.box); }
+      });
+      layers.lines.push(`<g data-entity="${escapeHtml(line.id)}">${parts.join('')}</g>`);
+
+      // Setbacks: each named edge offset inward by its distance and clipped to the lot.
+      const span = Math.hypot(ext.maxX - ext.minX, ext.maxY - ext.minY);
+      for (const setback of site.setbacks ?? []) {
+        const a = v[setback.edgeIndex], b = v[(setback.edgeIndex + 1) % v.length], pieces = [];
+        if (!a || !b) continue;
+        if (a.bulge) {
+          const arc = bulgeArc(a, b, a.bulge), inwardSign = Math.sign(arc.sweep) * orient;
+          // Inward on a counter-clockwise ring is toward the centre of a counter-clockwise arc.
+          const radius = arc.radius - inwardSign * setback.distanceMm;
+          if (radius > 0) pieces.push(curvePoints([{ ...arcPointAt({ ...arc, radius }, 0), bulge: a.bulge }, arcPointAt({ ...arc, radius }, 1)], false).filter(p => pointInPolygon(p, ring)));
+        } else {
+          const d = unit2(sub(b, a)), inward = mul(perp(d), orient), o = add(a, mul(inward, setback.distanceMm));
+          const p0 = sub(o, mul(d, span)), p1 = add(o, mul(d, span * 2));
+          for (const [t0, t1] of segmentPolygonIntervals(p0, p1, ring)) pieces.push([add(p0, mul(sub(p1, p0), t0)), add(p0, mul(sub(p1, p0), t1))]);
+        }
+        const drawn = pieces.filter(piece => piece.length >= 2);
+        if (!drawn.length) continue;
+        const longest = drawn.reduce((best, piece) => Math.hypot(piece.at(-1).x - piece[0].x, piece.at(-1).y - piece[0].y) > Math.hypot(best.at(-1).x - best[0].x, best.at(-1).y - best[0].y) ? piece : best);
+        const m = longest[Math.floor((longest.length - 1) / 2)], m2 = longest[Math.floor((longest.length - 1) / 2) + 1] ?? longest.at(-1);
+        const mid = longest.length === 2 ? mul(add(longest[0], longest[1]), 0.5) : m, pd = paperDir(m, m2), pn = perp(pd);
+        const placed = textAlong(map(mid), pd, pn, 1, `${siteLength(setback.distanceMm, profile)} ${setback.label ?? 'setback'}`, T.label);
+        placer.reserve(placed.box);
+        layers.lines.push(`<g data-entity="${escapeHtml(setback.id)}">${drawn.map(piece => svgPoly(piece.map(map), { open: true, stroke: ink, width: P.thin, dash: '4 1.5' })).join('')}${placed.svg}</g>`);
+      }
+    }
+    if (site.gradingLimit) {
+      const limit = site.gradingLimit, ring = ringOf(limit.boundary);
+      // The label takes the first edge midpoint, from the top of the sheet down, where it fits.
+      const candidates = ring.map((p, i) => [p, ring[(i + 1) % ring.length]]).filter(([a, b]) => Math.hypot(b.x - a.x, b.y - a.y) / ratio > 20).sort((m, n) => (n[0].y + n[1].y) - (m[0].y + m[1].y));
+      let placed = null;
+      for (const [a, b] of candidates) {
+        const pd = paperDir(a, b), attempt = textAlong(map(mul(add(a, b), 0.5)), pd, perp(pd), 1, 'Limit of grading', T.label);
+        if (placer.fits(attempt.box)) { placed = attempt; break; }
+        placed ??= attempt;
+      }
+      if (placed) placer.reserve(placed.box);
+      layers.lines.push(`<g data-entity="${escapeHtml(limit.id)}"><path d="${curvePathD(limit.boundary, true, map, ratio)}" fill="none" ${strokeAttrs({ stroke: ink, width: P.thin, dash: '6 1.5 1 1.5' })}/>${placed?.svg ?? ''}</g>`);
+    }
+
+    // Point plantings, largest canopy first so smaller plants draw over larger ones.
+    const points = (model.plantings ?? []).filter(item => item.position).sort((a, b) => plantingCanopy(model, b) - plantingCanopy(model, a) || a.id.localeCompare(b.id));
+    for (const planting of points) {
+      const plant = plantOf(model, planting); if (!plant) continue;
+      const c = map(planting.position), r = Math.max(PLANT_KINDS[plant.kind]?.tree ? 1.6 : 0.9, plantingCanopy(model, planting) / 2 / ratio);
+      layers.plants.push(`<g data-entity="${escapeHtml(planting.id)}">${plantSymbol(c, r, plant, planting.status, P, (planting.trunkDiameterMm ?? 0) / 2 / ratio)}</g>`);
+    }
+    // Tags after every symbol is known, so a tag never sits on a later plant.
+    for (const planting of [...points, ...(model.plantings ?? []).filter(item => item.boundary)]) {
+      const plant = plantOf(model, planting); if (!plant) continue;
+      const tag = planting.status === 'existing' ? `EX ${plant.key}` : planting.status === 'remove' ? `${plant.key} REMOVE` : planting.boundary ? `${plantingQuantity(model, planting)} ${plant.key}` : plant.key;
+      const anchor = planting.position ? map(planting.position) : map(centroid(ringOf(planting.boundary)));
+      const r = planting.position ? Math.max(1.6, plantingCanopy(model, planting) / 2 / ratio) : 0;
+      const w = textWidth(tag, T.label) + 1, h = T.label * 1.4;
+      let spot = null;
+      for (const reach of [r + 1.2, r + 3, r + 6]) for (const deg of [45, -45, 135, -135, 0, 180, 90, -90]) {
+        if (spot) break;
+        const a = deg * Math.PI / 180, c = add(anchor, { x: Math.cos(a) * (reach + w / 2), y: -Math.sin(a) * (reach + h / 2) });
+        if (placer.fits(centeredBox(c, w, h))) spot = c;
+      }
+      if (!spot) { warnings.push({ severity: 'warning', code: 'label.placement', message: `${planting.id}: no clear position for the plant tag.`, entityId: planting.id }); spot = add(anchor, { x: r + w / 2 + 1, y: 0 }); }
+      placer.reserve(centeredBox(spot, w, h));
+      const leaderEnd = add(anchor, mul(unit2(sub(spot, anchor)), r));
+      const leader = Math.hypot(spot.x - anchor.x, spot.y - anchor.y) > r + w / 2 + 2 ? svgLine(leaderEnd, sub(spot, mul(unit2(sub(spot, anchor)), w / 2)), { width: P.fine }) : '';
+      layers.tags.push(`<g data-entity="${escapeHtml(planting.id)}">${leader}${svgText(spot.x, spot.y + T.label * 0.36, tag, T.label, { weight: 700 })}</g>`);
+    }
+    for (const spot of site.spotElevations ?? []) {
+      const c = map(spot.position), k = 0.9, value = `${spot.status === 'existing' ? 'EX ' : ''}${profile.id === 'metric' ? '' : 'EL. '}${siteDatum(spot.elevationMm, profile)}`;
+      placer.reserve(centeredBox(add(c, { x: 1.4 + textWidth(value, T.label) / 2, y: 0 }), textWidth(value, T.label) + 3, T.label * 1.5));
+      layers.spots.push(`<g data-entity="${escapeHtml(spot.id)}">${svgLine({ x: c.x - k, y: c.y }, { x: c.x + k, y: c.y }, { width: P.thin })}${svgLine({ x: c.x, y: c.y - k }, { x: c.x, y: c.y + k }, { width: P.thin })}${svgText(c.x + 1.4, c.y - 0.6, value, T.label, { anchor: 'start', upper: false, italic: spot.status === 'existing' })}</g>`);
+    }
+
+    // Plant schedule in the column reserved beside the drawing.
+    if (rows.length) {
+      const x0 = area.x1 - SITE_SCHEDULE_WIDTH, cols = [9, 10, 43, 16, 10], lineGap = T.label * 1.3, rowH = 2 * lineGap + 1.6;
+      const xs = cols.reduce((acc, w) => [...acc, acc.at(-1) + w], [x0]);
+      let y = area.y0;
+      const parts = [svgText(x0, y + T.note, 'Plant schedule', T.note, { anchor: 'start', weight: 700 })];
+      y += T.note + 2.5;
+      ['Sym', 'Key', 'Botanical / common name', 'Size', 'Qty'].forEach((head, i) => parts.push(svgText(xs[i] + 1, y + T.label, head, T.label, { anchor: 'start', weight: 700 })));
+      y += T.label + 1.6;
+      parts.push(svgLine({ x: x0, y }, { x: xs.at(-1), y }, { width: P.thin }));
+      let shown = 0;
+      for (const row of rows) {
+        if (y + rowH > area.y1 - (shown < rows.length - 1 ? T.note + 2 : 0)) break;
+        const r = PLANT_KINDS[row.plant.kind]?.tree ? 3.2 : 2.2, c = { x: xs[0] + cols[0] / 2, y: y + rowH / 2 };
+        const status = row.status === 'proposed' ? row.plant.commonName : `${row.plant.commonName}, ${PLANTING_STATUS[row.status].toLowerCase()}`;
+        parts.push(`<g data-entity="${escapeHtml(row.plant.id)}">${svgRect(x0, y, xs.at(-1) - x0, rowH, { fill: DRAFT.paper, fillOpacity: 0, width: 0 })}${plantSymbol(c, r, row.plant, row.status, P)}`
+          + svgText(xs[1] + 1, y + lineGap, row.plant.key, T.label, { anchor: 'start', weight: 700 })
+          + svgText(xs[2] + 1, y + lineGap, fitText(row.plant.botanicalName, T.label, cols[2] - 2), T.label, { anchor: 'start', upper: false, italic: true })
+          + svgText(xs[2] + 1, y + 2 * lineGap, fitText(status, T.label, cols[2] - 2), T.label, { anchor: 'start', upper: false })
+          + svgText(xs[3] + 1, y + lineGap, fitText(row.plant.size ?? '', T.label, cols[3] - 2), T.label, { anchor: 'start', upper: false })
+          + svgText(xs[5] - 1, y + lineGap, String(row.quantity), T.label, { anchor: 'end' }) + '</g>');
+        y += rowH;
+        parts.push(svgLine({ x: x0, y }, { x: xs.at(-1), y }, { width: P.fine }));
+        shown += 1;
+      }
+      if (shown < rows.length) {
+        const missing = rows.slice(shown).map(row => `${row.plant.key} (${row.status})`);
+        parts.push(svgText(x0, y + T.note + 1, `+${missing.length} rows not shown`, T.note, { anchor: 'start', upper: false }));
+        warnings.push({ severity: 'warning', code: 'site.schedule-overflow', message: `L-101: the plant schedule has no room for ${missing.join(', ')}. Reduce the plant list or split the schedule onto its own sheet.`, entityId: rows[shown].plant.id });
+      }
+      parts.push(...xs.map(x => svgLine({ x, y: area.y0 + T.note + 2.5 }, { x, y }, { width: P.fine })));
+      layers.schedule.push(`<g data-role="plant-schedule">${parts.join('')}</g>`);
+    }
+
+    const body = Object.entries(layers).filter(([, items]) => items.length).map(([key, items]) => `<g data-layer="${key}">${items.join('')}</g>`).join('');
+    const title = 'Site plan';
+    const svg = sheetSvg(model, profile, { sheetId: 'L-101', title, scaleLabel, ratio, area, view: 'site', northDeg, materialContext: mats, warnings }, body);
+    return { svg, sheetId: 'L-101', title, view: 'site', ratio, scaleLabel, warnings };
   }
 
   // Full drawing set for the model. scripts/export-drawings.mjs writes these files; the viewer
   // only downloads what that script already wrote.
   function renderDrawingSet(model) {
     const sheets = [];
+    if (hasSiteContent(model)) sheets.push({ path: 'exports/site/site-plan.svg', ...renderSitePlanSheet(model) });
     for (const level of sortedLevels(model)) sheets.push({ path: `exports/plans/${level.id}.svg`, ...renderPlanSheet(model, level.id) });
     for (const side of ['north', 'east', 'south', 'west']) sheets.push({ path: `exports/elevations/${side}.svg`, ...renderElevationSheet(model, side) });
     for (const section of model.sections ?? []) sheets.push({ path: `exports/sections/${section.id}.svg`, ...renderSectionSheet(model, section.id) });
@@ -2013,9 +2656,16 @@
   // ---------------------------------------------------------------------------
   // Selected-element details: measurements a reviewer wants that would clutter the sheets.
   // ---------------------------------------------------------------------------
-  const ENTITY_GROUPS = [['levels', 'Level'], ['spaces', 'Room'], ['walls', 'Wall'], ['openings', 'Opening'], ['slabs', 'Slab'], ['roofs', 'Roof'], ['stairs', 'Stair'], ['fixtures', 'Fixture'], ['equipment', 'Equipment'], ['systems', 'System'], ['dimensions', 'Dimension'], ['sections', 'Section'], ['assumptions', 'Assumption'], ['materials', 'Material'], ['beams', 'Beam'], ['columns', 'Column'], ['foundations', 'Foundation'], ['surfaces', 'Surface']];
+  const ENTITY_GROUPS = [['levels', 'Level'], ['spaces', 'Room'], ['walls', 'Wall'], ['openings', 'Opening'], ['slabs', 'Slab'], ['roofs', 'Roof'], ['stairs', 'Stair'], ['fixtures', 'Fixture'], ['equipment', 'Equipment'], ['systems', 'System'], ['dimensions', 'Dimension'], ['sections', 'Section'], ['assumptions', 'Assumption'], ['materials', 'Material'], ['beams', 'Beam'], ['columns', 'Column'], ['foundations', 'Foundation'], ['surfaces', 'Surface'], ['plants', 'Plant'], ['plantings', 'Planting']];
   // Decisions the concept model never makes; listed so nobody mistakes their absence for an answer.
   const OPEN_ITEMS = {
+    'Property line': ['Boundary survey and recorded plat', 'Easements and rights of way'],
+    Setback: ['Zoning setback confirmed with the jurisdiction'],
+    'Grading limit': ['Erosion control and tree protection'],
+    Contour: ['Topographic survey', 'Drainage and cut and fill by a civil engineer'],
+    'Spot elevation': ['Topographic survey'],
+    Plant: ['Hardiness, invasiveness rules, and availability'],
+    Planting: ['Soil, irrigation, and planting details', 'Tree protection for existing trees'],
     Stair: ['Landing and headroom', 'Guards and handrails', 'Code geometry (riser and tread limits)'],
     Opening: ['Header size and framing', 'Rough opening and unit size', 'Hardware, glazing, and egress requirements'],
     Wall: ['Assembly, insulation, and finishes', 'Structural role and bracing'],
@@ -2042,11 +2692,19 @@
       const node = system.nodes.find(item => item.id === id); if (node) return { entity: node, type: 'System point', system };
       const edge = system.edges.find(item => item.id === id); if (edge) return { entity: edge, type: 'System route', system };
     }
+    const site = model.site ?? {};
+    if (site.propertyLine?.id === id) return { entity: site.propertyLine, type: 'Property line' };
+    if (site.gradingLimit?.id === id) return { entity: site.gradingLimit, type: 'Grading limit' };
+    for (const [list, type] of [[site.setbacks, 'Setback'], [site.contours, 'Contour'], [site.spotElevations, 'Spot elevation']]) {
+      const entity = (list ?? []).find(item => item.id === id); if (entity) return { entity, type };
+    }
     return model.project?.id === id ? { entity: model.project, type: 'Project' } : null;
   }
   function entityTitle(entity, type) {
     if (entity.name) return entity.name;
-    const prefixes = ['level', 'space', 'wall', 'opening', 'slab', 'roof', 'stair', 'fixture', 'equipment', 'system', 'dimension', 'section', 'assumption', 'plumbing', 'electrical', 'mechanical', 'material', 'beam', 'column', 'foundation', 'surface'];
+    if (type === 'Plant') return `${entity.commonName} (${entity.key})`;
+    if (type === 'Setback' && entity.label) return capitalize(entity.label);
+    const prefixes = ['level', 'space', 'wall', 'opening', 'slab', 'roof', 'stair', 'fixture', 'equipment', 'system', 'dimension', 'section', 'assumption', 'plumbing', 'electrical', 'mechanical', 'material', 'beam', 'column', 'foundation', 'surface', 'plant', 'planting', 'site', 'setback', 'contour', 'spot'];
     const words = entity.id.split('-');
     const rest = (prefixes.includes(words[0]) ? words.slice(1) : words).filter(word => word.length > 1);
     const noun = type.split(' ').at(-1).toLowerCase();
@@ -2200,7 +2858,32 @@
       dims.push(['Width', L(Math.min(box.x1 - box.x0, box.y1 - box.y0))], ['Length', L(Math.max(box.x1 - box.x0, box.y1 - box.y0))], ['Depth', L(entity.depthMm)], ['Top', L(entity.topElevationMm)], ['Bottom', L(entity.topElevationMm - entity.depthMm)], ['Material', materialName(entity.materialId)]);
     } else if (type === 'Surface') {
       context = `Site surface, ${levelName(entity.levelId)}`;
-      dims.push(['Area', profileFor(model).area(polygonArea(ringOf(entity.boundary)))], ['Thickness', L(entity.thicknessMm)], ['Top', L(entity.topElevationMm)], ['Material', materialName(entity.materialId)]);
+      dims.push(['Area', profileFor(model).area(polygonArea(ringOf(entity.boundary)))], ['Thickness', L(entity.thicknessMm)], entity.followsGrade === true ? ['Top', `Follows grade${entity.gradeOffsetMm ? `, ${L(entity.gradeOffsetMm)} above` : ''}`] : ['Top', L(entity.topElevationMm)], ['Material', materialName(entity.materialId)]);
+      if (hasCurves(entity.boundary)) dims.push(['Perimeter', L(curveLength(entity.boundary, true))]);
+    } else if (type === 'Property line' || type === 'Grading limit') {
+      const ring = ringOf(entity.boundary);
+      dims.push(['Enclosed area', profileFor(model).area(polygonArea(ring))], ['Perimeter', L(curveLength(entity.boundary, true))], ['Edges', String(entity.boundary.length)]);
+      if (type === 'Property line') dims.push(['Setbacks', String((model.site?.setbacks ?? []).length)]);
+    } else if (type === 'Setback') {
+      context = `Edge ${entity.edgeIndex + 1} of the property line`;
+      dims.push(['Distance', L(entity.distanceMm)]);
+    } else if (type === 'Contour') {
+      context = `${capitalize(entity.status)} contour`;
+      dims.push(['Elevation', L(entity.elevationMm)], ['Length', L(curveLength(entity.path, Boolean(entity.closed)))], ['Closed', entity.closed ? 'Yes' : 'No']);
+    } else if (type === 'Spot elevation') {
+      context = `${capitalize(entity.status)} grade`;
+      dims.push(['Elevation', L(entity.elevationMm)]);
+    } else if (type === 'Plant') {
+      context = `${PLANT_KINDS[entity.kind]?.label ?? entity.kind}, ${entity.botanicalName}`;
+      const count = (model.plantings ?? []).filter(item => item.plantId === entity.id).reduce((total, item) => total + plantingQuantity(model, item), 0);
+      dims.push(['Key', entity.key], ['Planting size', entity.size ?? 'Not set'], ['Mature height', L(entity.matureHeightMm)], ['Mature spread', L(entity.matureSpreadMm)], ['Quantity', String(count)]);
+      if (entity.spacingMm) dims.push(['Spacing', L(entity.spacingMm)]);
+    } else if (type === 'Planting') {
+      const plant = plantOf(model, entity);
+      context = `${plant ? `${plant.commonName} (${plant.botanicalName})` : entity.plantId}, ${PLANTING_STATUS[entity.status]?.toLowerCase() ?? entity.status}`;
+      if (entity.boundary) dims.push(['Area', profileFor(model).area(polygonArea(ringOf(entity.boundary)))], ['Spacing', plant?.spacingMm ? L(plant.spacingMm) : 'Not set'], ['Quantity', String(plantingQuantity(model, entity))]);
+      else dims.push(['Canopy', L(plantingCanopy(model, entity))], ['Height', L(entity.heightMm ?? plant?.matureHeightMm ?? 0)]);
+      if (entity.trunkDiameterMm) dims.push(['Trunk', L(entity.trunkDiameterMm)]);
     } else if (type === 'Material') {
       const id = entity.id;
       const uses = [...model.walls, ...model.slabs].filter(item => item.materialId === id || item.layers?.some(layer => layer.materialId === id)).length
@@ -2236,7 +2919,8 @@
   const FINDING_TOPICS = {
     'evidence.review': 'Evidence to confirm', 'stair.code': 'Stair', 'code.status': 'Code research', 'system.review': 'Systems',
     'label.placement': 'Drawing label', 'section.empty': 'Section', 'webgl.unavailable': '3D view', 'structure.review': 'Structure',
-    'material.key-overflow': 'Material key', 'material.evidence': 'Material sources'
+    'material.key-overflow': 'Material key', 'material.evidence': 'Material sources', 'material.category-use': 'Material use',
+    'site.survey': 'Survey', 'site.schedule-overflow': 'Plant schedule', 'terrain.constraint-failed': 'Terrain', 'scene.reduced-detail': '3D view', 'wall.join-fallback': 'Wall join'
   };
   // Groups findings by code so repeated notes (one per system, say) read as one entry.
   function reviewQueue(findings) {
@@ -2371,6 +3055,72 @@
   }
   const worldPoint = point => [point.x / 1000, point.z / 1000, -point.y / 1000];
 
+  // Site in 3D: terrain, draped surfaces, and plantings. Detail depends on model size only, with fixed
+  // caps; when a cap applies the scene says so instead of silently thinning the site.
+  const SCENE_LIMITS = { terrainCells: 128, drapeCells: 64, triangles: 200000 };
+  function pushSite(gls, model, materialColor) {
+    const terrain = terrainOf(model), notes = [];
+    gls.notes = [];
+    const tri = (a, b, c, color) => {
+      // Upward-facing triangles, wound so back-face culling keeps their tops.
+      const n = cross([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]);
+      for (const p of n[1] >= 0 ? [a, b, c] : [a, c, b]) gls.triangles.push(...p, ...color);
+    };
+    const ground = sortedLevels(model)[0], footprints = model.slabs.filter(slab => slab.levelId === ground?.id).map(slab => ringOf(slab.boundary));
+    const underBuilding = corners => footprints.some(ring => corners.some(p => pointInPolygon(p, ring)) || ring.some(p => pointInPolygon(p, corners)));
+    // A grid over the area, keeping cells whose centre passes `keep`; each kept cell is two triangles.
+    const drape = (box, cells, z, keep, color) => {
+      const nx = Math.max(1, Math.min(cells, Math.ceil((box.x1 - box.x0) / 250))), ny = Math.max(1, Math.min(cells, Math.ceil((box.y1 - box.y0) / 250)));
+      if ((box.x1 - box.x0) / nx > 250 * 1.01 || (box.y1 - box.y0) / ny > 250 * 1.01) notes.push(color);
+      const w = (box.x1 - box.x0) / nx, h = (box.y1 - box.y0) / ny, at = (i, j) => ({ x: box.x0 + i * w, y: box.y0 + j * h });
+      for (let i = 0; i < nx; i += 1) for (let j = 0; j < ny; j += 1) {
+        const q = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)];
+        if (!keep({ x: box.x0 + (i + 0.5) * w, y: box.y0 + (j + 0.5) * h }, q)) continue;
+        const v = q.map(p => worldPoint({ ...p, z: z(p) }));
+        tri(v[0], v[1], v[2], color); tri(v[0], v[2], v[3], color);
+      }
+    };
+    const site = model.site ?? {}, lot = site.propertyLine ? ringOf(site.propertyLine.boundary) : null;
+    if (terrain) {
+      const box = boundsOf(lot ?? terrain.proposed?.points ?? terrain.existing.points);
+      drape(box, SCENE_LIMITS.terrainCells, p => terrain.at(p), (c, q) => (!lot || pointInPolygon(c, lot)) && !underBuilding(q), rgb('#9aa77f'));
+    }
+    for (const surface of (model.surfaces ?? []).filter(item => item.followsGrade === true)) {
+      const ring = ringOf(surface.boundary), offset = (surface.gradeOffsetMm ?? 0) + 5;
+      drape(boundsOf(ring), SCENE_LIMITS.drapeCells, p => (terrain ? terrain.at(p) : (model.project.coordinates.siteDatumMm ?? 0)) + offset, c => pointInPolygon(c, ring), rgb(materialColor(surface.materialId, '#b9b8b0')));
+    }
+    // Plantings: trunk prisms with low-poly canopies (spheres for broadleaf plants, cones for conifers).
+    // Plants marked for removal are not part of the proposed scene.
+    for (const planting of (model.plantings ?? []).filter(item => item.position && item.status !== 'remove')) {
+      const plant = plantOf(model, planting); if (!plant) continue;
+      const base = terrain ? terrain.at(planting.position) : (model.project.coordinates.siteDatumMm ?? 0), height = planting.heightMm ?? plant.matureHeightMm;
+      const radius = plantingCanopy(model, planting) / 2, tree = PLANT_KINDS[plant.kind]?.tree, cx = planting.position.x, cy = planting.position.y;
+      const leaf = rgb(plant.kind === 'evergreen-tree' ? '#3f6b4a' : '#6f9a5a');
+      if (tree) {
+        const trunk = Math.max(120, planting.trunkDiameterMm ?? 200);
+        pushPrism(gls.triangles, cx / 1000, (base + height * 0.2) / 1000, -cy / 1000, trunk / 1000, height * 0.4 / 1000, trunk / 1000, 0, rgb('#6b5038'));
+      }
+      const bottom = base + (tree ? height * 0.3 : 0), centre = { x: cx, y: cy }, segments = 10;
+      const ringAt = (z, r) => Array.from({ length: segments }, (_, i) => worldPoint({ x: centre.x + r * Math.cos(i * 2 * Math.PI / segments), y: centre.y + r * Math.sin(i * 2 * Math.PI / segments), z }));
+      const top = worldPoint({ ...centre, z: base + height }), low = worldPoint({ ...centre, z: bottom }), middle = worldPoint({ ...centre, z: (bottom + base + height) / 2 });
+      // Faces wound outward from the canopy's centre.
+      const solid = (a, b, c) => {
+        const n = cross([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]), m = [0, 1, 2].map(k => (a[k] + b[k] + c[k]) / 3 - middle[k]);
+        for (const p of dot(n, m) >= 0 ? [a, b, c] : [a, c, b]) gls.triangles.push(...p, ...leaf);
+      };
+      if (plant.kind === 'evergreen-tree') {
+        const rim = ringAt(bottom, radius);
+        rim.forEach((p, i) => { solid(p, rim[(i + 1) % segments], top); solid(p, rim[(i + 1) % segments], low); });
+      } else {
+        const zs = [0.2, 0.5, 0.8].map(k => bottom + (base + height - bottom) * k), rs = [0.75, 1, 0.75].map(k => radius * k), rings = zs.map((z, i) => ringAt(z, rs[i]));
+        rings[0].forEach((p, i) => solid(p, rings[0][(i + 1) % segments], low));
+        rings.at(-1).forEach((p, i) => solid(p, rings.at(-1)[(i + 1) % segments], top));
+        for (let k = 1; k < rings.length; k += 1) rings[k].forEach((p, i) => { const j = (i + 1) % segments; solid(rings[k - 1][i], rings[k - 1][j], p); solid(rings[k - 1][j], rings[k][j], p); });
+      }
+    }
+    if (notes.length || gls.triangles.length / 18 > SCENE_LIMITS.triangles) gls.notes = [{ severity: 'advisory', code: 'scene.reduced-detail', message: 'The site is large enough that the 3D terrain and draped surfaces use a coarser grid than 250 mm.' }];
+  }
+
   function buildScene(gls) {
     gls.triangles.length = 0; gls.lines.length = 0; const model = state.model;
     const levelMap = new Map(model.levels.map(level => [level.id, level]));
@@ -2391,7 +3141,8 @@
       else pushExtrusion(gls.triangles, ringOf(slab.boundary), top - slab.thicknessMm, top, rgb(color));
     }
     for (const foundation of model.foundations ?? []) pushExtrusion(gls.triangles, ringOf(foundation.boundary), foundation.topElevationMm - foundation.depthMm, foundation.topElevationMm, rgb(materialColor(foundation.materialId, '#b9b8b0')));
-    for (const surface of model.surfaces ?? []) pushExtrusion(gls.triangles, ringOf(surface.boundary), surface.topElevationMm - surface.thicknessMm, surface.topElevationMm, rgb(materialColor(surface.materialId, '#b9b8b0')));
+    for (const surface of (model.surfaces ?? []).filter(item => item.followsGrade !== true)) pushExtrusion(gls.triangles, ringOf(surface.boundary), surface.topElevationMm - surface.thicknessMm, surface.topElevationMm, rgb(materialColor(surface.materialId, '#b9b8b0')));
+    pushSite(gls, model, materialColor);
     for (const beam of model.beams ?? []) {
       const dx = beam.end.x - beam.start.x, dy = beam.end.y - beam.start.y;
       pushPrism(gls.triangles, (beam.start.x + dx / 2) / 1000, (beam.topElevationMm - beam.shape.depthMm / 2) / 1000, -(beam.start.y + dy / 2) / 1000, Math.hypot(dx, dy) / 1000, beam.shape.depthMm / 1000, beam.shape.widthMm / 1000, Math.atan2(-dy, dx), rgb(materialColor(beam.materialId, '#7d858c')));
@@ -2591,6 +3342,7 @@
     if (state.view === 'systems') return renderPlanSheet(state.model, state.levelId, { systems: state.systems });
     if (state.view === 'elevation') return renderElevationSheet(state.model, state.elevation);
     if (state.view === 'section') return renderSectionSheet(state.model, state.sectionId);
+    if (state.view === 'site') return renderSitePlanSheet(state.model);
     return null;
   }
   function entityLabel(id) {
@@ -2668,7 +3420,7 @@
     if (!isSheet) showStageStatus(null);
     if (isSheet) renderSheetView(options.refit);
     else state.renderWarnings = [];
-    if (isModel) { if (glState) buildScene(glState); requestAnimationFrame(renderWebGL); }
+    if (isModel) { if (glState) { buildScene(glState); state.renderWarnings = glState.notes ?? []; } requestAnimationFrame(renderWebGL); }
     if (isDocument) {
       renderDocument(state.view);
       content.querySelectorAll('[data-select]').forEach(button => button.addEventListener('click', () => select(button.dataset.select)));
@@ -2693,7 +3445,7 @@
   }
 
   function setView(view, focusTab) {
-    if (!ALL_VIEWS.includes(view)) return;
+    if (!availableViews(state.model).includes(view)) return;
     const changed = view !== state.view;
     state.view = view;
     render({ refit: changed });
@@ -2701,7 +3453,7 @@
   }
 
   function wireControls() {
-    const tabs = [...document.querySelectorAll('.tab')];
+    const tabs = [...document.querySelectorAll('.tab')].filter(tab => availableViews(state.model).includes(tab.dataset.view));
     tabs.forEach(tab => tab.addEventListener('click', () => setView(tab.dataset.view)));
     $('.tabs').addEventListener('keydown', event => {
       const index = tabs.findIndex(tab => tab.dataset.view === state.view);
@@ -2796,7 +3548,8 @@
     try {
       const params = new URLSearchParams(location.search);
       state.model = await loadModel(params);
-      const requestedView = params.get('view'); if (ALL_VIEWS.includes(requestedView)) state.view = requestedView;
+      state.view = resolveView(params.get('view') ?? state.view, state.model);
+      const siteTab = $('#tab-site'); if (siteTab) siteTab.hidden = !hasSiteContent(state.model);
       const requestedLevel = params.get('level'); state.levelId = state.model.levels.some(level => level.id === requestedLevel) ? requestedLevel : (sortedLevels(state.model)[0]?.id ?? null);
       const requestedSection = params.get('section'); state.sectionId = (state.model.sections ?? []).some(item => item.id === requestedSection) ? requestedSection : (state.model.sections?.[0]?.id ?? null);
       const requestedElevation = params.get('elevation'); if ([...elevationSelect.options].some(option => option.value === requestedElevation)) state.elevation = requestedElevation;
@@ -2836,7 +3589,7 @@
   const studioApi = {
     state, PROFILES, DISCIPLINES, MATERIAL_CATEGORIES, HEADER_KINDS, materialContext, materialsActive, wallBands, segmentPolygonIntervals, triangulate, pushExtrusion, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
     bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, polygonArea, pointInPolygon,
-    renderPlanSheet, renderElevationSheet, renderSectionSheet, sectionGeometry, renderDrawingSet, modelFingerprint,
+    renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport
   };
   if (typeof globalThis.__ARCHITECTURE_STUDIO_API__ === 'function') globalThis.__ARCHITECTURE_STUDIO_API__(studioApi);
