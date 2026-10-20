@@ -215,3 +215,18 @@ test('terrain for dense survey-sized contours builds in reasonable time', () => 
   assert.ok(terrain.existing, 'a surface is built');
   assert.ok(elapsed < 6000, `terrain took ${elapsed} ms`);
 });
+
+test('site plan layers can be hidden in the viewer without changing the scale or the export', () => {
+  const model = clone(site);
+  assert.deepEqual([...api.siteCategories(model)], ['trees', 'plants', 'surfaces', 'grading', 'lot']);
+  assert.deepEqual([...api.siteCategories(legacy)], []);
+  assert.deepEqual([...api.parseSiteHidden('trees,bogus,grading', model)], ['trees', 'grading']);
+  const full = api.renderSitePlanSheet(model), noTrees = api.renderSitePlanSheet(model, { hidden: new Set(['trees']) });
+  assert.equal(noTrees.scaleLabel, full.scaleLabel);
+  assert.ok(!noTrees.svg.includes('data-entity="planting-oak"') && !noTrees.svg.includes('data-entity="plant-red-maple"'), 'trees and their schedule rows are gone');
+  assert.ok(noTrees.svg.includes('data-entity="planting-inkberry-1"') && noTrees.svg.includes('data-entity="plant-inkberry"'), 'shrubs stay');
+  const bare = api.renderSitePlanSheet(model, { hidden: new Set(['surfaces', 'grading', 'lot']) }).svg;
+  for (const id of ['surface-walk', 'contour-ex-0', 'spot-front-door', 'site-grading-limit', 'site-property-line', 'setback-front']) assert.ok(!bare.includes(`data-entity="${id}"`), id);
+  assert.ok(!bare.includes('TURF LAWN'), 'hidden surfaces leave the material key');
+  assert.equal(buildDrawingSet(html, model).sheets[0].svg, full.svg, 'the export always draws every layer');
+});

@@ -113,8 +113,11 @@ browser.
 
 The viewer accepts query parameters: `view` (`plan`, `elevation`, `section`,
 `systems`, `site`, `model`, `code`, `assumptions`), `level`, `section`,
-`elevation`, and `model` (a path to an alternative model file). The Site tab
-appears only for models with site content.
+`elevation`, `hide` (site plan layers to hide: `trees`, `plants`, `surfaces`,
+`grading`, `lot`), and `model` (a path to an alternative model file). The Site
+tab appears only for models with site content; its toolbar toggles show or
+hide trees, shrubs and groundcover, surfaces, grading, and property lines in
+the viewer. The exported L-101 always shows everything.
 
 ## Drawings
 

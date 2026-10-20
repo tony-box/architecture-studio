@@ -138,7 +138,10 @@ table".
   End. The selected tab gets a 3px accent underline and the paper background.
   The drawing tabs (Plans, Elevations, Sections, Systems, and Site when the
   model has site content) lead on the left; a hidden Site tab is skipped by the
-  arrow keys, Home, and End, and `?view=site` falls back to Plans.
+  arrow keys, Home, and End, and `?view=site` falls back to Plans. On the Site
+  view the toolbar shows one pressed toggle per site category the model draws
+  (Trees, Shrubs and groundcover, Surfaces, Grading, Property lines), styled
+  like the system toggles; the hidden set is kept in `?hide=`.
   3D model, Code review, and Assumptions sit together at the right edge behind a
   divider, because they are not drawing sheets.
 - **Toolbar**: one shared toolbar for every view; only the controls for the

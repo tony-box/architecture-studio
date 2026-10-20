@@ -217,6 +217,7 @@
           <button class="tool system-toggle" data-system="electrical" aria-pressed="true"><span class="swatch" style="color:#9c2f8f"></span>Electrical</button>
           <button class="tool system-toggle" data-system="mechanical" aria-pressed="true"><span class="swatch" style="color:#1f7a4d"></span>Mechanical</button>
         </div>
+        <div class="group hidden-view" id="site-controls" role="group" aria-label="Site plan layers shown"></div>
         <button class="tool primary" id="download-set" aria-describedby="download-status">Download drawing set</button>
       </div>
       <div class="canvas-wrap">
@@ -246,6 +247,7 @@
     elevation: 'north',
     sectionId: null,
     systems: new Set(['plumbing', 'electrical', 'mechanical']),
+    siteHidden: new Set(),
     findings: [],
     renderWarnings: [],
     selected: null,
@@ -2725,10 +2727,28 @@
   }
   const fitText = (value, size, width) => { let text = String(value); while (text.length > 3 && textWidth(text, size) > width) text = text.slice(0, -1); return text === String(value) ? text : `${text.slice(0, -2)}..`; };
 
-  function renderSitePlanSheet(model) {
+  // Site plan categories the viewer can hide. The exported L-101 always draws all of them.
+  const SITE_CATEGORIES = { trees: 'Trees', plants: 'Shrubs and groundcover', surfaces: 'Surfaces', grading: 'Grading', lot: 'Property lines' };
+  const plantingCategory = (model, planting) => PLANT_KINDS[plantOf(model, planting)?.kind]?.tree ? 'trees' : 'plants';
+  // Categories a model actually draws on L-101, in toolbar order.
+  function siteCategories(model) {
+    const site = model?.site ?? {}, found = new Set((model?.plantings ?? []).map(item => plantingCategory(model, item)));
+    if ((model?.surfaces ?? []).some(item => item.levelId === sortedLevels(model)[0]?.id)) found.add('surfaces');
+    if ((site.contours ?? []).length || (site.spotElevations ?? []).length || site.gradingLimit) found.add('grading');
+    if (site.propertyLine) found.add('lot');
+    return Object.keys(SITE_CATEGORIES).filter(key => found.has(key));
+  }
+  // `?hide=trees,grading` from the URL, keeping only categories this model draws.
+  const parseSiteHidden = (value, model) => new Set(String(value ?? '').split(',').filter(key => siteCategories(model).includes(key)));
+
+  function renderSitePlanSheet(model, options = {}) {
     const profile = profileFor(model), P = profile.pens, T = profile.text, site = model.site ?? {};
+    const hidden = options.hidden ?? new Set(), shows = category => !hidden.has(category);
     const ink = DRAFT.ink, area = drawingArea(profile), northDeg = model.project.coordinates.trueNorthDeg ?? 0, warnings = [];
-    const rows = plantSchedule(model), extra = { x: rows.length ? SITE_SCHEDULE_WIDTH + 8 : 0, y: 0 };
+    // The schedule column is reserved for the full schedule, so hiding plants never changes the scale.
+    const allRows = plantSchedule(model), extra = { x: allRows.length ? SITE_SCHEDULE_WIDTH + 8 : 0, y: 0 };
+    const rows = allRows.filter(row => shows(PLANT_KINDS[row.plant.kind]?.tree ? 'trees' : 'plants'));
+    const visiblePlantings = (model.plantings ?? []).filter(item => shows(plantingCategory(model, item)));
     const ext = siteExtent(model), ladder = { ...profile, scales: SITE_SCALES[profile.id] };
     const { ratio, label: scaleLabel } = selectScale(ladder, ext.maxX - ext.minX, ext.maxY - ext.minY, area, extra);
     const place = placeExtent(area, ratio, ext.maxX - ext.minX, ext.maxY - ext.minY, extra);
@@ -2740,14 +2760,14 @@
     const paperDir = (a, b) => unit2(sub(map(b), map(a)));
 
     // Surfaces on the ground level: draped surfaces first, then flat ones from low to high.
-    const surfaces = (model.surfaces ?? []).filter(item => item.levelId === ground.id)
+    const surfaces = (model.surfaces ?? []).filter(item => item.levelId === ground.id && shows('surfaces'))
       .sort((a, b) => (b.followsGrade === true) - (a.followsGrade === true) || (a.topElevationMm ?? 0) - (b.topElevationMm ?? 0));
     for (const surface of surfaces) {
       const ring = ringOf(surface.boundary), box = boundsOf(ring), outline = ring.map(map);
       const fill = mats.region(outline, { o: map({ x: box.x0, y: box.y0 }), u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: (box.x1 - box.x0) / ratio, T: (box.y1 - box.y0) / ratio }, mats.resolve(surface.materialId), `clip-site-${surface.id}`);
       layers.surfaces.push(`${fill}<g data-entity="${escapeHtml(surface.id)}">${svgRing(surface.boundary, map, ratio, { fill: DRAFT.paper, fillOpacity: 0, stroke: ink, width: P.thin })}</g>`);
     }
-    for (const planting of (model.plantings ?? []).filter(item => item.boundary)) {
+    for (const planting of visiblePlantings.filter(item => item.boundary)) {
       layers.plantingAreas.push(`<g data-entity="${escapeHtml(planting.id)}">${svgRing(planting.boundary, map, ratio, { fill: mats.pattern('planting'), stroke: ink, width: P.thin, dash: planting.status === 'proposed' ? null : '1 0.6' })}</g>`);
     }
 
@@ -2758,7 +2778,7 @@
       : groundSlabs.length ? boundsOf(groundSlabs.flatMap(slab => ringOf(slab.boundary)).map(map)) : null;
     if (footprintBox) placer.reserve(footprintBox);
     const interval = site.contourIntervalMm;
-    for (const contour of site.contours ?? []) {
+    for (const contour of shows('grading') ? site.contours ?? [] : []) {
       const index = interval > 0 && Math.round(contour.elevationMm / interval) % 5 === 0;
       const existing = contour.status === 'existing', width = existing ? (index ? P.thin : P.fine) : (index ? P.medium : P.thin);
       layers.contours.push(`<g data-entity="${escapeHtml(contour.id)}"><path d="${curvePathD(contour.path, Boolean(contour.closed), map, ratio)}" fill="none" ${strokeAttrs({ stroke: ink, width, dash: existing ? '2 1' : null })}/></g>`);
@@ -2796,7 +2816,7 @@
     layers.building.push(footprintParts.join(''));
 
     // Property line with bearings and distances; arcs carry radius and length.
-    const line = site.propertyLine;
+    const line = shows('lot') ? site.propertyLine : null;
     if (line) {
       const ring = ringOf(line.boundary), orient = polygonSignedArea(ring) > 0 ? 1 : -1, v = line.boundary;
       const parts = [`<path d="${curvePathD(v, true, map, ratio)}" fill="none" ${strokeAttrs({ stroke: ink, width: P.profile, dash: '12 1.5 2 1.5 2 1.5' })}/>`];
@@ -2842,7 +2862,7 @@
         layers.lines.push(`<g data-entity="${escapeHtml(setback.id)}">${drawn.map(piece => svgPoly(piece.map(map), { open: true, stroke: ink, width: P.thin, dash: '4 1.5' })).join('')}${placed.svg}</g>`);
       }
     }
-    if (site.gradingLimit) {
+    if (site.gradingLimit && shows('grading')) {
       const limit = site.gradingLimit, ring = ringOf(limit.boundary);
       // The label takes the first edge midpoint, from the top of the sheet down, where it fits.
       const candidates = ring.map((p, i) => [p, ring[(i + 1) % ring.length]]).filter(([a, b]) => Math.hypot(b.x - a.x, b.y - a.y) / ratio > 20).sort((m, n) => (n[0].y + n[1].y) - (m[0].y + m[1].y));
@@ -2857,14 +2877,14 @@
     }
 
     // Point plantings, largest canopy first so smaller plants draw over larger ones.
-    const points = (model.plantings ?? []).filter(item => item.position).sort((a, b) => plantingCanopy(model, b) - plantingCanopy(model, a) || a.id.localeCompare(b.id));
+    const points = visiblePlantings.filter(item => item.position).sort((a, b) => plantingCanopy(model, b) - plantingCanopy(model, a) || a.id.localeCompare(b.id));
     for (const planting of points) {
       const plant = plantOf(model, planting); if (!plant) continue;
       const c = map(planting.position), r = Math.max(PLANT_KINDS[plant.kind]?.tree ? 1.6 : 0.9, plantingCanopy(model, planting) / 2 / ratio);
       layers.plants.push(`<g data-entity="${escapeHtml(planting.id)}">${plantSymbol(c, r, plant, planting.status, P, (planting.trunkDiameterMm ?? 0) / 2 / ratio)}</g>`);
     }
     // Tags after every symbol is known, so a tag never sits on a later plant.
-    for (const planting of [...points, ...(model.plantings ?? []).filter(item => item.boundary)]) {
+    for (const planting of [...points, ...visiblePlantings.filter(item => item.boundary)]) {
       const plant = plantOf(model, planting); if (!plant) continue;
       const tag = planting.status === 'existing' ? `EX ${plant.key}` : planting.status === 'remove' ? `${plant.key} REMOVE` : planting.boundary ? `${plantingQuantity(model, planting)} ${plant.key}` : plant.key;
       const anchor = planting.position ? map(planting.position) : map(centroid(ringOf(planting.boundary)));
@@ -2882,7 +2902,7 @@
       const leader = Math.hypot(spot.x - anchor.x, spot.y - anchor.y) > r + w / 2 + 2 ? svgLine(leaderEnd, sub(spot, mul(unit2(sub(spot, anchor)), w / 2)), { width: P.fine }) : '';
       layers.tags.push(`<g data-entity="${escapeHtml(planting.id)}">${leader}${svgText(spot.x, spot.y + T.label * 0.36, tag, T.label, { weight: 700 })}</g>`);
     }
-    for (const spot of site.spotElevations ?? []) {
+    for (const spot of shows('grading') ? site.spotElevations ?? [] : []) {
       const c = map(spot.position), k = 0.9, value = `${spot.status === 'existing' ? 'EX ' : ''}${profile.id === 'metric' ? '' : 'EL. '}${siteDatum(spot.elevationMm, profile)}`;
       placer.reserve(centeredBox(add(c, { x: 1.4 + textWidth(value, T.label) / 2, y: 0 }), textWidth(value, T.label) + 3, T.label * 1.5));
       layers.spots.push(`<g data-entity="${escapeHtml(spot.id)}">${svgLine({ x: c.x - k, y: c.y }, { x: c.x + k, y: c.y }, { width: P.thin })}${svgLine({ x: c.x, y: c.y - k }, { x: c.x, y: c.y + k }, { width: P.thin })}${svgText(c.x + 1.4, c.y - 0.6, value, T.label, { anchor: 'start', upper: false, italic: spot.status === 'existing' })}</g>`);
@@ -3679,7 +3699,7 @@
     if (state.view === 'systems') return renderPlanSheet(state.model, state.levelId, { systems: state.systems });
     if (state.view === 'elevation') return renderElevationSheet(state.model, state.elevation);
     if (state.view === 'section') return renderSectionSheet(state.model, state.sectionId);
-    if (state.view === 'site') return renderSitePlanSheet(state.model);
+    if (state.view === 'site') return renderSitePlanSheet(state.model, { hidden: state.siteHidden });
     return null;
   }
   function entityLabel(id) {
@@ -3748,6 +3768,7 @@
     $('#zoom-controls').classList.toggle('hidden-view', !isSheet);
     $('#camera-controls').classList.toggle('hidden-view', !isModel);
     $('#system-controls').classList.toggle('hidden-view', !['systems', 'model'].includes(state.view));
+    $('#site-controls').classList.toggle('hidden-view', state.view !== 'site');
     document.querySelectorAll('.tab').forEach(tab => {
       const active = tab.dataset.view === state.view;
       tab.setAttribute('aria-selected', String(active));
@@ -3778,6 +3799,7 @@
     if (state.levelId) params.set('level', state.levelId);
     if (state.sectionId) params.set('section', state.sectionId);
     if (state.elevation) params.set('elevation', state.elevation);
+    if (state.siteHidden.size) params.set('hide', [...state.siteHidden].join(',')); else params.delete('hide');
     history.replaceState(null, '', `${location.pathname}?${params}${location.hash}`);
   }
 
@@ -3809,6 +3831,15 @@
       const key = button.dataset.system;
       if (state.systems.has(key)) state.systems.delete(key); else state.systems.add(key);
       button.setAttribute('aria-pressed', String(state.systems.has(key)));
+      render();
+    }));
+    // One toggle per site plan category the model draws; pressed means shown.
+    const siteControls = $('#site-controls');
+    siteControls.innerHTML = siteCategories(state.model).map(key => `<button class="tool site-toggle" data-site-layer="${key}" aria-pressed="${!state.siteHidden.has(key)}">${escapeHtml(SITE_CATEGORIES[key])}</button>`).join('');
+    siteControls.querySelectorAll('.site-toggle').forEach(button => button.addEventListener('click', () => {
+      const key = button.dataset.siteLayer;
+      if (state.siteHidden.has(key)) state.siteHidden.delete(key); else state.siteHidden.add(key);
+      button.setAttribute('aria-pressed', String(!state.siteHidden.has(key)));
       render();
     }));
     const setCamera = mode => {
@@ -3890,6 +3921,7 @@
       const requestedLevel = params.get('level'); state.levelId = state.model.levels.some(level => level.id === requestedLevel) ? requestedLevel : (sortedLevels(state.model)[0]?.id ?? null);
       const requestedSection = params.get('section'); state.sectionId = (state.model.sections ?? []).some(item => item.id === requestedSection) ? requestedSection : (state.model.sections?.[0]?.id ?? null);
       const requestedElevation = params.get('elevation'); if ([...elevationSelect.options].some(option => option.value === requestedElevation)) state.elevation = requestedElevation;
+      state.siteHidden = parseSiteHidden(params.get('hide'), state.model);
       state.findings = validateModel(state.model);
       state.approvals = loadApprovals();
       const embeddedCode = params.get('code') ? '' : $('#embedded-code-findings')?.textContent?.trim();
@@ -3926,7 +3958,7 @@
   const studioApi = {
     state, PROFILES, DISCIPLINES, MATERIAL_CATEGORIES, HEADER_KINDS, materialContext, materialsActive, wallBands, segmentPolygonIntervals, triangulate, pushExtrusion, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
     bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, polygonArea, pointInPolygon, wallGeometry, wallLength, wallEndClip, terrainOf, siteExtent,
-    renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
+    renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, siteCategories, parseSiteHidden, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport
   };
   if (typeof globalThis.__ARCHITECTURE_STUDIO_API__ === 'function') globalThis.__ARCHITECTURE_STUDIO_API__(studioApi);

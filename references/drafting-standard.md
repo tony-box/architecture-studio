@@ -326,6 +326,13 @@ planting, and `ceil(area / (spacing² × 0.866))` for a massed planting
 shown" and raise a `site.schedule-overflow` warning; rows are never dropped
 silently.
 
+**Hidden layers (viewer only).** The viewer can hide trees, shrubs and
+groundcover (including massed plantings), surfaces, grading (contours, spot
+elevations, limit of grading), and property lines with setbacks. Hidden items
+also leave the plant schedule and the material key, so the sheet never lists
+what it does not draw. The scale, framing, and schedule column stay as they
+are, and the exported L-101 always draws every layer.
+
 **Plants in other views.** Elevations show plants up to 9 m in front of the
 face, standing on the elevation ground line, and sections show plants up to
 9 m beyond the cut, on the ground: trunk lines and a canopy outline (a lobed
