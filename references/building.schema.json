@@ -192,6 +192,51 @@
       "minItems": 3,
       "items": { "$ref": "#/$defs/point2" }
     },
+    "curveVertex": {
+      "description": "A vertex and the segment that starts at it: straight by default, a circular arc with bulge (tan(sweep / 4), positive counter-clockwise, as in DXF), or a cubic Bezier with absolute controls c1 and c2. See coordinate-contract.md, Curves.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "bulge": { "type": "number", "description": "Non-zero, at most 3.7 in magnitude (about 299 degrees)." },
+        "c1": { "$ref": "#/$defs/point2" },
+        "c2": { "$ref": "#/$defs/point2" }
+      },
+      "if": { "anyOf": [{ "required": ["c1"] }, { "required": ["c2"] }] },
+      "then": { "required": ["c1", "c2"] },
+      "not": { "required": ["bulge", "c1"] }
+    },
+    "arcVertex": {
+      "description": "A curve vertex limited to straight segments and arcs, for legal lines that need a bearing or a radius.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "bulge": { "type": "number" }
+      }
+    },
+    "curvePolygon": {
+      "description": "Closed boundary of curve vertices. The last vertex describes the closing segment; two arc vertices make a circle.",
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/curveVertex" }
+    },
+    "arcPolygon": {
+      "description": "Closed boundary of straight segments and arcs only.",
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/arcVertex" }
+    },
+    "curvePath": {
+      "description": "Open path of curve vertices. The last vertex carries no curve.",
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/curveVertex" }
+    },
     "level": {
       "type": "object",
       "additionalProperties": false,
@@ -214,7 +259,7 @@
         "levelId": { "$ref": "#/$defs/id" },
         "use": { "type": "string" },
         "occupancy": { "type": "integer", "minimum": 0 },
-        "boundary": { "$ref": "#/$defs/polygon" },
+        "boundary": { "$ref": "#/$defs/curvePolygon" },
         "evidence": { "$ref": "#/$defs/evidence" }
       }
     },
@@ -343,7 +388,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "kind": { "enum": ["strip-footing", "pad-footing", "stem-wall", "grade-beam", "pier"] },
-        "boundary": { "$ref": "#/$defs/polygon" },
+        "boundary": { "$ref": "#/$defs/curvePolygon" },
         "topElevationMm": { "type": "integer" },
         "depthMm": { "type": "integer", "minimum": 1 },
         "materialId": { "$ref": "#/$defs/id" },
@@ -358,7 +403,7 @@
         "id": { "$ref": "#/$defs/id" },
         "name": { "type": "string" },
         "levelId": { "$ref": "#/$defs/id" },
-        "boundary": { "$ref": "#/$defs/polygon" },
+        "boundary": { "$ref": "#/$defs/curvePolygon" },
         "topElevationMm": { "type": "integer" },
         "thicknessMm": { "type": "integer", "minimum": 1 },
         "materialId": { "$ref": "#/$defs/id" },
@@ -393,7 +438,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "levelId": { "$ref": "#/$defs/id" },
-        "boundary": { "$ref": "#/$defs/polygon" },
+        "boundary": { "$ref": "#/$defs/curvePolygon" },
         "thicknessMm": { "type": "integer", "minimum": 1 },
         "materialId": { "$ref": "#/$defs/id" },
         "layers": {

@@ -320,12 +320,49 @@
     return [...new Set(issues)];
   }
   function rectangleBounds(points) {
-    if (polygonIssues(points).length || points.length !== 4) return null;
+    if (hasCurves(points) || polygonIssues(points).length || points.length !== 4) return null;
     const xs = [...new Set(points.map(point => point.x))], ys = [...new Set(points.map(point => point.y))];
     if (xs.length !== 2 || ys.length !== 2) return null;
     const corners = new Set(points.map(point => `${point.x},${point.y}`));
     if (!xs.every(x => ys.every(y => corners.has(`${x},${y}`)))) return null;
     return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+  }
+  const isModelPoint = p => p != null && isFiniteInteger(p.x) && isFiniteInteger(p.y);
+  // Curve vertex rules (coordinate-contract.md "Curves"). `bezier: false` limits a path to straight
+  // segments and arcs, for walls and legal lines that need a bearing or a radius.
+  function vertexIssues(vertices, closed, options = {}) {
+    const issues = [], maxBulge = options.maxBulge ?? 3.7;
+    vertices.forEach((v, i) => {
+      if (!isModelPoint(v)) { issues.push('a vertex without integer x and y'); return; }
+      const last = !closed && i === vertices.length - 1, next = vertices[(i + 1) % vertices.length];
+      if (v.bulge != null) {
+        if (typeof v.bulge !== 'number' || !Number.isFinite(v.bulge) || v.bulge === 0) issues.push('a zero or non-numeric bulge');
+        else if (Math.abs(v.bulge) > maxBulge) issues.push(`a bulge beyond ${maxBulge}`);
+        if (v.c1 != null || v.c2 != null) issues.push('both a bulge and Bezier controls on one vertex');
+        if (!last && isModelPoint(next) && Math.hypot(next.x - v.x, next.y - v.y) < 10) issues.push('an arc with a chord under 10 mm');
+      }
+      if (v.c1 != null || v.c2 != null) {
+        if (options.bezier === false) issues.push('Bezier controls where only straight segments and arcs are allowed');
+        if (!isModelPoint(v.c1) || !isModelPoint(v.c2)) issues.push('Bezier controls without both c1 and c2 as integer points');
+      }
+      if (last && isCurvedVertex(v)) issues.push('a curve on the last vertex of an open path');
+      if (!last && isModelPoint(next) && next !== v && next.x === v.x && next.y === v.y) issues.push('coincident consecutive vertices');
+    });
+    return [...new Set(issues)];
+  }
+  // Issues of a closed boundary. Straight boundaries keep the legacy polygon checks exactly.
+  function curveIssues(vertices, options = {}) {
+    if (!Array.isArray(vertices) || !vertices.length) return ['fewer than three points'];
+    if (!hasCurves(vertices)) return polygonIssues(vertices);
+    if (vertices.length < 2) return ['fewer than two vertices'];
+    const issues = vertexIssues(vertices, true, options);
+    return issues.length ? issues : polygonIssues(curvePoints(vertices, true));
+  }
+  function pathIssues(vertices, closed, options = {}) {
+    if (!Array.isArray(vertices) || vertices.length < 2) return ['fewer than two vertices'];
+    const issues = vertexIssues(vertices, closed, options);
+    if (issues.length) return issues;
+    return closed ? polygonIssues(curvePoints(vertices, true)) : [];
   }
 
   function validateModel(model) {
@@ -358,10 +395,9 @@
     }
     for (const entity of [...model.spaces, ...model.slabs, ...model.roofs]) {
       const points = entity.boundary ?? entity.footprint;
-      const issues = polygonIssues(points);
+      const issues = entity.footprint ? polygonIssues(points) : curveIssues(points);
       if (issues.length) add('error', 'polygon.geometry', `Polygon has ${issues.join(', ')}.`, entity.id);
     }
-    for (const slab of model.slabs) if (!rectangleBounds(slab.boundary)) add('error', 'renderer.unsupported-slab', 'The studio renders only axis-aligned rectangular slabs.', slab.id);
     if (model.roofs.length > 1) add('error', 'renderer.unsupported-roofs', 'The studio renders one roof only.');
     for (const roof of model.roofs) {
       if (roof.kind !== 'gable' || !rectangleBounds(roof.footprint)) add('error', 'renderer.unsupported-roof', 'The studio renders one axis-aligned rectangular gable roof only.', roof.id);
@@ -499,14 +535,14 @@
     }
     for (const foundation of model.foundations ?? []) {
       checkRef(foundation.materialId, foundation.id);
-      const issues = polygonIssues(foundation.boundary);
+      const issues = curveIssues(foundation.boundary);
       if (issues.length) add('error', 'polygon.geometry', `Polygon has ${issues.join(', ')}.`, foundation.id);
       if (!positive(foundation.depthMm) || !isFiniteInteger(foundation.topElevationMm)) add('error', 'foundation.geometry', 'Foundation needs a positive integer depth and an integer top elevation.', foundation.id);
     }
     for (const surface of model.surfaces ?? []) {
       if (!levels.has(surface.levelId)) add('error', 'reference.level', `Unknown level ${surface.levelId}.`, surface.id);
       checkRef(surface.materialId, surface.id);
-      const issues = polygonIssues(surface.boundary);
+      const issues = curveIssues(surface.boundary);
       if (issues.length) add('error', 'polygon.geometry', `Polygon has ${issues.join(', ')}.`, surface.id);
       if (!positive(surface.thicknessMm) || !isFiniteInteger(surface.topElevationMm)) add('error', 'surface.geometry', 'Surface needs a positive integer thickness and an integer top elevation.', surface.id);
     }
@@ -515,7 +551,7 @@
 
   function modelBounds(model) {
     const points = [
-      ...(model.spaces ?? []).flatMap(space => space.boundary),
+      ...(model.spaces ?? []).flatMap(space => ringOf(space.boundary)),
       ...(model.walls ?? []).flatMap(wall => [wall.start, wall.end]),
       ...(model.roofs ?? []).flatMap(roof => roof.footprint)
     ];
@@ -632,6 +668,84 @@
   }
   function boundsOf(points) {
     return { x0: Math.min(...points.map(p => p.x)), y0: Math.min(...points.map(p => p.y)), x1: Math.max(...points.map(p => p.x)), y1: Math.max(...points.map(p => p.y)) };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Curves. Spec: references/coordinate-contract.md "Curves".
+  // A vertex describes the segment that starts at it: straight, a circular arc (`bulge`, as in DXF:
+  // tan(sweep / 4), positive counter-clockwise in model coordinates), or a cubic Bezier (`c1`, `c2`,
+  // absolute model points). Geometry uses one model-space chord tolerance, so areas, quantities, and
+  // validation never depend on a drawing scale. Linework is drawn with exact SVG arcs and curves.
+  // ---------------------------------------------------------------------------
+  const CURVE_TOLERANCE_MM = 1;
+  const isCurvedVertex = v => v != null && (v.bulge != null || v.c1 != null || v.c2 != null);
+  const hasCurves = vertices => Array.isArray(vertices) && vertices.some(isCurvedVertex);
+  // Circle through a and b with the given bulge. `sweep` is signed: positive is counter-clockwise.
+  function bulgeArc(a, b, bulge) {
+    const chord = sub(b, a), c = Math.hypot(chord.x, chord.y), sweep = 4 * Math.atan(bulge);
+    const radius = c / (2 * Math.abs(Math.sin(sweep / 2)));
+    const center = add(mul(add(a, b), 0.5), mul(perp(unit2(chord)), c / 2 * (1 - bulge * bulge) / (2 * bulge)));
+    return { center, radius, start: Math.atan2(a.y - center.y, a.x - center.x), sweep, length: radius * Math.abs(sweep) };
+  }
+  const arcPointAt = (arc, t) => ({ x: arc.center.x + arc.radius * Math.cos(arc.start + arc.sweep * t), y: arc.center.y + arc.radius * Math.sin(arc.start + arc.sweep * t) });
+  const arcSteps = (arc, tolerance) => Math.min(1024, Math.max(1, Math.ceil(Math.abs(arc.sweep) / Math.max(2 * Math.acos(Math.max(-1, 1 - tolerance / arc.radius)), 1e-4))));
+  function cubicAt(a, c1, c2, b, t) {
+    const s = 1 - t, k0 = s * s * s, k1 = 3 * s * s * t, k2 = 3 * s * t * t, k3 = t * t * t;
+    return { x: k0 * a.x + k1 * c1.x + k2 * c2.x + k3 * b.x, y: k0 * a.y + k1 * c1.y + k2 * c2.y + k3 * b.y };
+  }
+  // Points along the segment that starts at vertex a and ends at b, excluding a and including b.
+  function segmentSamples(a, b, tolerance = CURVE_TOLERANCE_MM) {
+    const end = { x: b.x, y: b.y };
+    if (a.bulge) {
+      const arc = bulgeArc(a, b, a.bulge), n = arcSteps(arc, tolerance);
+      return Array.from({ length: n }, (_, i) => i === n - 1 ? end : arcPointAt(arc, (i + 1) / n));
+    }
+    if (a.c1 && a.c2) {
+      // Wang's bound: n uniform steps keep a cubic within the tolerance.
+      const second = (p, q, r) => Math.hypot(p.x - 2 * q.x + r.x, p.y - 2 * q.y + r.y);
+      const n = Math.min(1024, Math.max(1, Math.ceil(Math.sqrt(0.75 * Math.max(second(a, a.c1, a.c2), second(a.c1, a.c2, b)) / tolerance))));
+      return Array.from({ length: n }, (_, i) => i === n - 1 ? end : cubicAt(a, a.c1, a.c2, b, (i + 1) / n));
+    }
+    return [end];
+  }
+  // Tessellates a vertex list. Every point records the authored edge it lies on, so per-edge data
+  // (setbacks, property-line labels) still refers to the model's edges after tessellation.
+  function curvePoints(vertices, closed, tolerance = CURVE_TOLERANCE_MM) {
+    const out = [{ x: vertices[0].x, y: vertices[0].y, edge: 0 }], count = closed ? vertices.length : vertices.length - 1;
+    for (let i = 0; i < count; i += 1) {
+      const samples = segmentSamples(vertices[i], vertices[(i + 1) % vertices.length], tolerance);
+      for (const p of closed && i === count - 1 ? samples.slice(0, -1) : samples) out.push({ x: p.x, y: p.y, edge: i });
+    }
+    return out;
+  }
+  // The polygon geometry works on: the authored ring itself when it is straight, its tessellation otherwise.
+  const ringOf = boundary => hasCurves(boundary) ? curvePoints(boundary, true) : boundary;
+  function curveLength(vertices, closed) {
+    const points = curvePoints(vertices, closed, 0.25);
+    return points.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - points[i].x, p.y - points[i].y), 0)
+      + (closed ? Math.hypot(points[0].x - points.at(-1).x, points[0].y - points.at(-1).y) : 0);
+  }
+  // Exact SVG path data. `map` takes model points to paper; `ratio` converts a model radius to paper.
+  function curvePathD(vertices, closed, map, ratio) {
+    const first = map(vertices[0]), count = closed ? vertices.length : vertices.length - 1;
+    let d = `M${num(first.x)},${num(first.y)}`;
+    for (let i = 0; i < count; i += 1) {
+      const a = vertices[i], b = vertices[(i + 1) % vertices.length], pb = map(b);
+      if (a.bulge) {
+        // Paper is y-down, so a counter-clockwise model arc is a negative-angle (sweep 0) SVG arc.
+        const arc = bulgeArc(a, b, a.bulge), r = arc.radius / ratio;
+        d += ` A${num(r)},${num(r)} 0 ${Math.abs(arc.sweep) > Math.PI ? 1 : 0} ${a.bulge > 0 ? 0 : 1} ${num(pb.x)},${num(pb.y)}`;
+      } else if (a.c1 && a.c2) {
+        const p1 = map(a.c1), p2 = map(a.c2);
+        d += ` C${num(p1.x)},${num(p1.y)} ${num(p2.x)},${num(p2.y)} ${num(pb.x)},${num(pb.y)}`;
+      } else if (!(closed && i === count - 1)) d += ` L${num(pb.x)},${num(pb.y)}`;
+    }
+    return closed ? `${d} Z` : d;
+  }
+  // Outline of a plan polygon: the legacy polygon element when straight, an exact path when curved.
+  function svgRing(vertices, map, ratio, o = {}) {
+    if (!hasCurves(vertices)) return svgPoly(vertices.map(map), o);
+    return `<path d="${curvePathD(vertices, true, map, ratio)}" fill="${o.fill ?? 'none'}"${o.fillOpacity != null ? ` fill-opacity="${o.fillOpacity}"` : ''}${o.inert ? ' pointer-events="none"' : ''} ${strokeAttrs(o)}/>`;
   }
 
   // Deterministic label placement: fixed font metrics, explicit obstacles, ordered candidates.
@@ -868,12 +982,12 @@
   }
   function planExtent(model) {
     const points = [
-      ...model.spaces.flatMap(space => space.boundary),
+      ...model.spaces.flatMap(space => ringOf(space.boundary)),
       ...model.walls.flatMap(wall => [wall.start, wall.end]),
       ...model.stairs.flatMap(stairCorners),
       ...[...model.fixtures, ...model.equipment].flatMap(object => rotatedRect(object.position, object.size.x, object.size.y, object.rotationDeg)),
       ...(model.sections ?? []).flatMap(section => [section.start, section.end]),
-      ...(model.surfaces ?? []).flatMap(surface => surface.boundary),
+      ...(model.surfaces ?? []).flatMap(surface => ringOf(surface.boundary)),
       ...(model.beams ?? []).flatMap(beamCorners),
       ...(model.columns ?? []).map(column => column.position)
     ];
@@ -1144,22 +1258,22 @@
     const mats = materialContext(model, profile, !screened && materialsActive(model, ratio));
     const cutZ = level.elevationMm + DRAFT.cutHeightMm;
     const walls = model.walls.filter(wall => wall.levelId === level.id);
-    const wallBox = walls.length ? boundsOf(walls.flatMap(wall => [wall.start, wall.end])) : boundsOf(model.spaces.flatMap(space => space.boundary));
+    const wallBox = walls.length ? boundsOf(walls.flatMap(wall => [wall.start, wall.end])) : boundsOf(model.spaces.flatMap(space => ringOf(space.boundary)));
     const center = { x: (wallBox.x0 + wallBox.x1) / 2, y: (wallBox.y0 + wallBox.y1) / 2 };
     const layers = { site: [], rooms: [], roof: [], objects: [], stairs: [], wallStroke: [], wallFill: [], wallLines: [], structure: [], openings: [], marks: [], dims: [], tags: [], systems: [] };
 
     // Higher surfaces draw over lower ones; a surface wholly under a higher one is not visible in plan.
     const levelSurfaces = (model.surfaces ?? []).filter(item => item.levelId === level.id);
-    const covered = surface => levelSurfaces.some(other => other !== surface && other.topElevationMm > surface.topElevationMm
-      && surface.boundary.every(p => pointInPolygon(p, other.boundary) || other.boundary.some(q => samePoint(p, q, tolerance))));
+    const covered = surface => { const ring = ringOf(surface.boundary); return levelSurfaces.some(other => { const otherRing = ringOf(other.boundary); return other !== surface && other.topElevationMm > surface.topElevationMm
+      && ring.every(p => pointInPolygon(p, otherRing) || otherRing.some(q => samePoint(p, q, tolerance))); }); };
     for (const surface of levelSurfaces.filter(item => !covered(item)).sort((a, b) => a.topElevationMm - b.topElevationMm)) {
-      const box = boundsOf(surface.boundary), outline = surface.boundary.map(map), o = map({ x: box.x0, y: box.y0 });
+      const ring = ringOf(surface.boundary), box = boundsOf(ring), outline = ring.map(map), o = map({ x: box.x0, y: box.y0 });
       // Fills sit outside the entity group so a clipped directional fill never nests inside it.
       const fill = mats.active ? mats.region(outline, { o, u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: (box.x1 - box.x0) / ratio, T: (box.y1 - box.y0) / ratio }, mats.resolve(surface.materialId), `clip-${surface.id}`) : '';
-      layers.site.push(`${fill}<g data-entity="${escapeHtml(surface.id)}">${svgPoly(outline, { fill: DRAFT.paper, fillOpacity: 0, stroke: ink, width: P.thin })}</g>`);
+      layers.site.push(`${fill}<g data-entity="${escapeHtml(surface.id)}">${svgRing(surface.boundary, map, ratio, { fill: DRAFT.paper, fillOpacity: 0, stroke: ink, width: P.thin })}</g>`);
     }
     for (const space of model.spaces.filter(item => item.levelId === level.id)) {
-      layers.rooms.push(`<g data-entity="${escapeHtml(space.id)}">${svgPoly(space.boundary.map(map), { fill: DRAFT.paper, fillOpacity: 0, width: 0 })}</g>`);
+      layers.rooms.push(`<g data-entity="${escapeHtml(space.id)}">${svgRing(space.boundary, map, ratio, { fill: DRAFT.paper, fillOpacity: 0, width: 0 })}</g>`);
     }
     for (const roof of model.roofs.filter(item => item.levelId === level.id)) {
       const box = boundsOf(roof.footprint), ov = roof.overhangMm ?? 0;
@@ -1367,8 +1481,8 @@
     }
 
     for (const space of model.spaces.filter(item => item.levelId === level.id)) {
-      const poly = space.boundary.map(map), name = space.name.toUpperCase(), areaLabel = profile.area(polygonArea(space.boundary));
-      const box = boundsOf(poly), c = map(centroid(space.boundary));
+      const ring = ringOf(space.boundary), poly = ring.map(map), name = space.name.toUpperCase(), areaLabel = profile.area(polygonArea(ring));
+      const box = boundsOf(poly), c = map(centroid(ring));
       const attempt = lines => {
         const w = Math.max(...lines.map(line => textWidth(line.text, line.size))) + 1.2, h = lines.reduce((sum, line) => sum + line.size * 1.25, 0) + 0.6;
         const candidates = [c];
@@ -1629,8 +1743,9 @@
     }
     for (const slab of model.slabs) {
       const level = levelOf(slab.levelId), top = level?.elevationMm ?? 0, bottom = top - slab.thicknessMm;
-      const crossing = clipSegmentToConvex(section.start, section.end, slab.boundary);
-      if (crossing) {
+      // Rectangular slabs keep the convex clip; any other outline may be crossed more than once.
+      const crossings = rectangleBounds(slab.boundary) ? [clipSegmentToConvex(section.start, section.end, slab.boundary)].filter(Boolean) : segmentPolygonIntervals(section.start, section.end, ringOf(slab.boundary));
+      for (const crossing of crossings) {
         const [h0, h1] = hRange([at(crossing[0]), at(crossing[1])]);
         cut.push({ id: slab.id, kind: 'slab', h0, h1, z0: bottom, z1: top });
         let z = top;
@@ -1640,7 +1755,7 @@
     // Foundations and surfaces may be any simple polygon, so the plane can cross them more than once.
     for (const item of [...(model.foundations ?? []).map(entity => ({ entity, kind: 'foundation', z1: entity.topElevationMm, z0: entity.topElevationMm - entity.depthMm })),
       ...(model.surfaces ?? []).map(entity => ({ entity, kind: 'surface', z1: entity.topElevationMm, z0: entity.topElevationMm - entity.thicknessMm }))]) {
-      for (const [t0, t1] of segmentPolygonIntervals(section.start, section.end, item.entity.boundary)) {
+      for (const [t0, t1] of segmentPolygonIntervals(section.start, section.end, ringOf(item.entity.boundary))) {
         const [h0, h1] = hRange([at(t0), at(t1)]);
         cut.push({ id: item.entity.id, kind: item.kind, h0, h1, z0: item.z0, z1: item.z1 });
         regions.push({ id: item.entity.id, role: 'layer', h0, h1, z0: item.z0, z1: item.z1, materialId: item.entity.materialId ?? null });
@@ -2034,14 +2149,14 @@
       if (entity.baseOffsetMm) dims.push(['Base offset', L(entity.baseOffsetMm)]);
       dims.push(...assemblyRows(entity));
     } else if (type === 'Room') {
-      const box = boundsOf(entity.boundary);
-      const perimeter = entity.boundary.reduce((sum, point, i) => { const next = entity.boundary[(i + 1) % entity.boundary.length]; return sum + Math.hypot(next.x - point.x, next.y - point.y); }, 0);
+      const ring = ringOf(entity.boundary), box = boundsOf(ring);
+      const perimeter = hasCurves(entity.boundary) ? curveLength(entity.boundary, true) : entity.boundary.reduce((sum, point, i) => { const next = entity.boundary[(i + 1) % entity.boundary.length]; return sum + Math.hypot(next.x - point.x, next.y - point.y); }, 0);
       context = `${capitalize(entity.use)}, ${levelName(entity.levelId)}`;
-      dims.push(['Area', profileFor(model).area(polygonArea(entity.boundary))], ['Perimeter', L(perimeter)], ['Overall width', L(box.x1 - box.x0)], ['Overall depth', L(box.y1 - box.y0)]);
+      dims.push(['Area', profileFor(model).area(polygonArea(ring))], ['Perimeter', L(perimeter)], ['Overall width', L(box.x1 - box.x0)], ['Overall depth', L(box.y1 - box.y0)]);
       if (entity.occupancy != null) dims.push(['Occupancy', String(entity.occupancy)]);
     } else if (type === 'Slab') {
       context = levelName(entity.levelId);
-      dims.push(['Thickness', L(entity.thicknessMm)], ['Area', profileFor(model).area(polygonArea(entity.boundary))], ...assemblyRows(entity));
+      dims.push(['Thickness', L(entity.thicknessMm)], ['Area', profileFor(model).area(polygonArea(ringOf(entity.boundary)))], ...assemblyRows(entity));
     } else if (type === 'Roof') {
       const box = boundsOf(entity.footprint), half = (entity.ridgeAxis === 'y' ? box.x1 - box.x0 : box.y1 - box.y0) / 2, rise = entity.ridgeElevationMm - entity.eaveElevationMm;
       const pitch = units === 'metric' ? `${(Math.atan2(rise, half) * 180 / Math.PI).toFixed(1)}°` : `${(rise / half * 12).toFixed(1)}:12`;
@@ -2080,12 +2195,12 @@
       dims.push(['Height', L(entity.topElevationMm - entity.baseElevationMm)], ...shapeRows(entity.shape).slice(1), ['Base', L(entity.baseElevationMm)], ['Top', L(entity.topElevationMm)], ['Material', materialName(entity.materialId)]);
       if (entity.designation) dims.push(['Designation', entity.designation]);
     } else if (type === 'Foundation') {
-      const box = boundsOf(entity.boundary);
+      const box = boundsOf(ringOf(entity.boundary));
       context = capitalize(entity.kind.replace(/-/g, ' '));
       dims.push(['Width', L(Math.min(box.x1 - box.x0, box.y1 - box.y0))], ['Length', L(Math.max(box.x1 - box.x0, box.y1 - box.y0))], ['Depth', L(entity.depthMm)], ['Top', L(entity.topElevationMm)], ['Bottom', L(entity.topElevationMm - entity.depthMm)], ['Material', materialName(entity.materialId)]);
     } else if (type === 'Surface') {
       context = `Site surface, ${levelName(entity.levelId)}`;
-      dims.push(['Area', profileFor(model).area(polygonArea(entity.boundary))], ['Thickness', L(entity.thicknessMm)], ['Top', L(entity.topElevationMm)], ['Material', materialName(entity.materialId)]);
+      dims.push(['Area', profileFor(model).area(polygonArea(ringOf(entity.boundary)))], ['Thickness', L(entity.thicknessMm)], ['Top', L(entity.topElevationMm)], ['Material', materialName(entity.materialId)]);
     } else if (type === 'Material') {
       const id = entity.id;
       const uses = [...model.walls, ...model.slabs].filter(item => item.materialId === id || item.layers?.some(layer => layer.materialId === id)).length
@@ -2271,11 +2386,12 @@
     };
     const box = (bounds, z0, z1, color) => pushPrism(gls.triangles, (bounds.minX + bounds.maxX) / 2000, (z0 + z1) / 2000, -(bounds.minY + bounds.maxY) / 2000, (bounds.maxX - bounds.minX) / 1000, (z1 - z0) / 1000, (bounds.maxY - bounds.minY) / 1000, 0, rgb(color));
     for (const slab of model.slabs) {
-      const level = levelMap.get(slab.levelId); const bounds = rectangleBounds(slab.boundary);
-      box(bounds, (level?.elevationMm ?? 0) - slab.thicknessMm, level?.elevationMm ?? 0, assemblyColor(slab, slab.thicknessMm, '#b9b8b0'));
+      const level = levelMap.get(slab.levelId), bounds = rectangleBounds(slab.boundary), top = level?.elevationMm ?? 0, color = assemblyColor(slab, slab.thicknessMm, '#b9b8b0');
+      if (bounds) box(bounds, top - slab.thicknessMm, top, color);
+      else pushExtrusion(gls.triangles, ringOf(slab.boundary), top - slab.thicknessMm, top, rgb(color));
     }
-    for (const foundation of model.foundations ?? []) pushExtrusion(gls.triangles, foundation.boundary, foundation.topElevationMm - foundation.depthMm, foundation.topElevationMm, rgb(materialColor(foundation.materialId, '#b9b8b0')));
-    for (const surface of model.surfaces ?? []) pushExtrusion(gls.triangles, surface.boundary, surface.topElevationMm - surface.thicknessMm, surface.topElevationMm, rgb(materialColor(surface.materialId, '#b9b8b0')));
+    for (const foundation of model.foundations ?? []) pushExtrusion(gls.triangles, ringOf(foundation.boundary), foundation.topElevationMm - foundation.depthMm, foundation.topElevationMm, rgb(materialColor(foundation.materialId, '#b9b8b0')));
+    for (const surface of model.surfaces ?? []) pushExtrusion(gls.triangles, ringOf(surface.boundary), surface.topElevationMm - surface.thicknessMm, surface.topElevationMm, rgb(materialColor(surface.materialId, '#b9b8b0')));
     for (const beam of model.beams ?? []) {
       const dx = beam.end.x - beam.start.x, dy = beam.end.y - beam.start.y;
       pushPrism(gls.triangles, (beam.start.x + dx / 2) / 1000, (beam.topElevationMm - beam.shape.depthMm / 2) / 1000, -(beam.start.y + dy / 2) / 1000, Math.hypot(dx, dy) / 1000, beam.shape.depthMm / 1000, beam.shape.widthMm / 1000, Math.atan2(-dy, dx), rgb(materialColor(beam.materialId, '#7d858c')));
@@ -2719,6 +2835,7 @@
 
   const studioApi = {
     state, PROFILES, DISCIPLINES, MATERIAL_CATEGORIES, HEADER_KINDS, materialContext, materialsActive, wallBands, segmentPolygonIntervals, triangulate, pushExtrusion, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
+    bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, polygonArea, pointInPolygon,
     renderPlanSheet, renderElevationSheet, renderSectionSheet, sectionGeometry, renderDrawingSet, modelFingerprint,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport
   };

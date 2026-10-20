@@ -46,9 +46,13 @@ test('fixture is renderable while invalid and unsupported geometry is blocked', 
   unknownRoofLevel.roofs[0].levelId = 'missing-level';
   assert.ok(errorCodes(api, unknownRoofLevel).includes('reference.level'));
 
-  const unsupportedSlab = cloneFixture();
-  unsupportedSlab.slabs[0].boundary = [{ x: 0, y: 0 }, { x: 9600, y: 0 }, { x: 9600, y: 6000 }, { x: 4800, y: 6000 }, { x: 4800, y: 13200 }, { x: 0, y: 13200 }];
-  assert.ok(errorCodes(api, unsupportedSlab).includes('renderer.unsupported-slab'));
+  const lShapedSlab = cloneFixture();
+  lShapedSlab.slabs[0].boundary = [{ x: 0, y: 0 }, { x: 9600, y: 0 }, { x: 9600, y: 6000 }, { x: 4800, y: 6000 }, { x: 4800, y: 13200 }, { x: 0, y: 13200 }];
+  assert.ok(!errorCodes(api, lShapedSlab).includes('renderer.unsupported-slab'), 'any simple slab outline renders');
+
+  const unsupportedRoof = cloneFixture();
+  unsupportedRoof.roofs[0].kind = 'hip';
+  assert.ok(errorCodes(api, unsupportedRoof).includes('renderer.unsupported-roof'));
 });
 
 test('system plans are level-specific and reject disconnected paths', () => {
