@@ -12,6 +12,7 @@ const site = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', 'hillsi
 const { api } = loadStudioApi(html);
 const clone = model => structuredClone(model);
 const findings = model => { api.state.model = model; return [...api.validateModel(model)]; };
+const errorCodes = model => findings(model).filter(item => item.severity === 'error').map(item => item.code);
 const near = (a, b, tolerance, message) => assert.ok(Math.abs(a - b) <= tolerance, `${message ?? ''} expected ${b}, got ${a}`);
 // The centreline itself as straights and fillet arcs, for checking the outline against it.
 function centreline(p) {
@@ -105,17 +106,18 @@ test('placement checks catch a walk that leaves the lot or runs under the house'
   assert.deepEqual([...findings(clone(site)).filter(item => ['site.outside-lot', 'surface.under-building', 'planting.under-building'].includes(item.code))], []);
   const out = clone(site); out.surfaces.find(item => item.id === 'surface-walk').path.centerline.at(-1).y = -2000;
   assert.ok(findings(out).some(item => item.code === 'site.outside-lot' && item.entityId === 'surface-walk'));
-  const under = clone(site); under.surfaces.find(item => item.id === 'surface-walk').path.centerline[0].y = 12000;
-  assert.ok(findings(under).some(item => item.code === 'surface.under-building' && item.entityId === 'surface-walk'));
+  const under = clone(site), stepping = under.surfaces.find(item => item.id === 'surface-stepping-path');
+  stepping.path.centerline = [{ x: 3505, y: 14935 }, { x: 7000, y: 14935 }];
+  assert.ok(findings(under).some(item => item.code === 'surface.under-building' && item.entityId === 'surface-stepping-path'));
   const tree = clone(site); tree.plantings.find(item => item.id === 'planting-maple-2').position = { x: 9000, y: 12000 };
   assert.ok(findings(tree).some(item => item.code === 'planting.under-building'));
 });
 
 test('inspect reports a path as numbers and the script runs on a project', () => {
   const report = inspect(html, clone(site), 'surface-walk');
-  assert.equal(report.path.widthMm, 1219);
+  assert.equal(report.path.widthMm, site.openings.find(item => item.id === 'opening-front-door').widthMm);
   assert.deepEqual([...report.path.corners.map(c => c.radiusMm)], [2438, 2438]);
-  near(report.areaMm2, 1219 * report.path.centerlineLengthMm, 1219 * 2);
+  near(report.areaMm2, report.path.widthMm * report.path.centerlineLengthMm, report.path.widthMm * 2);
   assert.ok(report.clearanceToBuildingMm >= 0 && report.clearanceToPropertyLineMm > 0);
   assert.deepEqual([...report.findings], []);
   assert.ok(inspect(html, clone(site), null).elements.some(item => item.id === 'surface-walk'));
@@ -130,12 +132,62 @@ test('inspect reports a path as numbers and the script runs on a project', () =>
 
 test('a guided edit (bend point between the lead-ins) keeps the walk square to the door and the street', () => {
   const model = clone(site), walk = model.surfaces.find(item => item.id === 'surface-walk'), c = walk.path.centerline;
-  const before = inspect(html, clone(site), 'surface-walk');
-  walk.path.centerline = [c[0], { x: c[0].x, y: 6800 }, { x: Math.round((c[1].x + c[2].x) / 2) + 914, y: Math.round((c[1].y + c[2].y) / 2) }, { x: c[3].x, y: 3200 }, c[3]];
+  const before = inspect(html, clone(site), 'surface-walk'), door = before.path.centerline[0];
+  walk.path.centerline = [c[0], { x: door.x, y: 6800 }, { x: Math.round((c[1].x + c[2].x) / 2) + 914, y: Math.round((c[1].y + c[2].y) / 2) }, { x: c[3].x, y: 3200 }, c[3]];
   walk.path.cornerRadiusMm = 3048;
   const after = inspect(html, model, 'surface-walk');
   assert.deepEqual([...after.findings], []);
   assert.deepEqual(JSON.parse(JSON.stringify(after.path.ends.map(e => e.headingDeg))), JSON.parse(JSON.stringify(before.path.ends.map(e => e.headingDeg))));
   assert.equal(after.path.widthMm, before.path.widthMm);
   assert.ok(after.clearanceToBuildingMm >= 0 && after.clearanceToPropertyLineMm > 0);
+});
+
+test('anchors line a walk and a patio edge up with a door, and follow it when it moves', () => {
+  const model = clone(site), door = model.openings.find(item => item.id === 'opening-front-door');
+  const jambs = ['start', 'end'].map(at => api.anchorPoint(model, { openingId: door.id, at }).point);
+  // The example walk takes the door's width and its end corners are the exterior jambs.
+  const walk = inspect(html, clone(model), 'surface-walk');
+  assert.equal(walk.path.widthMm, door.widthMm);
+  for (const jamb of jambs) assert.ok(walk.path.outline.some(v => Math.abs(v.x - jamb.x) <= 1 && Math.abs(v.y - jamb.y) <= 1), `a corner on the ${JSON.stringify(jamb)} jamb`);
+  // A patio with a curved front edge from jamb to jamb, offset 1.2 m out from the wall.
+  const patio = { id: 'surface-door-patio', name: 'Door Patio', levelId: 'level-ground', boundary: [
+    { anchor: { openingId: door.id, at: 'end' } }, { anchor: { openingId: door.id, at: 'start' } },
+    { anchor: { openingId: door.id, at: 'start', offsetMm: 1200 }, bulge: 0.3 }, { anchor: { openingId: door.id, at: 'end', offsetMm: 1200 } }
+  ], topElevationMm: -50, thicknessMm: 100, materialId: 'mat-pavers', evidence: site.levels[0].evidence };
+  model.surfaces = model.surfaces.filter(item => item.id !== 'surface-walk').concat(patio);
+  assert.deepEqual(errorCodes(model), []);
+  const ring = api.ringOf(api.outlineOf(model, patio));
+  for (const jamb of jambs) assert.ok(ring.some(v => v.x === jamb.x && v.y === jamb.y));
+  // Move the door 600 mm along its wall: the patio follows without editing it.
+  door.offsetMm += 600;
+  const moved = api.ringOf(api.outlineOf(model, patio));
+  near(Math.min(...moved.map(v => v.x)) - Math.min(...ring.map(v => v.x)), 600, 1);
+  assert.ok(api.renderSitePlanSheet(model).svg.includes('data-entity="surface-door-patio"'));
+});
+
+test('anchor mistakes and a walk that leaves its door at a slant are reported with the fix', () => {
+  const bad = clone(site), walk = bad.surfaces.find(item => item.id === 'surface-walk');
+  walk.path.centerline[0].anchor.openingId = 'opening-missing';
+  assert.ok(findings(bad).some(item => item.code === 'surface.path' && /unknown opening opening-missing/.test(item.message)));
+  const both = clone(site); both.surfaces.find(item => item.id === 'surface-walk').path.widthMm = 1200;
+  assert.ok(findings(both).some(item => /both widthMm and a matchWidth anchor/.test(item.message)));
+  const slant = clone(site); slant.surfaces.find(item => item.id === 'surface-walk').path.centerline[1].x += 1500;
+  const warning = findings(slant).find(item => item.code === 'surface.anchor-angle');
+  assert.match(warning?.message ?? '', /off square; put centerline point 1 straight out from the door, for example at x 9143/);
+  const wall = clone(site); wall.surfaces.push({ id: 'surface-wall-strip', name: 'Strip', levelId: 'level-ground', boundary: [{ anchor: { wallId: 'wall-west', alongMm: 99999 } }, { x: 0, y: 0 }, { x: 100, y: 0 }], topElevationMm: 0, thicknessMm: 50, evidence: site.levels[0].evidence });
+  assert.ok(findings(wall).some(item => item.code === 'surface.anchor' && /alongMm between 0 and the wall length/.test(item.message)));
+});
+
+test('inspect lists the anchor points of a door', () => {
+  const report = inspect(html, clone(site), 'opening-front-door');
+  assert.deepEqual(Object.keys(report.anchors), ['exterior-start', 'exterior-center', 'exterior-end', 'interior-start', 'interior-center', 'interior-end']);
+  near(report.anchors['exterior-end'].x - report.anchors['exterior-start'].x, report.widthMm, 1);
+  assert.equal(report.anchors['exterior-center'].outward.y, -1, 'the front door faces south, toward the street');
+});
+
+test('system route lengths are unaffected by path geometry', () => {
+  const barn = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', 'lakeside-barn-residence', 'building.json'), 'utf8'));
+  const edge = barn.systems[0].edges[0], expected = edge.path.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - edge.path[i].x, p.y - edge.path[i].y, p.z - edge.path[i].z), 0);
+  const shown = api.entityDetails(barn, edge.id).dims.find(([label]) => label === 'Length')[1];
+  assert.equal(shown, api.formatLength(expected, barn.project.coordinates.displayUnits).replace(/^0'-/, '').replace(/^0 (?=\d+\/)/, ''));
 });

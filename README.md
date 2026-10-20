@@ -105,7 +105,7 @@ All scripts live in `scripts/` and run with plain `node`.
 | `node scripts/init.mjs <project>` | Create a project folder. `--update` replaces only the viewer with this skill's version. |
 | `node scripts/serve.mjs <project>` | Serve the project on `127.0.0.1` and open the default browser. Live reload is on by default. Options: `--port`, `--no-open`, `--no-watch`, `--json`. |
 | `node scripts/export-drawings.mjs --project <project>` | Validate the model and write `exports/**/*.svg` plus `exports/manifest.json`. Writes nothing while the model has errors. |
-| `node scripts/inspect.mjs --project <project> --id <id>` | Report one element as numbers (size, area, path width and radii, clearance to the building and the lot, its findings), so the agent can check a curve edit without looking at a drawing. Without `--id` it lists the elements. |
+| `node scripts/inspect.mjs --project <project> --id <id>` | Report one element as numbers (size, area, path width and radii, clearance to the building and the lot, its findings), so the agent can check a curve edit without looking at a drawing. For a door or window it lists the jamb and centre points anchors can use. Without `--id` it lists the elements. |
 | `node scripts/bundle.mjs <project>` | Write one self-contained HTML file to `exports/` for sharing. It opens with a double-click and needs no server. |
 
 `serve.mjs` picks a port derived from the project path, so a project always
@@ -160,7 +160,10 @@ and the 3D view shows the ground and the plants. Curved walks, beds, decks,
 and rooms use arc (`bulge`) or Bezier vertices, and walls can curve too. Walks,
 paths, and drives are best drawn as a centreline with a width and corner
 radii; the outline is derived exactly, so asking the agent to "curve the walk
-more" or "move it east" changes a radius or a point, never the width.
+more" or "move it east" changes a radius or a point, never the width. Points
+can be anchored to a door, window, or wall, so "make the walk as wide as the
+door" or "start the patio edge at the door jamb" lines up exactly and follows
+the door if it moves.
 [`references/curves.md`](references/curves.md) is the agent's guide to
 turning such requests into numbers.
 

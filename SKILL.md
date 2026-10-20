@@ -51,9 +51,11 @@ survey accurate, or professionally engineered.
    support, and leave unknown elements without one. Draw walks, paths, and
    drives as surface `path`s (a centreline, a width, and corner radii), bowed
    edges and curved decks, rooms, and walls with `bulge`, and only free-form
-   beds with Bezier controls. Follow `references/curves.md` for every curved
-   shape and every curve edit: it turns requests like "curve it more" or "move
-   it east" into numbers. When the site matters, add the property
+   beds with Bezier controls. Anchor any point that should line up with a door,
+   window, or wall instead of typing its coordinates. Follow
+   `references/curves.md` for every curved shape and every curve edit: it turns
+   requests like "curve it more", "move it east", or "line it up with the door"
+   into numbers. When the site matters, add the property
    line, setbacks, contours, a grading limit, and `plants` with `plantings`;
    the model then draws a site plan, L-101. Lot lines, setbacks, and existing
    trees come from a survey or the user, never from imagery or a guess.

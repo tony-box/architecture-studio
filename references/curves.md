@@ -9,6 +9,7 @@ points. Then check the result with `scripts/inspect.mjs`.
 
 | What the user describes | Use | Why |
 |---|---|---|
+| Anything that should line up with a door, window, or wall | An `anchor` on that point (see below) | Exact, and it follows the opening if it moves |
 | A walk, path, drive, or anything else of constant width | Surface `path` | You set the centreline, width, and corner radii; the outline is derived exactly, so the width never drifts |
 | An edge that bows out or in: a curved lawn edge, a rounded patio, a curved deck, a bay | `bulge` on that edge | One number from how far the middle of the edge moves |
 | A circle (pond, tree ring) | Two vertices, both `bulge: 1` | Exact circle |
@@ -25,8 +26,10 @@ a stake; Beziers cannot.
 {
   "id": "surface-walk", "name": "Entry Walk", "levelId": "level-ground",
   "path": {
-    "centerline": [{ "x": 9220, "y": 8961 }, { "x": 9220, "y": 6096 }, { "x": 7163, "y": 3962 }, { "x": 7163, "y": 1219 }],
-    "widthMm": 1219,
+    "centerline": [
+      { "anchor": { "openingId": "opening-front-door", "at": "center", "matchWidth": true } },
+      { "x": 9144, "y": 6096 }, { "x": 7163, "y": 3962 }, { "x": 7163, "y": 1219 }
+    ],
     "cornerRadiusMm": 2438
   },
   "followsGrade": true, "thicknessMm": 102, "materialId": "mat-concrete", "evidence": { ... }
@@ -91,6 +94,40 @@ that straight line (the sagitta).
   `b = (2R − √(4R² − c²)) / c` for an arc under a semicircle.
 - `bulge: 1` is a semicircle. Keep walls at 1 or below and outlines at 3.7 or
   below.
+
+## Line things up with doors and walls (anchors)
+
+When an edge, corner, or path end should meet a door, window, or wall, anchor
+the point instead of typing coordinates. Its position is worked out from the
+model, so it lines up exactly and follows the opening if it moves.
+
+```json
+{ "anchor": { "openingId": "opening-front-door", "at": "start", "face": "exterior", "offsetMm": 0 } }
+```
+
+- `at`: `center`, or the jamb at the opening's `start` or `end` (measured
+  along its wall from the wall's start). Run `inspect.mjs --id <opening>` to
+  see the coordinates of all six points (three on each face) and which way
+  the door faces.
+- `face`: `exterior` (default) or `interior`. `offsetMm` moves the point
+  straight out from that face, for example 1200 mm out for the far edge of a
+  landing.
+- Walls: `{ "wallId": "wall-south", "alongMm": 2400 }` for a point on a wall
+  face that is not at an opening.
+- An anchored point takes no `x` or `y`. It may still carry `bulge`, `c1` and
+  `c2` on an outline, or `radiusMm` on a centreline.
+
+| Request | Edit |
+|---|---|
+| "The walk should be as wide as the door, edges in line with the jambs" | First centreline point `{ "anchor": { "openingId": ..., "at": "center", "matchWidth": true } }` and no `widthMm`; the next point straight out from the door |
+| "A curved patio in front of the door, its edges starting at the jambs" | Outline vertices anchored at `start` and `end`, then two more at the same jambs with `offsetMm` set to the patio depth, and a `bulge` on the far edge for the curve |
+| "The walk is 5 ft but centred on the door" | Anchor the first point at `center` without `matchWidth`, and set `widthMm: 1524` |
+| "Run the bed along the wall from the door to the corner" | Anchor its wall-side vertices to the door jamb and to the wall with `alongMm` at the wall end |
+
+A path end anchored to an opening must leave it square: the next centreline
+point goes straight out from the door, along the `outward` direction
+`inspect.mjs` reports. Validation warns (`surface.anchor-angle`) and gives
+coordinates for that point when it does not.
 
 ## Rounded corners on an outline
 

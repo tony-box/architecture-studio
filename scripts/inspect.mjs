@@ -26,28 +26,31 @@ export function inspect(html, model, id) {
   api.state.model = model;
   const findings = api.validateModel(model);
   if (!id) {
-    const groups = ['surfaces', 'plantings', 'slabs', 'spaces', 'walls', 'foundations'];
+    const groups = ['surfaces', 'plantings', 'openings', 'slabs', 'spaces', 'walls', 'foundations'];
     return { elements: groups.flatMap(group => (model[group] ?? []).map(item => ({ id: item.id, group, name: item.name ?? null }))), errors: findings.filter(item => item.severity === 'error').length };
   }
   const details = api.entityDetails(model, id);
   if (!details) throw new Error(`No element with id ${id}.`);
   const entity = [...(model.surfaces ?? []), ...(model.plantings ?? []), ...(model.slabs ?? []), ...(model.spaces ?? []), ...(model.foundations ?? [])].find(item => item.id === id);
   const report = { id, type: details.type, title: details.title, details: Object.fromEntries(details.dims), findings: findings.filter(item => item.entityId === id).map(({ severity, code, message }) => ({ severity, code, message })) };
-  const outline = entity ? api.outlineOf(entity) : null;
+  const outline = entity ? api.outlineOf(model, entity) : null;
   if (outline) {
     const ring = api.ringOf(outline), xs = ring.map(p => p.x), ys = ring.map(p => p.y);
     report.bounds = { minX: round(Math.min(...xs)), minY: round(Math.min(...ys)), maxX: round(Math.max(...xs)), maxY: round(Math.max(...ys)) };
     report.areaMm2 = round(api.polygonArea(ring));
     if (entity.path) {
+      const resolved = api.resolvePath(model, entity.path);
       report.path = {
-        widthMm: entity.path.widthMm,
-        centerlineLengthMm: round(api.centerlineLength(entity.path)),
-        corners: api.pathFillets(entity.path).map(f => ({ point: f.index, turnDeg: round(f.turn * 180 / Math.PI), radiusMm: f.r, tangentMm: round(f.tangent) })),
+        widthMm: resolved.widthMm,
+        centerlineLengthMm: round(api.centerlineLength(resolved)),
+        // Where every centreline point ended up, with the anchor that placed it.
+        centerline: resolved.centerline.map((p, i) => ({ x: p.x, y: p.y, ...(entity.path.centerline[i].anchor ? { anchor: entity.path.centerline[i].anchor } : {}) })),
+        corners: api.pathFillets(resolved).map(f => ({ point: f.index, turnDeg: round(f.turn * 180 / Math.PI), radiusMm: f.r, tangentMm: round(f.tangent) })),
         // Direction each end runs out of the path, in degrees clockwise from project north (+y). An end
         // that meets a door, wall, or kerb square to it runs at 0, 90, 180, or 270 when they are axis-aligned.
-        ends: [[0, 1], [entity.path.centerline.length - 1, entity.path.centerline.length - 2]].map(([end, next]) => {
-          const a = entity.path.centerline[next], b = entity.path.centerline[end];
-          return { point: end, headingDeg: round(((Math.atan2(b.x - a.x, b.y - a.y) * 180 / Math.PI) + 360) % 360) };
+        ends: [[0, 1], [resolved.centerline.length - 1, resolved.centerline.length - 2]].map(([end, next]) => {
+          const a = resolved.centerline[next], b = resolved.centerline[end];
+          return { point: end, headingDeg: round((Math.atan2(b.x - a.x, b.y - a.y) * 180 / Math.PI) + 360) % 360 };
         }),
         outline
       };
@@ -61,6 +64,16 @@ export function inspect(html, model, id) {
       report.clearanceToPropertyLineMm = round(Math.min(...ring.map(p => (api.pointInPolygon(p, lot) ? 1 : -1) * distanceToRing(p, lot))));
     }
   } else if (entity?.position) report.position = entity.position;
+  // Doors and windows: the points an anchor can name, so a walk or patio can be lined up with them.
+  const opening = (model.openings ?? []).find(item => item.id === id);
+  if (opening) {
+    report.anchors = {};
+    for (const face of ['exterior', 'interior']) for (const at of ['start', 'center', 'end']) {
+      const found = api.anchorPoint(model, { openingId: id, at, face });
+      if (!found.error) report.anchors[`${face}-${at}`] = { ...found.point, outward: { x: Number(found.outward.x.toFixed(4)), y: Number(found.outward.y.toFixed(4)) } };
+    }
+    report.widthMm = opening.widthMm;
+  }
   return report;
 }
 

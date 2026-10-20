@@ -505,7 +505,7 @@
         "id": { "$ref": "#/$defs/id" },
         "name": { "type": "string" },
         "levelId": { "$ref": "#/$defs/id" },
-        "boundary": { "$ref": "#/$defs/curvePolygon" },
+        "boundary": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/anchoredVertex" }, "description": "Closed outline of curve vertices; any vertex may be anchored to a door, window, or wall." },
         "path": { "$ref": "#/$defs/surfacePath", "description": "Walks, drives, and paths: a centreline, a width, and corner radii instead of a boundary. Prefer this for anything of constant width (see curves.md)." },
         "topElevationMm": { "type": "integer", "description": "Flat top. Required unless the surface follows grade." },
         "thicknessMm": { "type": "integer", "minimum": 1, "description": "Vertical thickness below the top." },
@@ -521,21 +521,54 @@
     "centerlinePoint": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["x", "y"],
       "properties": {
         "x": { "type": "integer" },
         "y": { "type": "integer" },
+        "anchor": { "$ref": "#/$defs/anchor" },
         "radiusMm": { "type": "integer", "minimum": 0, "description": "Fillet radius at this corner; overrides the path's cornerRadiusMm. 0 is a sharp corner." }
-      }
+      },
+      "oneOf": [{ "required": ["x", "y"] }, { "required": ["anchor"] }]
+    },
+    "anchor": {
+      "description": "A point placed from the model instead of fixed coordinates: a door or window (its centre or a jamb) or a distance along a wall, on the wall's exterior or interior face, optionally offset straight out from the face. See coordinate-contract.md, Anchors.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "openingId": { "$ref": "#/$defs/id" },
+        "wallId": { "$ref": "#/$defs/id" },
+        "at": { "enum": ["center", "start", "end"], "default": "center", "description": "Openings only: the centre, or the jamb at the opening's start or end along its wall." },
+        "alongMm": { "type": "integer", "minimum": 0, "description": "Walls only: distance along the wall centreline from its start." },
+        "face": { "enum": ["exterior", "interior"], "default": "exterior" },
+        "offsetMm": { "type": "integer", "default": 0, "description": "Distance straight out from the face." },
+        "matchWidth": { "type": "boolean", "description": "Path ends only, with an opening centre: the path takes the opening's width (omit widthMm)." }
+      },
+      "oneOf": [{ "required": ["openingId"] }, { "required": ["wallId", "alongMm"] }]
+    },
+    "anchoredVertex": {
+      "description": "A surface outline vertex: a curve vertex with fixed coordinates or an anchor.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "anchor": { "$ref": "#/$defs/anchor" },
+        "bulge": { "type": "number" },
+        "c1": { "$ref": "#/$defs/point2" },
+        "c2": { "$ref": "#/$defs/point2" }
+      },
+      "if": { "anyOf": [{ "required": ["c1"] }, { "required": ["c2"] }] },
+      "then": { "required": ["c1", "c2"] },
+      "not": { "required": ["bulge", "c1"] },
+      "oneOf": [{ "required": ["x", "y"] }, { "required": ["anchor"] }]
     },
     "surfacePath": {
       "description": "A constant-width surface along a centreline. Straights between centreline points are joined by circular fillets; ends are square to the centreline. See coordinate-contract.md, Paths.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["centerline", "widthMm"],
+      "required": ["centerline"],
       "properties": {
         "centerline": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/centerlinePoint" } },
-        "widthMm": { "type": "integer", "minimum": 1 },
+        "widthMm": { "type": "integer", "minimum": 1, "description": "Required unless an end anchor has matchWidth." },
         "cornerRadiusMm": { "type": "integer", "minimum": 0, "default": 0, "description": "Fillet radius at every interior point without its own radiusMm. At least half the width." }
       }
     },

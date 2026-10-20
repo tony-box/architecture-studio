@@ -48,7 +48,9 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
   (the same checks as spaces), with positive depth or thickness. A surface has
   exactly one of `boundary` and `path`; a path passes the checks in
   `coordinate-contract.md` (Paths) and its derived outline is a simple
-  polygon. A surface has
+  polygon. Every anchor names an existing opening or wall, with `alongMm`
+  inside the wall, and `matchWidth` sits on a path end anchored at an
+  opening's centre, never together with `widthMm`. A surface has
   an integer `topElevationMm` unless `followsGrade` is `true`; `gradeOffsetMm`
   is an integer.
 - Setbacks name an existing property line edge and a positive distance.
@@ -78,6 +80,8 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
   (`site.outside-lot`), or a surface runs under, or a proposed planting sits
   inside, the building footprint (`surface.under-building`,
   `planting.under-building`).
+- A path end anchored to a door leaves it at a slant; the message gives
+  coordinates for a square lead-in point (`surface.anchor-angle`).
 - A contour segment could not be kept as a terrain edge
   (`terrain.constraint-failed`).
 - The contours and spot elevations lie on one line, so no ground surface can

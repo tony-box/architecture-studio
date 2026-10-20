@@ -83,6 +83,30 @@ interior point may override with its own `radiusMm`.
   need more of a straight than it has. The messages give the largest radius
   that fits.
 
+## Anchors
+
+A surface outline vertex or a path centreline point may carry an `anchor`
+instead of `x` and `y`. It is resolved from the model before any geometry:
+
+- `openingId` with `at`: the opening's centre (`center`, the default), or the
+  jamb at its `start` or `end`, at `offsetMm` and `offsetMm + widthMm` along
+  the host wall's centreline from the wall's start (along the arc for an arc
+  wall).
+- `wallId` with `alongMm`: that distance along the wall's centreline.
+- The point lies on the wall's `exterior` face (default) or `interior` face.
+  The interior side is the side toward the centre of the level's walls. It
+  then moves `offsetMm` straight out from that face (the face normal, pointing
+  away from the wall), and rounds to the millimetre.
+- `matchWidth: true` on a path's first or last point, anchored at an
+  opening's centre, sets the path width to the opening width; the path then
+  has no `widthMm`. Its edges meet the jambs exactly.
+
+Anchors are resolved on every render, so a surface follows its opening or
+wall. An anchor that names a missing opening or wall, or an `alongMm` beyond
+the wall, is an error. A path end anchored to an opening whose next point is
+not straight out from the face raises `surface.anchor-angle`, with
+coordinates for that point.
+
 ## Arc Walls
 
 A wall with `bulge` follows a circular arc from `start` to `end`, with

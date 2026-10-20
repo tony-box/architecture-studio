@@ -57,7 +57,8 @@ function build(s) {
     surface('surface-front-lawn', 'Front Lawn', [P(1, 4), P(45, 4), C(45, 27, [36, 29], [26, 25]), P(16, 27), P(1, 27)], 'mat-lawn', draped(s.lawn), 'Concept lawn on the existing slope.'),
     surface('surface-back-lawn', 'Back Lawn', [C(1, 72, [20, 68], [40, 76]), P(59, 71), P(59, 99), P(1, 99)], 'mat-lawn', draped(s.lawn), 'Concept rear lawn.'),
     surface('surface-front-bed', 'Front Planting Bed', [C(17, 25.5, [24, 23], [36, 23]), P(43, 26), P(43, 29.4), P(17, 29.4)], 'mat-mulch', draped(s.mulch), 'Concept mulch bed along the entry.'),
-    surface('surface-walk', 'Entry Walk', path([[30.25, 29.4], [30.25, 20], [23.5, 13], [23.5, 4]], 4, 8), 'mat-concrete', draped(s.walk), 'Concept 4 ft concrete walk from the door to the street, two 8 ft radius curves.'),
+    // The walk starts at the front door's centre and takes the door's width, so its edges run on from the jambs.
+    surface('surface-walk', 'Entry Walk', { centerline: [{ anchor: { openingId: 'opening-front-door', at: 'center', matchWidth: true } }, P(30, 20), P(23.5, 13), P(23.5, 4)], cornerRadiusMm: U(8) }, 'mat-concrete', draped(s.walk), 'Concept concrete walk as wide as the front door, from the door to the street on two 8 ft radius curves.'),
     surface('surface-drive', 'Driveway', rect(46, 1, 56, 34), 'mat-asphalt', draped(s.drive), 'Concept asphalt drive.'),
     surface('surface-patio', 'Paver Patio', rect(8, 36, 17.4, 49), 'mat-pavers', { topElevationMm: -s.step, thicknessMm: s.patio }, 'Concept paver patio one step below the floor.'),
     surface('surface-stepping-path', 'Stepping-Stone Path', path([[11.5, 49], [11.5, 58], [19.5, 70]], 3, 10), 'mat-flagstone', draped(s.walk), 'Concept 3 ft flagstone path from the patio to the back lawn, one 10 ft radius curve.'),

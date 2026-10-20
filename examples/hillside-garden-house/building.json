@@ -1520,11 +1520,14 @@
       "path": {
         "centerline": [
           {
-            "x": 9220,
-            "y": 8961
+            "anchor": {
+              "openingId": "opening-front-door",
+              "at": "center",
+              "matchWidth": true
+            }
           },
           {
-            "x": 9220,
+            "x": 9144,
             "y": 6096
           },
           {
@@ -1536,7 +1539,6 @@
             "y": 1219
           }
         ],
-        "widthMm": 1219,
         "cornerRadiusMm": 2438
       },
       "followsGrade": true,
@@ -1547,7 +1549,7 @@
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept 4 ft concrete walk from the door to the street, two 8 ft radius curves."
+        "note": "Concept concrete walk as wide as the front door, from the door to the street on two 8 ft radius curves."
       }
     },
     {
