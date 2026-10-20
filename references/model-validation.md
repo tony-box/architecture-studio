@@ -73,6 +73,8 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
   (`site.schedule-overflow`).
 - A contour segment could not be kept as a terrain edge
   (`terrain.constraint-failed`).
+- The contours and spot elevations lie on one line, so no ground surface can
+  be built and the ground stays at the site datum (`terrain.degenerate`).
 - Space boundaries overlap or leave an unintended gap inside an occupied
   envelope.
 - Doors collide with walls, fixtures, equipment, or another door swing.

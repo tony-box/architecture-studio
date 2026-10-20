@@ -104,7 +104,8 @@ two ground surfaces, existing and proposed, each a triangulated surface:
   where existing grade is within 50 mm of its elevation.
 - Ground elevation at a plan point is linear on its triangle. Outside the
   triangulated area it holds the value of the nearest hull edge. A model with
-  no contours or spot elevations is flat at `siteDatumMm`.
+  no contours or spot elevations is flat at `siteDatumMm`, and so is one whose
+  samples all lie on a line (`terrain.degenerate` warning).
 - Flat triangles where every corner lies on one contour (hilltops, valley
   floors) are accepted; terrain is concept-level.
 

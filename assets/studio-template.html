@@ -640,7 +640,7 @@
         }
       }
     }
-    for (const issue of terrainOf(model)?.issues ?? []) add(issue.code === 'terrain.constraint-failed' ? 'warning' : 'error', issue.code, issue.message, issue.entityId ?? model.project.id);
+    for (const issue of terrainOf(model)?.issues ?? []) add(['terrain.constraint-failed', 'terrain.degenerate'].includes(issue.code) ? 'warning' : 'error', issue.code, issue.message, issue.entityId ?? model.project.id);
     const plants = new Map();
     for (const plant of model.plants ?? []) {
       idOf(plant, 'Plant'); evidenceOf(plant, 'Plant');
@@ -951,29 +951,38 @@
   }
   const edgeKey = (u, v) => u < v ? `${u},${v}` : `${v},${u}`;
   const properCross = (a, b, c, d) => orient2d(a, b, c) * orient2d(a, b, d) < 0 && orient2d(c, d, a) * orient2d(c, d, b) < 0;
-  // Recovers constraint edges by flipping the edges that cross them, in constraint order.
+  // Recovers constraint edges by flipping the edges that cross them, in constraint order. The edge map
+  // is updated in place after each flip, so the cost stays near linear in the number of flips.
   function recoverConstraints(points, tris, constraints) {
     let flips = 0, failed = 0;
-    const edgeMap = () => { const m = new Map(); tris.forEach((t, i) => { for (const [u, v] of [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]]) { const key = edgeKey(u, v); if (!m.has(key)) m.set(key, []); m.get(key).push(i); } }); return m; };
-    let edges = edgeMap();
+    const edges = new Map();
+    const link = i => { const t = tris[i]; for (const [u, v] of [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]]) { const key = edgeKey(u, v); if (!edges.has(key)) edges.set(key, []); edges.get(key).push(i); } };
+    const unlink = i => { const t = tris[i]; for (const [u, v] of [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]]) { const key = edgeKey(u, v), owners = edges.get(key).filter(j => j !== i); if (owners.length) edges.set(key, owners); else edges.delete(key); } };
+    tris.forEach((_, i) => link(i));
+    const orient = (i, j, k) => orient2d(points[i], points[j], points[k]) < 0 ? [i, k, j] : [i, j, k];
     for (const [a, b] of constraints) {
-      let done = edges.has(edgeKey(a, b));
-      while (!done && flips < TERRAIN.maxFlips) {
+      const pa = points[a], pb = points[b], x0 = Math.min(pa.x, pb.x), x1 = Math.max(pa.x, pb.x), y0 = Math.min(pa.y, pb.y), y1 = Math.max(pa.y, pb.y);
+      while (!edges.has(edgeKey(a, b)) && flips < TERRAIN.maxFlips) {
         let flipped = false;
-        for (const [key, owners] of edges) {
-          if (owners.length !== 2) continue;
-          const [u, v] = key.split(',').map(Number);
-          if (u === a || u === b || v === a || v === b || !properCross(points[a], points[b], points[u], points[v])) continue;
-          const [t1, t2] = owners.map(i => tris[i]), w = t1.find(i => i !== u && i !== v), x = t2.find(i => i !== u && i !== v);
-          if (!properCross(points[w], points[x], points[u], points[v])) continue;
-          const orient = (i, j, k) => orient2d(points[i], points[j], points[k]) < 0 ? [i, k, j] : [i, j, k];
-          tris[owners[0]] = orient(w, x, u); tris[owners[1]] = orient(w, x, v);
-          flips += 1; flipped = true; edges = edgeMap(); break;
+        for (let i = 0; i < tris.length && !flipped; i += 1) {
+          const t = tris[i], ps = t.map(k => points[k]);
+          if (Math.max(...ps.map(p => p.x)) < x0 || Math.min(...ps.map(p => p.x)) > x1 || Math.max(...ps.map(p => p.y)) < y0 || Math.min(...ps.map(p => p.y)) > y1) continue;
+          for (const [u, v] of [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]]) {
+            if (u === a || u === b || v === a || v === b || !properCross(pa, pb, points[u], points[v])) continue;
+            const owners = edges.get(edgeKey(u, v));
+            if (owners?.length !== 2) continue;
+            const [i1, i2] = owners, w = tris[i1].find(k => k !== u && k !== v), x = tris[i2].find(k => k !== u && k !== v);
+            if (!properCross(points[w], points[x], points[u], points[v])) continue;
+            unlink(i1); unlink(i2);
+            tris[i1] = orient(w, x, u); tris[i2] = orient(w, x, v);
+            link(i1); link(i2);
+            flips += 1; flipped = true;
+            break;
+          }
         }
-        done = edges.has(edgeKey(a, b));
         if (!flipped) break;
       }
-      if (!done) failed += 1;
+      if (!edges.has(edgeKey(a, b))) failed += 1;
     }
     return { flips, failed };
   }
@@ -1004,6 +1013,8 @@
     if (points.length < 3) return null;
     const index = new Map(points.map((p, i) => [`${p.x},${p.y}`, i])), idx = p => index.get(`${Math.round(p.x)},${Math.round(p.y)}`);
     const tris = delaunay(points);
+    // Collinear samples triangulate to nothing; the caller then falls back to the datum and says so.
+    if (!tris.length) { issues.push({ code: 'terrain.degenerate', message: 'The contours and spot elevations lie on one line, so no ground surface can be built; the ground stays at the site datum.', entityId: null }); return null; }
     const pairs = constraints.map(([p, q]) => [idx(p), idx(q)]).filter(([i, j]) => i != null && j != null && i !== j);
     const { failed } = recoverConstraints(points, tris, pairs);
     if (failed) issues.push({ code: 'terrain.constraint-failed', message: `${failed} contour segment${failed === 1 ? '' : 's'} could not be kept as triangle edges; the ground between them is interpolated without them.`, entityId: null });
@@ -1039,8 +1050,9 @@
     if (!contours.length && !spots.length) return null;
     const key = JSON.stringify([contours, spots, site.gradingLimit ?? null]);
     if (terrainCache.has(key)) return terrainCache.get(key);
+    const limitValid = Boolean(site.gradingLimit) && !curveIssues(site.gradingLimit.boundary, { bezier: false }).length;
     const issues = [], spacing = (() => {
-      const length = contours.reduce((total, c) => total + (pathIssues(c.path, Boolean(c.closed)).length ? 0 : curveLength(c.path, Boolean(c.closed))), 0) + (site.gradingLimit ? curveLength(site.gradingLimit.boundary, true) : 0);
+      const length = contours.reduce((total, c) => total + (pathIssues(c.path, Boolean(c.closed)).length ? 0 : curveLength(c.path, Boolean(c.closed))), 0) + (limitValid ? curveLength(site.gradingLimit.boundary, true) : 0);
       return Math.max(TERRAIN.spacingMm, length / TERRAIN.maxSamples);
     })();
     const valid = contours.filter(c => !pathIssues(c.path, Boolean(c.closed)).length && isFiniteInteger(c.elevationMm));
@@ -1059,7 +1071,7 @@
     crossingContours(valid, issues);
     const existing = existingData.samples.length >= 3 ? makeTin(existingData.samples, existingData.constraints, issues) : null;
     let proposed = existing;
-    if (proposedData.samples.length && site.gradingLimit && !curveIssues(site.gradingLimit.boundary, { bezier: false }).length) {
+    if (proposedData.samples.length && limitValid) {
       const limit = ringOf(site.gradingLimit.boundary), outside = p => !pointInPolygon(p, limit);
       const edge = samplePath(site.gradingLimit.boundary, true, spacing).map(p => ({ ...p, z: existing ? existing.at(p) : (model.project.coordinates.siteDatumMm ?? 0), ref: site.gradingLimit.id }));
       const samples = [...existingData.samples.filter(outside), ...edge, ...proposedData.samples];
@@ -1076,16 +1088,31 @@
     terrainCache.set(key, result);
     return result;
   }
-  // Contours of different elevation in the same dataset may not cross.
+  // Contours of different elevation in the same dataset may not cross. Segments are bucketed on a grid so
+  // survey-sized contour sets stay near linear.
   function crossingContours(contours, issues) {
     for (const status of ['existing', 'proposed']) {
-      const lines = contours.filter(c => c.status === status).map(c => ({ c, pts: curvePoints(c.path, Boolean(c.closed), 50) })).map(item => ({ ...item, box: boundsOf(item.pts) }));
-      for (let i = 0; i < lines.length; i += 1) for (let j = i + 1; j < lines.length; j += 1) {
-        const A = lines[i], B = lines[j];
-        if (A.c.elevationMm === B.c.elevationMm || A.box.x1 < B.box.x0 || B.box.x1 < A.box.x0 || A.box.y1 < B.box.y0 || B.box.y1 < A.box.y0) continue;
-        const hit = A.pts.slice(1).some((p, a) => B.pts.slice(1).some((q, b) => properCross(A.pts[a], p, B.pts[b], q)));
-        if (hit) issues.push({ code: 'terrain.crossing-contours', message: `Contours ${A.c.id} and ${B.c.id} cross but have different elevations.`, entityId: B.c.id });
+      const segments = [];
+      for (const c of contours.filter(item => item.status === status)) {
+        const pts = curvePoints(c.path, Boolean(c.closed), 50), list = c.closed ? [...pts, pts[0]] : pts;
+        for (let i = 1; i < list.length; i += 1) segments.push({ c, a: list[i - 1], b: list[i] });
       }
+      if (segments.length < 2) continue;
+      const box = boundsOf(segments.flatMap(s => [s.a, s.b])), cell = Math.max(1000, Math.max(box.x1 - box.x0, box.y1 - box.y0) / 128), grid = new Map(), reported = new Set();
+      segments.forEach((s, index) => {
+        for (let gx = Math.floor((Math.min(s.a.x, s.b.x) - box.x0) / cell); gx <= Math.floor((Math.max(s.a.x, s.b.x) - box.x0) / cell); gx += 1) for (let gy = Math.floor((Math.min(s.a.y, s.b.y) - box.y0) / cell); gy <= Math.floor((Math.max(s.a.y, s.b.y) - box.y0) / cell); gy += 1) {
+          const key = `${gx},${gy}`;
+          for (const other of grid.get(key) ?? []) {
+            const t = segments[other], pair = t.c.id < s.c.id ? `${t.c.id}|${s.c.id}` : `${s.c.id}|${t.c.id}`;
+            if (t.c === s.c || t.c.elevationMm === s.c.elevationMm || reported.has(pair) || !properCross(t.a, t.b, s.a, s.b)) continue;
+            reported.add(pair);
+            const [first, second] = contours.indexOf(t.c) < contours.indexOf(s.c) ? [t.c, s.c] : [s.c, t.c];
+            issues.push({ code: 'terrain.crossing-contours', message: `Contours ${first.id} and ${second.id} cross but have different elevations.`, entityId: second.id });
+          }
+          if (!grid.has(key)) grid.set(key, []);
+          grid.get(key).push(index);
+        }
+      });
     }
   }
 
@@ -3226,7 +3253,7 @@
     'evidence.review': 'Evidence to confirm', 'stair.code': 'Stair', 'code.status': 'Code research', 'system.review': 'Systems',
     'label.placement': 'Drawing label', 'section.empty': 'Section', 'webgl.unavailable': '3D view', 'structure.review': 'Structure',
     'material.key-overflow': 'Material key', 'material.evidence': 'Material sources', 'material.category-use': 'Material use',
-    'site.survey': 'Survey', 'site.schedule-overflow': 'Plant schedule', 'terrain.constraint-failed': 'Terrain', 'scene.reduced-detail': '3D view', 'wall.join-fallback': 'Wall join'
+    'site.survey': 'Survey', 'site.schedule-overflow': 'Plant schedule', 'terrain.constraint-failed': 'Terrain', 'terrain.degenerate': 'Terrain', 'scene.reduced-detail': '3D view', 'wall.join-fallback': 'Wall join'
   };
   // Groups findings by code so repeated notes (one per system, say) read as one entry.
   function reviewQueue(findings) {
@@ -3387,8 +3414,9 @@
       }
     };
     const site = model.site ?? {}, lot = site.propertyLine ? ringOf(site.propertyLine.boundary) : null;
-    if (terrain) {
-      const box = boundsOf(lot ?? terrain.proposed?.points ?? terrain.existing.points);
+    const tinPoints = terrain?.proposed?.points ?? terrain?.existing?.points;
+    if (terrain && (lot || tinPoints)) {
+      const box = boundsOf(lot ?? tinPoints);
       drape(box, SCENE_LIMITS.terrainCells, p => terrain.at(p), (c, q) => (!lot || pointInPolygon(c, lot)) && !underBuilding(q), rgb('#9aa77f'));
     }
     // Draped surfaces float 30 mm over the terrain mesh, whose grid differs, so the two never interleave.

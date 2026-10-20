@@ -182,3 +182,36 @@ test('the hillside garden house examples are generated and structurally identica
   const ids = model => JSON.stringify([...Object.values(model).filter(Array.isArray).flat(), ...Object.values(model.site).filter(Array.isArray).flat()].map(item => item.id ?? null));
   assert.equal(ids(imperial), ids(metric));
 });
+
+test('degenerate terrain inputs never crash validation, drawings, or 3D', () => {
+  const noLimit = clone(site); noLimit.site.gradingLimit.boundary = [];
+  assert.doesNotThrow(() => findings(noLimit));
+  assert.ok(errorCodes(noLimit).includes('polygon.geometry'));
+  const missing = clone(site); delete missing.site.gradingLimit.boundary;
+  assert.doesNotThrow(() => findings(missing));
+  // Two spot elevations and no lot: no surface, no crash, ground at the datum.
+  const spots = clone(site);
+  spots.site = { groundMaterialId: 'mat-earth', spotElevations: spots.site.spotElevations.filter(item => item.status === 'existing') };
+  assert.deepEqual(errorCodes(spots), []);
+  assert.ok(buildDrawingSet(html, spots).sheets.length > 0);
+  const scene = { triangles: [], lines: [] };
+  api.state.model = spots; api.state.systems = new Set();
+  assert.doesNotThrow(() => api.buildScene(scene));
+  // Collinear samples: a warning, and the ground holds the datum instead of falling to zero.
+  const line = clone(site);
+  line.project.coordinates.siteDatumMm = 1000;
+  line.site = { groundMaterialId: 'mat-earth', spotElevations: [0, 1, 2].map(i => ({ id: `spot-line-${i}`, position: { x: i * 5000, y: 0 }, elevationMm: 5000, status: 'existing', evidence: site.levels[0].evidence })) };
+  assert.ok(findings(line).some(item => item.code === 'terrain.degenerate' && item.severity === 'warning'));
+  assert.equal(api.terrainOf(line).at({ x: 2500, y: 4000 }), 1000);
+});
+
+test('terrain for dense survey-sized contours builds in reasonable time', () => {
+  const model = clone(site), evidence = site.levels[0].evidence;
+  model.site = { groundMaterialId: 'mat-earth', contourIntervalMm: 300, contours: Array.from({ length: 60 }, (_, k) => ({ id: `contour-dense-${k}`, elevationMm: k * 300, status: 'existing', evidence, path: Array.from({ length: 41 }, (__, i) => ({ x: i * 5000, y: k * 300 + Math.round(200 * Math.sin(i / 3)) })) })) };
+  const started = Date.now();
+  const terrain = api.terrainOf(model);
+  findings(model);
+  const elapsed = Date.now() - started;
+  assert.ok(terrain.existing, 'a surface is built');
+  assert.ok(elapsed < 6000, `terrain took ${elapsed} ms`);
+});
