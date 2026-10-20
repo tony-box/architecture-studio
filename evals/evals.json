@@ -44,6 +44,19 @@
         "The drawing set is re-exported so the manifest fingerprint matches the edited model",
         "No renderer-local opening coordinate is introduced"
       ]
+    },
+    {
+      "id": "site-plan-landscaping",
+      "prompt": "Add a site plan for my house: a curved front walk to the street, a lawn, planting beds along the front, two new maples, and keep the big oak in the back yard. The lot is 60 by 100 feet with 20 foot front and 25 foot rear setbacks, and it slopes down toward the street.",
+      "expected_output": "A model with site content that draws L-101 and keeps every lot, tree, and grade fact traceable.",
+      "assertions": [
+        "The property line and setbacks come from the user's figures and the lot is not inferred from imagery; the property line evidence is not marked as a survey",
+        "The walk uses curve vertices and the lawn and beds use landscape material categories",
+        "The existing oak is a planting with status existing, the maples are proposed, and the plant schedule counts them",
+        "Any contours are marked needs-review as a concept slope, not survey data",
+        "exports/site/site-plan.svg exists and the manifest lists L-101",
+        "The handoff asks for a boundary and topographic survey and a tree survey"
+      ]
     }
   ]
 }

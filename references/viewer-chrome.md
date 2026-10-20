@@ -136,7 +136,9 @@ table".
 
 - **Tabs**: real `tablist` semantics, roving tabindex, arrow keys, Home and
   End. The selected tab gets a 3px accent underline and the paper background.
-  The four drawing tabs (Plans, Elevations, Sections, Systems) lead on the left;
+  The drawing tabs (Plans, Elevations, Sections, Systems, and Site when the
+  model has site content) lead on the left; a hidden Site tab is skipped by the
+  arrow keys, Home, and End, and `?view=site` falls back to Plans.
   3D model, Code review, and Assumptions sit together at the right edge behind a
   divider, because they are not drawing sheets.
 - **Toolbar**: one shared toolbar for every view; only the controls for the

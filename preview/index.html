@@ -3391,8 +3391,9 @@
       const box = boundsOf(lot ?? terrain.proposed?.points ?? terrain.existing.points);
       drape(box, SCENE_LIMITS.terrainCells, p => terrain.at(p), (c, q) => (!lot || pointInPolygon(c, lot)) && !underBuilding(q), rgb('#9aa77f'));
     }
+    // Draped surfaces float 30 mm over the terrain mesh, whose grid differs, so the two never interleave.
     for (const surface of (model.surfaces ?? []).filter(item => item.followsGrade === true)) {
-      const ring = ringOf(surface.boundary), offset = (surface.gradeOffsetMm ?? 0) + 5;
+      const ring = ringOf(surface.boundary), offset = (surface.gradeOffsetMm ?? 0) + 30;
       drape(boundsOf(ring), SCENE_LIMITS.drapeCells, p => (terrain ? terrain.at(p) : (model.project.coordinates.siteDatumMm ?? 0)) + offset, c => pointInPolygon(c, ring), rgb(materialColor(surface.materialId, '#b9b8b0')));
     }
     // Plantings: trunk prisms with low-poly canopies (spheres for broadleaf plants, cones for conifers).

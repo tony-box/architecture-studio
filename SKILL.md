@@ -47,7 +47,12 @@ survey accurate, or professionally engineered.
    add a `materials` catalog and assign wall and slab `layers`, opening
    `headers`, `beams`, `columns`, `foundations`, and site `surfaces` so the
    drawings hatch by material; never invent a material the brief does not
-   support, and leave unknown elements without one.
+   support, and leave unknown elements without one. Draw curved walks, beds,
+   decks, and rooms with curve vertices (`bulge` arcs or Bezier controls) and
+   curved walls with a wall `bulge`. When the site matters, add the property
+   line, setbacks, contours, a grading limit, and `plants` with `plantings`;
+   the model then draws a site plan, L-101. Lot lines, setbacks, and existing
+   trees come from a survey or the user, never from imagery or a guess.
 5. **Validate.** Check model references, polygons, hosted openings, vertical
    datums, stairs, and system connectivity. `export-drawings.mjs` (step 9)
    prints every validation error and writes nothing until they are fixed.
@@ -103,6 +108,7 @@ sources/                          # user-supplied sketches, photos, documents
 models/building.json
 models/variants/*.json            # optional complete alternatives
 exports/manifest.json             # written by export-drawings.mjs
+exports/site/site-plan.svg        # L-101 site plan, when the model has site content
 exports/plans/*.svg               # A-1xx floor plans
 exports/elevations/*.svg          # A-2xx exterior elevations
 exports/sections/*.svg            # A-3xx building sections

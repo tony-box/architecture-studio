@@ -44,7 +44,9 @@ before writing `models/building.json`, save it to `brief.json` (validated by
 | `site.lot` | Do you know the lot size or buildable area? | Approximate is fine. |
 | `site.setbacks` | Do you know the required setbacks? | Never infer them; mark unknown setbacks for code research. |
 | `site.orientation` | Which way does the main view or street face? | Sets `trueNorthDeg`. |
-| `site.slope` | Is the site flat or sloped? | Direction and rough grade change. |
+| `site.slope` | Is the site flat or sloped? | Direction and rough grade change. A topographic survey or contours the user supplies become `site.contours`; never invent contours beyond a stated concept slope, and mark generated ones `needs-review`. |
+| `site.survey` | Do you have a survey, plat, or tree survey? | Copy it into `sources/`. Property lines, setbacks, and existing trees come only from a survey, a plat, or the user; satellite imagery can orient the site but never sets them. |
+| `site.landscape` | Should the concept include landscaping? | Lawns, beds, walks, drive, patio, trees to keep or remove, new planting. Adds a site plan (L-101) and a plant schedule. |
 | `site.utilities` | Municipal water and sewer, or well and septic? | Affects plumbing concept. |
 | `site.access` | How do people and vehicles reach the building? | Driveway side, garage doors. |
 
