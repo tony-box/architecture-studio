@@ -417,13 +417,19 @@
       if (roof.ridgeElevationMm <= roof.eaveElevationMm) add('error', 'roof.geometry', 'Roof ridge must be above its eave.', roof.id);
     }
     for (const wall of model.walls ?? []) {
-      const length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+      const length = wallLength(wall);
       if (length < 1 || !isFiniteInteger(wall.thicknessMm) || wall.thicknessMm < 1 || !isFiniteInteger(wall.heightMm) || wall.heightMm < 1) add('error', 'wall.geometry', 'Wall has invalid length, thickness, or height.', wall.id);
+      if (wall.bulge != null) {
+        if (typeof wall.bulge !== 'number' || !Number.isFinite(wall.bulge) || wall.bulge === 0 || Math.abs(wall.bulge) > 1) add('error', 'wall.arc', 'An arc wall bulge must be a non-zero number no larger than 1 (a semicircle).', wall.id);
+        else if (wallGeometry(wall).radius <= wall.thicknessMm / 2 + 50) add('error', 'wall.arc', 'The arc is too tight for the wall thickness; its radius must exceed half the thickness by at least 50 mm.', wall.id);
+      }
     }
     for (const opening of model.openings ?? []) {
       const wall = walls.get(opening.wallId);
       if (!wall) { add('error', 'reference.wall', `Unknown wall ${opening.wallId}.`, opening.id); continue; }
-      const length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+      const overlap = (model.openings ?? []).find(other => other !== opening && other.wallId === opening.wallId && other.offsetMm < opening.offsetMm + opening.widthMm && opening.offsetMm < other.offsetMm + other.widthMm && model.openings.indexOf(other) < model.openings.indexOf(opening));
+      if (overlap) add('error', 'opening.overlap', `Opening overlaps ${overlap.id} along their wall.`, opening.id);
+      const length = wallLength(wall);
       if (![opening.offsetMm, opening.widthMm, opening.heightMm, opening.sillMm].every(isFiniteInteger) || opening.offsetMm < 0 || opening.widthMm < 1 || opening.heightMm < 1 || opening.sillMm < 0) add('error', 'opening.geometry', 'Opening offsets and dimensions must be valid non-negative integer millimeters.', opening.id);
       else if (opening.offsetMm + opening.widthMm > length + tolerance || opening.sillMm + opening.heightMm > wall.heightMm + tolerance) add('error', 'opening.fit', 'Opening falls outside its host wall.', opening.id);
     }
@@ -505,7 +511,7 @@
       const wall = walls.get(opening.wallId);
       if (!wall || !opening.headers?.length) continue;
       structural ??= opening.id;
-      const bands = wallBands(model, wall), length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y), byLayer = new Map();
+      const bands = wallBands(model, wall), length = wallLength(wall), byLayer = new Map();
       for (const header of opening.headers) {
         const fail = message => add('error', 'opening.header', message, opening.id);
         const kind = Object.hasOwn(HEADER_KINDS, header.kind) ? HEADER_KINDS[header.kind] : null;
@@ -664,7 +670,7 @@
   function modelBounds(model) {
     const points = [
       ...(model.spaces ?? []).flatMap(space => ringOf(space.boundary)),
-      ...(model.walls ?? []).flatMap(wall => [wall.start, wall.end]),
+      ...(model.walls ?? []).flatMap(wallPoints),
       ...(model.roofs ?? []).flatMap(roof => roof.footprint)
     ];
     return {
@@ -678,9 +684,55 @@
   }
 
   function pointAlongWall(wall, offset) {
+    if (wall.bulge) return wallGeometry(wall).at(offset);
     const dx = wall.end.x - wall.start.x; const dy = wall.end.y - wall.start.y;
     const length = Math.hypot(dx, dy) || 1;
     return { x: wall.start.x + dx / length * offset, y: wall.start.y + dy / length * offset };
+  }
+  // Wall centreline geometry. `along` is distance along the centreline from the start; `side` is the
+  // offset to the left looking from start to end. An arc wall (`bulge`) keeps the same frame: its
+  // layers are concentric bands and its openings are measured along the centreline arc.
+  function wallGeometry(wall) {
+    const start = wall.start, end = wall.end;
+    if (!wall.bulge) {
+      const length = Math.hypot(end.x - start.x, end.y - start.y), u = unit2(sub(end, start)), n = perp(u);
+      return {
+        arc: null, length, start, end,
+        at: (along, side = 0) => add(add(start, mul(u, along)), mul(n, side)),
+        tangent: () => u, normal: () => n,
+        offsetOf: p => dot2(sub(p, start), n), alongOf: p => dot2(sub(p, start), u),
+        points: (a, b, side = 0) => [add(add(start, mul(u, a)), mul(n, side)), add(add(start, mul(u, b)), mul(n, side))]
+      };
+    }
+    const arc = bulgeArc(start, end, wall.bulge), sigma = Math.sign(arc.sweep), R = arc.radius, C = arc.center;
+    const radial = along => { const a = arc.start + sigma * along / R; return { x: Math.cos(a), y: Math.sin(a) }; };
+    const at = (along, side = 0) => add(C, mul(radial(along), R - sigma * side));
+    return {
+      arc, length: arc.length, start, end, radius: R, center: C, sigma,
+      at,
+      // Counter-clockwise travel has the centre on its left, so the left normal points at the centre.
+      tangent: along => mul(perp(radial(along)), sigma), normal: along => mul(radial(along), -sigma),
+      offsetOf: p => sigma * (R - Math.hypot(p.x - C.x, p.y - C.y)),
+      alongOf: p => {
+        let d = sigma * (Math.atan2(p.y - C.y, p.x - C.x) - arc.start);
+        d = ((d % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+        if (d > Math.abs(arc.sweep) + (2 * Math.PI - Math.abs(arc.sweep)) / 2) d -= 2 * Math.PI;
+        return d * R;
+      },
+      // Points along the band at `side`, close enough to the true arc for drawing and cutting.
+      points: (a, b, side = 0) => {
+        const r = Math.max(R - sigma * side, 1), n = Math.min(256, Math.max(1, Math.ceil(Math.abs(b - a) / R / Math.max(2 * Math.acos(Math.max(-1, 1 - CURVE_TOLERANCE_MM / r)), 1e-4))));
+        return Array.from({ length: n + 1 }, (_, i) => at(a + (b - a) * i / n, side));
+      }
+    };
+  }
+  const wallLength = wall => wall.bulge ? wallGeometry(wall).length : Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+  // Plan points that bound a wall's centreline: its ends, plus the arc between them.
+  const wallPoints = wall => wall.bulge ? wallGeometry(wall).points(0, wallLength(wall)) : [wall.start, wall.end];
+  // The plan outline of a wall between two distances along it, from side s0 to side s1.
+  function wallBand(geometry, a, b, s0, s1) {
+    if (!geometry.arc) return [geometry.at(a, s0), geometry.at(b, s0), geometry.at(b, s1), geometry.at(a, s1)];
+    return [...geometry.points(a, b, s0), ...geometry.points(a, b, s1).reverse()];
   }
 
 
@@ -1272,7 +1324,7 @@
   function planExtent(model) {
     const points = [
       ...model.spaces.flatMap(space => ringOf(space.boundary)),
-      ...model.walls.flatMap(wall => [wall.start, wall.end]),
+      ...model.walls.flatMap(wallPoints),
       ...model.stairs.flatMap(stairCorners),
       ...[...model.fixtures, ...model.equipment].flatMap(object => rotatedRect(object.position, object.size.x, object.size.y, object.rotationDeg)),
       ...(model.sections ?? []).flatMap(section => [section.start, section.end]),
@@ -1287,11 +1339,31 @@
     const box = boundsOf(points);
     return { minX: box.x0, minY: box.y0, maxX: box.x1, maxY: box.y1 };
   }
+  // Floor plans of a model with site content frame on the building plus a margin; the site plan shows
+  // the rest. Section lines and site surfaces are cropped at this frame.
+  const BUILDING_FRAME_MARGIN_MM = 2000;
+  function buildingFrame(model) {
+    const ext = planExtent({ ...model, sections: [], surfaces: [] }), m = BUILDING_FRAME_MARGIN_MM;
+    return { minX: ext.minX - m, minY: ext.minY - m, maxX: ext.maxX + m, maxY: ext.maxY + m };
+  }
+  // Liang-Barsky clip of a segment to an axis-aligned box, or null when it misses.
+  function clipSegmentToBox(a, b, box) {
+    let t0 = 0, t1 = 1;
+    const d = sub(b, a);
+    for (const [p, q] of [[-d.x, a.x - box.minX], [d.x, box.maxX - a.x], [-d.y, a.y - box.minY], [d.y, box.maxY - a.y]]) {
+      if (Math.abs(p) < 1e-12) { if (q < 0) return null; continue; }
+      const r = q / p;
+      if (p < 0) t0 = Math.max(t0, r); else t1 = Math.min(t1, r);
+      if (t0 > t1) return null;
+    }
+    return [add(a, mul(d, t0)), add(a, mul(d, t1))];
+  }
   // A wall end is joined when it lands on another wall of the same level; joined ends extend
   // by half the thickness so cut poché closes at corners.
   function wallEndJoined(wall, point, walls, tolerance) {
     return walls.some(other => {
       if (other.id === wall.id) return false;
+      if (other.bulge) return wallDistance(other, point) <= other.thicknessMm / 2 + tolerance;
       const d = sub(other.end, other.start), len2 = dot2(d, d) || 1;
       const t = Math.max(0, Math.min(1, dot2(sub(point, other.start), d) / len2));
       return Math.hypot(...Object.values(sub(point, add(other.start, mul(d, t))))) <= other.thicknessMm / 2 + tolerance;
@@ -1354,7 +1426,7 @@
   const assemblyLayers = (entity, depth) => entity.layers?.length ? entity.layers : [{ id: null, materialId: entity.materialId ?? null, thicknessMm: depth }];
   // +1 when a wall's interior (the side toward the centre of its level's walls) is its left side.
   function wallInteriorSign(model, wall) {
-    const walls = model.walls.filter(item => item.levelId === wall.levelId), box = boundsOf(walls.flatMap(item => [item.start, item.end]));
+    const walls = model.walls.filter(item => item.levelId === wall.levelId), box = boundsOf(walls.flatMap(wallPoints));
     const n = perp(unit2(sub(wall.end, wall.start))), mid = mul(add(wall.start, wall.end), 0.5);
     return dot2(sub({ x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 }, mid), n) >= 0 ? 1 : -1;
   }
@@ -1429,7 +1501,8 @@
           for (const id of style.patterns) { patterns.add(id); parts.push(svgPoly(points, { fill: `url(#hatch-${id})`, width: 0, inert: true })); }
           return parts.join('');
         }
-        const at = (x, y) => add(add(frame.o, mul(frame.u, x)), mul(frame.v, y));
+        // A curved band supplies its own mapping, so directional symbols follow the arc.
+        const at = frame.at ?? ((x, y) => add(add(frame.o, mul(frame.u, x)), mul(frame.v, y)));
         const { L, T } = frame, pen = { stroke: DRAFT.ink, width: P.fine };
         if (style.kind === 'batt') {
           const count = Math.max(1, Math.round(L / Math.max(T * 0.5, 0.6))), w = L / count;
@@ -1457,7 +1530,7 @@
           }
         } else if (style.kind === 'laminated') {
           const count = Math.max(2, Math.round(T / 0.8));
-          for (let i = 1; i < count; i += 1) parts.push(svgLine(at(0, T * i / count), at(L, T * i / count), pen));
+          for (let i = 1; i < count; i += 1) parts.push(frame.at ? svgPoly(Array.from({ length: 17 }, (_, k) => at(L * k / 16, T * i / count)), { open: true, inert: true, ...pen }) : svgLine(at(0, T * i / count), at(L, T * i / count), pen));
         }
         // Directional symbols follow the frame, so a non-rectangular region clips them to its outline.
         if (clipId) return `${parts[0]}<clipPath id="${escapeHtml(clipId)}">${svgPoly(points, { width: 0 })}</clipPath><g clip-path="url(#${escapeHtml(clipId)})" pointer-events="none">${parts.slice(1).join('')}</g>`;
@@ -1516,6 +1589,9 @@
   // Wall ends in a material plan: corners miter through the inner and outer face intersections,
   // tees stop at the face of the wall they meet, and anything else ends square.
   function wallEndClip(wall, atStart, walls, tolerance) {
+    const endPoint = atStart ? wall.start : wall.end;
+    // Joins that involve an arc wall use the true offset faces; straight joins keep the original rule.
+    if (wall.bulge || walls.some(other => other.bulge && other.id !== wall.id && wallDistance(other, endPoint) <= other.thicknessMm / 2 + tolerance)) return curvedEndClip(wall, atStart, walls, tolerance);
     const point = atStart ? wall.start : wall.end, far = atStart ? wall.end : wall.start, self = unit2(sub(far, point));
     for (const other of walls) {
       if (other.id === wall.id) continue;
@@ -1541,6 +1617,75 @@
     }
     return { extend: 0, keep: null };
   }
+  // Distance from a point to a wall's centreline (the segment, or the arc between its ends).
+  function wallDistance(wall, p) {
+    if (!wall.bulge) {
+      const d = sub(wall.end, wall.start), t = Math.max(0, Math.min(1, dot2(sub(p, wall.start), d) / (dot2(d, d) || 1)));
+      return Math.hypot(p.x - wall.start.x - d.x * t, p.y - wall.start.y - d.y * t);
+    }
+    const g = wallGeometry(wall), along = g.alongOf(p);
+    if (along >= 0 && along <= g.length) return Math.abs(g.offsetOf(p));
+    return Math.min(Math.hypot(p.x - wall.start.x, p.y - wall.start.y), Math.hypot(p.x - wall.end.x, p.y - wall.end.y));
+  }
+  // The face of a wall at `side` as a line or a circle.
+  function wallFace(g, side) {
+    return g.arc ? { circle: true, c: g.center, r: g.radius - g.sigma * side } : { circle: false, p: g.at(0, side), d: g.tangent(0) };
+  }
+  function faceIntersections(f, h) {
+    if (!f.circle && !h.circle) {
+      const den = cross2(f.d, h.d); if (Math.abs(den) < 1e-9) return [];
+      return [add(f.p, mul(f.d, cross2(sub(h.p, f.p), h.d) / den))];
+    }
+    if (f.circle && !h.circle) return faceIntersections(h, f);
+    if (!f.circle) {
+      const w = sub(f.p, h.c), b = dot2(w, f.d), c = dot2(w, w) - h.r * h.r, disc = b * b - c;
+      if (disc < 0) return [];
+      return [-b - Math.sqrt(disc), -b + Math.sqrt(disc)].map(t => add(f.p, mul(f.d, t)));
+    }
+    const d = Math.hypot(h.c.x - f.c.x, h.c.y - f.c.y);
+    if (d < 1e-9 || d > f.r + h.r || d < Math.abs(f.r - h.r)) return [];
+    const a = (f.r * f.r - h.r * h.r + d * d) / (2 * d), k = Math.sqrt(Math.max(0, f.r * f.r - a * a)), u = unit2(sub(h.c, f.c)), m = add(f.c, mul(u, a));
+    return [add(m, mul(perp(u), k)), sub(m, mul(perp(u), k))];
+  }
+  // Ends of joins that involve an arc wall (drafting-standard.md "Arc walls"). Each wall's faces are named
+  // from the joint looking into the wall; a corner pairs this wall's left face with the other's right face
+  // and its right face with the other's left face, choosing the face intersection nearest the joint.
+  function curvedEndClip(wall, atStart, walls, tolerance) {
+    const g = wallGeometry(wall), point = atStart ? wall.start : wall.end, t = wall.thicknessMm;
+    const into = atStart ? g.tangent(0) : mul(g.tangent(g.length), -1), far = g.at(g.length / 2);
+    // `side` along the wall's own start-to-end frame for the face on the left (+1) or right (-1) looking in.
+    const faceSide = (atStartFlag, look, thickness) => look * (atStartFlag ? 1 : -1) * thickness / 2;
+    for (const other of walls) {
+      if (other.id === wall.id) continue;
+      const og = wallGeometry(other);
+      for (const otherAtStart of [true, false]) {
+        const end = otherAtStart ? other.start : other.end;
+        if (Math.hypot(end.x - point.x, end.y - point.y) > other.thicknessMm / 2 + tolerance) continue;
+        const away = otherAtStart ? og.tangent(0) : mul(og.tangent(og.length), -1);
+        if (Math.abs(cross2(into, away)) < 1e-3) return { extend: 0, keep: null };
+        const limit = 3 * Math.max(t, other.thicknessMm), corners = [];
+        for (const look of [1, -1]) {
+          const candidates = faceIntersections(wallFace(g, faceSide(atStart, look, t)), wallFace(og, faceSide(otherAtStart, -look, other.thicknessMm)))
+            .filter(p => Math.hypot(p.x - point.x, p.y - point.y) <= limit).sort((p, q) => Math.hypot(p.x - point.x, p.y - point.y) - Math.hypot(q.x - point.x, q.y - point.y));
+          if (candidates.length) corners.push(candidates[0]);
+        }
+        if (corners.length < 2) return { extend: 0, keep: null, fallback: other.id };
+        const m = sub(corners[1], corners[0]), sign = Math.sign(cross2(m, sub(far, corners[0]))) || 1;
+        const reach = Math.max(...corners.map(p => Math.hypot(p.x - point.x, p.y - point.y)));
+        return { extend: reach + t, keep: p => sign * cross2(m, sub(p, corners[0])) };
+      }
+    }
+    // Tee: the end lands part way along another wall and stops at that wall's near face.
+    for (const other of walls) {
+      if (other.id === wall.id) continue;
+      const og = wallGeometry(other), along = og.alongOf(point);
+      if (along <= tolerance || along >= og.length - tolerance || Math.abs(og.offsetOf(point)) > other.thicknessMm / 2 + tolerance) continue;
+      if (Math.abs(cross2(into, og.tangent(along))) < 0.5) continue;
+      const side = Math.sign(og.offsetOf(far)) || 1;
+      return { extend: other.thicknessMm, keep: p => side * og.offsetOf(p) - other.thicknessMm / 2 };
+    }
+    return { extend: 0, keep: null };
+  }
   function clipSegmentHalfPlane(a, b, f) {
     const fa = f(a), fb = f(b);
     if (fa < 0 && fb < 0) return null;
@@ -1559,7 +1704,7 @@
     const level = levels.find(item => item.id === levelId) ?? levels[0];
     const levelIndex = levels.indexOf(level);
     const tolerance = model.project.coordinates.toleranceMm ?? 3;
-    const ext = planExtent(model), area = drawingArea(profile);
+    const siteModel = hasSiteContent(model), ext = siteModel ? buildingFrame(model) : planExtent(model), area = drawingArea(profile);
     const { ratio, label: scaleLabel } = selectScale(profile, ext.maxX - ext.minX, ext.maxY - ext.minY, area);
     const place = placeExtent(area, ratio, ext.maxX - ext.minX, ext.maxY - ext.minY);
     const map = p => ({ x: place.x + (p.x - ext.minX) / ratio, y: place.y + (ext.maxY - p.y) / ratio });
@@ -1567,15 +1712,17 @@
     const mats = materialContext(model, profile, !screened && materialsActive(model, ratio));
     const cutZ = level.elevationMm + DRAFT.cutHeightMm;
     const walls = model.walls.filter(wall => wall.levelId === level.id);
-    const wallBox = walls.length ? boundsOf(walls.flatMap(wall => [wall.start, wall.end])) : boundsOf(model.spaces.flatMap(space => ringOf(space.boundary)));
+    const wallBox = walls.length ? boundsOf(walls.flatMap(wallPoints)) : boundsOf(model.spaces.flatMap(space => ringOf(space.boundary)));
     const center = { x: (wallBox.x0 + wallBox.x1) / 2, y: (wallBox.y0 + wallBox.y1) / 2 };
     const layers = { site: [], rooms: [], roof: [], objects: [], stairs: [], wallStroke: [], wallFill: [], wallLines: [], structure: [], openings: [], marks: [], dims: [], tags: [], systems: [] };
 
     // Higher surfaces draw over lower ones; a surface wholly under a higher one is not visible in plan.
+    // Draped surfaces lie on the ground under every flat one.
     const levelSurfaces = (model.surfaces ?? []).filter(item => item.levelId === level.id);
-    const covered = surface => { const ring = ringOf(surface.boundary); return levelSurfaces.some(other => { const otherRing = ringOf(other.boundary); return other !== surface && other.topElevationMm > surface.topElevationMm
+    const flat = item => item.followsGrade !== true;
+    const covered = surface => { const ring = ringOf(surface.boundary); return levelSurfaces.some(other => { const otherRing = ringOf(other.boundary); return other !== surface && flat(other) && flat(surface) && other.topElevationMm > surface.topElevationMm
       && ring.every(p => pointInPolygon(p, otherRing) || otherRing.some(q => samePoint(p, q, tolerance))); }); };
-    for (const surface of levelSurfaces.filter(item => !covered(item)).sort((a, b) => a.topElevationMm - b.topElevationMm)) {
+    for (const surface of levelSurfaces.filter(item => !covered(item)).sort((a, b) => flat(a) - flat(b) || (a.topElevationMm ?? 0) - (b.topElevationMm ?? 0))) {
       const ring = ringOf(surface.boundary), box = boundsOf(ring), outline = ring.map(map), o = map({ x: box.x0, y: box.y0 });
       // Fills sit outside the entity group so a clipped directional fill never nests inside it.
       const fill = mats.active ? mats.region(outline, { o, u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: (box.x1 - box.x0) / ratio, T: (box.y1 - box.y0) / ratio }, mats.resolve(surface.materialId), `clip-${surface.id}`) : '';
@@ -1650,7 +1797,101 @@
       placer.reserve(centeredBox(labelP, 6, 4));
     }
 
+    // Arc walls: the same layers, joins, and openings as straight walls, drawn on concentric bands.
+    const splitRun = (run, f) => {
+      const out = []; let current = [];
+      run.forEach((p, i) => {
+        const fp = f(p);
+        if (i > 0) {
+          const q = run[i - 1], fq = f(q);
+          if ((fq >= 0) !== (fp >= 0)) { const x = add(q, mul(sub(p, q), fq / (fq - fp))); current.push(x); if (fp < 0) { out.push(current); current = []; } else current = [x]; }
+        }
+        if (fp >= 0) current.push(p);
+      });
+      out.push(current);
+      return out.filter(item => item.length > 1);
+    };
+    const clipRuns = (points, keeps) => keeps.reduce((runs, f) => runs.flatMap(run => splitRun(run, f)), [points]);
+    const drawArcWall = wall => {
+      const g = wallGeometry(wall), L = g.length, t = wall.thicknessMm, inward = dot2(sub(center, g.at(L / 2)), g.normal(L / 2)) >= 0 ? 1 : -1;
+      const openings = model.openings.filter(item => item.wallId === wall.id).sort((a, b) => a.offsetMm - b.offsetMm);
+      const ends = [wallEndClip(wall, true, walls, tolerance), wallEndClip(wall, false, walls, tolerance)];
+      for (const end of ends) if (end.fallback) warnings.push({ severity: 'advisory', code: 'wall.join-fallback', message: `${wall.id} meets ${end.fallback} where the faces have no clean miter; the end is drawn square.`, entityId: wall.id });
+      const bands = wallBands(model, wall), strokeParts = [], fillParts = [], lineParts = [], cuts = [];
+      let cursor = 0;
+      for (const opening of openings) { cuts.push([cursor, opening.offsetMm]); cursor = opening.offsetMm + opening.widthMm; }
+      cuts.push([cursor, L]);
+      cuts.forEach(([a, b], cutIndex) => {
+        if (b - a < 1) return;
+        const startEnd = a <= 0 ? ends[0] : null, endEnd = b >= L ? ends[1] : null;
+        const a0 = a - (startEnd?.extend ?? 0), b0 = b + (endEnd?.extend ?? 0), keeps = [startEnd?.keep, endEnd?.keep].filter(Boolean);
+        const clipPoly = poly => keeps.reduce((points, f) => points.length >= 3 ? clipHalfPlane(points, f) : points, poly);
+        const outline = clipPoly(wallBand(g, a0, b0, t / 2, -t / 2));
+        if (outline.length < 3) return;
+        if (!mats.active) {
+          strokeParts.push(svgPoly(outline.map(map), { fill: poche, stroke: ink, width: P.cut * 2, join: 'miter' }));
+          fillParts.push(svgPoly(outline.map(map), { fill: poche, width: 0, inert: true }));
+          return;
+        }
+        strokeParts.push(svgPoly(outline.map(map), { fill: DRAFT.paper, stroke: ink, width: P.cut * 2, join: 'miter' }));
+        for (const band of bands) {
+          const region = clipPoly(wallBand(g, a0, b0, band.s0, band.s1)), faces = [band.s0, band.s1].map(s => clipRuns(g.points(a0, b0, s), keeps).flat());
+          if (region.length < 3 || faces.some(face => !face.length)) continue;
+          const spans = faces.map(face => face.map(g.alongOf)), coreA = Math.max(...spans.map(s => Math.min(...s))), coreB = Math.min(...spans.map(s => Math.max(...s)));
+          const T = Math.abs(band.s0 - band.s1) / ratio;
+          const frame = { o: map(g.at(coreA, band.s0)), u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: Math.max(0, coreB - coreA) / ratio, T, at: (x, y) => map(g.at(coreA + x * ratio, band.s0 + (band.s1 - band.s0) * (T ? y / T : 0))) };
+          fillParts.push(mats.region(region.map(map), frame, mats.resolve(band.layer.materialId), `clip-${wall.id}-${cutIndex}-${band.index}`));
+        }
+        for (const side of [bands[0].s0, ...bands.map(band => band.s1)]) for (const run of clipRuns(g.points(a0, b0, side), keeps)) lineParts.push(svgPoly(run.map(map), { open: true, stroke: ink, width: P.fine }));
+      });
+      layers.wallStroke.push(`<g data-entity="${escapeHtml(wall.id)}">${strokeParts.join('')}</g>`);
+      layers.wallFill.push(fillParts.join(''));
+      if (lineParts.length) layers.wallLines.push(lineParts.join(''));
+      const centreLine = g.points(0, L).map(map);
+      centreLine.slice(1).forEach((p, i) => placer.reserveSegment(centreLine[i], p, t / ratio / 2 + 0.8));
+      for (const opening of openings) {
+        const a = opening.offsetMm, b = a + opening.widthMm, w = opening.widthMm, parts = [];
+        const arcLine = (side, from, to, o) => svgPoly(g.points(from, to, side).map(map), { open: true, stroke: ink, ...o });
+        parts.push(svgPoly(wallBand(g, a, b, -t / 2, t / 2).map(map), { fill: DRAFT.paper, fillOpacity: 0, width: 0 }));
+        if (opening.kind === 'window') {
+          for (const side of [-t / 2, t / 2, -t * 0.12, t * 0.12]) parts.push(arcLine(side, a, b, { width: P.thin }));
+        } else if (opening.kind === 'overhead-door') {
+          parts.push(arcLine(0, a, b, { width: P.thin, dash: '3 1.5' }), arcLine(inward * (t / 2 + 600), a, b, { width: P.thin, dash: '3 1.5' }));
+        } else if (opening.kind === 'door') {
+          const swing = opening.swing ?? 'left', face = inward * t / 2;
+          // The leaf swings radially from the hinge; it closes on the chord to the far jamb.
+          const leaf = (hingeAlong, closedAlong) => {
+            const hingeModel = g.at(hingeAlong, face), closedModel = g.at(closedAlong, face), r = Math.hypot(closedModel.x - hingeModel.x, closedModel.y - hingeModel.y);
+            const hinge = map(hingeModel), tip = map(add(hingeModel, mul(g.normal(hingeAlong), inward * r))), closed = map(closedModel), sweep = cross2(sub(tip, hinge), sub(closed, hinge)) > 0 ? 1 : 0;
+            return svgLine(hinge, tip, { stroke: ink, width: P.medium }) + `<path d="M${num(tip.x)},${num(tip.y)} A${num(r / ratio)},${num(r / ratio)} 0 0 ${sweep} ${num(closed.x)},${num(closed.y)}" fill="none" ${strokeAttrs({ stroke: ink, width: P.fine })}/>`;
+          };
+          if (swing === 'left') parts.push(leaf(a, b));
+          else if (swing === 'right') parts.push(leaf(b, a));
+          else if (swing === 'double') parts.push(leaf(a, a + w / 2), leaf(b, b - w / 2));
+          else if (swing === 'sliding') parts.push(arcLine(-t / 6, a, a + w * 0.55, { width: P.medium }), arcLine(t / 6, b - w * 0.55, b, { width: P.medium }));
+          if (swing !== 'sliding' && swing !== 'none') placer.reserve(boundsOf([...wallBand(g, a, b, face, face + inward * w)].map(map)));
+        }
+        layers.openings.push(`<g data-entity="${escapeHtml(opening.id)}">${parts.join('')}</g>`);
+      }
+      // Radius note outside the arc, at the first point along it that clears other annotation and section lines.
+      const label = `R ${profile.dimension(g.radius)}`, w = textWidth(label, T.note);
+      const cutLines = (model.sections ?? []).map(section => [map(section.start), map(section.end)]);
+      const clearOfCuts = box => cutLines.every(([a, b]) => { const c = { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 }, d = sub(b, a), k = Math.max(0, Math.min(1, dot2(sub(c, a), d) / (dot2(d, d) || 1))); return Math.hypot(c.x - a.x - d.x * k, c.y - a.y - d.y * k) > Math.hypot(box.x1 - box.x0, box.y1 - box.y0) / 2; });
+      let note = null;
+      for (const fraction of [0.5, 0.35, 0.65, 0.2, 0.8]) for (const reach of [3, 6, 10]) {
+        if (note) break;
+        const along = L * fraction, out = unit2(sub(map(g.at(along, -inward * t)), map(g.at(along, 0))));
+        const c = add(map(g.at(along, -inward * t / 2)), mul(out, reach + Math.abs(out.x) * w / 2 + Math.abs(out.y) * T.note / 2)), box = centeredBox(c, w + 1, T.note * 1.4);
+        if (placer.fits(box) && clearOfCuts(box)) note = { c, box };
+      }
+      if (note) {
+        placer.reserve(note.box);
+        layers.dims.push(`<g data-entity="${escapeHtml(wall.id)}">${svgText(note.c.x, note.c.y + T.note * 0.36, label, T.note, { fill: textInk, upper: false })}</g>`);
+      } else warnings.push({ severity: 'warning', code: 'label.placement', message: `${wall.id}: no clear position for the radius note on ${level.name}.`, entityId: wall.id });
+    };
+
     for (const wall of walls) {
+      if (wall.bulge) { drawArcWall(wall); continue; }
       const L = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y), u = unit2(sub(wall.end, wall.start)), n = perp(u), t = wall.thicknessMm;
       const inward = dot2(sub(center, mul(add(wall.start, wall.end), 0.5)), n) >= 0 ? 1 : -1;
       const openings = model.openings.filter(item => item.wallId === wall.id).sort((a, b) => a.offsetMm - b.offsetMm);
@@ -1746,7 +1987,10 @@
     }
 
     for (const section of model.sections ?? []) {
-      const s = map(section.start), e = map(section.end), d = unit2(sub(e, s));
+      // On a building plan of a site model the cut line is cropped to the frame; the site plan shows the rest.
+      const cropped = siteModel ? clipSegmentToBox(section.start, section.end, ext) : [section.start, section.end];
+      if (!cropped) continue;
+      const s = map(cropped[0]), e = map(cropped[1]), d = unit2(sub(e, s));
       const look = section.lookDirection === 'left' ? perp(unit2(sub(section.end, section.start))) : mul(perp(unit2(sub(section.end, section.start))), -1);
       const lookPaper = unit2({ x: look.x, y: -look.y }), r = 5, letter = sectionLetter(model, section.id), sheet = sectionSheetId(model, section.id);
       // Each bubble slides outward along the cut line until it clears dimensions and other marks.
@@ -1833,10 +2077,42 @@
     const sheetId = screened ? `M-1${String(levelIndex + 1).padStart(2, '0')}` : `A-1${String(levelIndex + 1).padStart(2, '0')}`;
     const body = ['site', 'rooms', 'roof', 'objects', 'stairs', 'wallStroke', 'wallFill', 'wallLines', 'structure', 'openings', 'marks', 'dims', 'tags', 'systems']
       .filter(key => layers[key].length || !['site', 'wallLines', 'structure'].includes(key))
-      .map(key => `<g data-layer="${key}"${key === 'wallFill' || key === 'wallLines' ? ' pointer-events="none"' : ''}>${layers[key].join('')}</g>`).join('');
+      .map(key => {
+        // Site surfaces of a site model stop at the plan frame instead of pushing the frame out.
+        if (key === 'site' && siteModel) {
+          const a = map({ x: ext.minX, y: ext.maxY }), b = map({ x: ext.maxX, y: ext.minY }), id = `plan-frame-${level.id}`;
+          return `<clipPath id="${escapeHtml(id)}">${svgRect(a.x, a.y, b.x - a.x, b.y - a.y, { width: 0 })}</clipPath><g data-layer="site" clip-path="url(#${escapeHtml(id)})">${layers.site.join('')}</g>`;
+        }
+        return `<g data-layer="${key}"${key === 'wallFill' || key === 'wallLines' ? ' pointer-events="none"' : ''}>${layers[key].join('')}</g>`;
+      }).join('');
     const svg = sheetSvg(model, profile, { sheetId, title, scaleLabel, ratio, area, view: screened ? 'systems' : 'plan', northDeg: model.project.coordinates.trueNorthDeg ?? 0, legend, materialContext: mats.active ? mats : null, warnings }, body);
     return { svg, sheetId, title, view: screened ? 'systems' : 'plan', ratio, scaleLabel, warnings };
   }
+
+  // Elevation or section outline of a plant: trunk lines and a canopy outline at the thin pen, with no
+  // fill, so a building behind it stays legible. `h` is the plant's horizontal drawing position.
+  function plantProfileSvg(model, planting, map, h, base, P) {
+    const plant = plantOf(model, planting); if (!plant) return '';
+    const height = planting.heightMm ?? plant.matureHeightMm, r = plantingCanopy(model, planting) / 2, tree = PLANT_KINDS[plant.kind]?.tree;
+    const top = base + height, bottom = base + (tree ? height * 0.3 : 0), pen = { width: P.thin, join: 'round' }, parts = [];
+    if (tree) {
+      const t = Math.max(150, planting.trunkDiameterMm ?? 250) / 2, trunkTop = bottom + (top - bottom) * 0.2;
+      parts.push(svgLine(map(h - t, base), map(h - t, trunkTop), pen), svgLine(map(h + t, base), map(h + t, trunkTop), pen));
+    }
+    if (plant.kind === 'evergreen-tree') parts.push(svgPoly([map(h - r, bottom), map(h + r, bottom), map(h, top)], { fill: DRAFT.paper, fillOpacity: 0, ...pen }));
+    else {
+      // A softly lobed canopy outline.
+      const cz = (bottom + top) / 2, rz = (top - bottom) / 2;
+      parts.push(svgPoly(Array.from({ length: 48 }, (_, i) => { const a = i * Math.PI / 24, k = 1 + 0.04 * Math.cos(a * 9); return map(h + r * k * Math.cos(a), cz + rz * k * Math.sin(a)); }), { fill: DRAFT.paper, fillOpacity: 0, ...pen }));
+    }
+    return `<g data-entity="${escapeHtml(planting.id)}">${parts.join('')}</g>`;
+  }
+  // Plants that can appear in a vertical view: single plants, not marked for removal.
+  const standingPlants = model => (model.plantings ?? []).filter(item => item.position && item.status !== 'remove' && plantOf(model, item));
+  const plantBase = (model, planting) => terrainOf(model)?.at(planting.position) ?? (model.project.coordinates.siteDatumMm ?? 0);
+  const plantTop = (model, planting, base = plantBase(model, planting)) => base + (planting.heightMm ?? plantOf(model, planting).matureHeightMm);
+  // Elevations and sections show plants up to this far in front of the face or beyond the cut.
+  const PLANT_VIEW_DEPTH_MM = 9000;
 
   function elevationBasis(side, bounds) {
     const definitions = {
@@ -1881,7 +2157,7 @@
 
   function renderElevationSheet(model, side) {
     const bounds = modelBounds(model), roof = model.roofs[0], basis = elevationBasis(side, bounds);
-    const wallBox = boundsOf(model.walls.flatMap(wall => [wall.start, wall.end]));
+    const wallBox = boundsOf(model.walls.flatMap(wallPoints));
     const projected = [{ x: wallBox.x0, y: wallBox.y0 }, { x: wallBox.x1, y: wallBox.y0 }, { x: wallBox.x1, y: wallBox.y1 }, { x: wallBox.x0, y: wallBox.y1 }].map(basis.project);
     const wallMin = Math.min(...projected), wallMax = Math.max(...projected), ov = roof?.overhangMm ?? 0;
     const minH = wallMin - ov, maxH = wallMax + ov;
@@ -1889,8 +2165,22 @@
     const ridge = roof?.ridgeElevationMm ?? wallTop, eave = roof?.eaveElevationMm ?? wallTop;
     const gable = roof ? ((side === 'north' || side === 'south') ? roof.ridgeAxis === 'y' : roof.ridgeAxis === 'x') : false;
     const isVisibleWall = wall => Math.abs(wall.start[basis.axis] - basis.face) < 3 && Math.abs(wall.end[basis.axis] - basis.face) < 3;
+    // An arc wall shows an opening when the wall faces the viewer there; its jambs project to their true
+    // positions, so a curved opening reads foreshortened.
+    const viewDir = { north: { x: 0, y: 1 }, south: { x: 0, y: -1 }, east: { x: 1, y: 0 }, west: { x: -1, y: 0 } }[side];
+    const buildingCentre = { x: (wallBox.x0 + wallBox.x1) / 2, y: (wallBox.y0 + wallBox.y1) / 2 };
+    const facesViewer = (wall, along) => {
+      const g = wallGeometry(wall), n = g.normal(along), outward = dot2(n, sub(g.at(along), buildingCentre)) >= 0 ? n : mul(n, -1);
+      return wall.kind === 'exterior' && dot2(outward, viewDir) > 0.5;
+    };
+    const showsOpening = (wall, opening) => wall.bulge ? facesViewer(wall, opening.offsetMm + opening.widthMm / 2) : isVisibleWall(wall);
+    const baseMinZ = Math.min(0, model.project.coordinates.siteDatumMm ?? 0), baseMaxZ = Math.max(ridge, eave, wallTop), datumZ = model.project.coordinates.siteDatumMm ?? 0;
+    // Plants in front of the face, within the view depth, draw over the building in outline and stand on
+    // the elevation's ground line.
+    const outward = (side === 'north' || side === 'east') ? 1 : -1;
+    const plants = standingPlants(model).filter(item => { const h = basis.project(item.position), depth = outward * (item.position[basis.axis] - basis.face); return h >= minH && h <= maxH && depth > 0 && depth <= PLANT_VIEW_DEPTH_MM; });
     return renderVerticalSheet(model, 'elevation', { sheetId: ELEVATION_SHEETS[side], title: `${basis.label} elevation` }, {
-      extent: { minH, maxH, minZ: Math.min(0, model.project.coordinates.siteDatumMm ?? 0), maxZ: Math.max(ridge, eave, wallTop) },
+      extent: { minH, maxH, minZ: baseMinZ, maxZ: Math.max(baseMaxZ, ...plants.map(item => plantTop(model, item, datumZ))) },
       draw(ctx) {
         const { map, profile } = ctx, P = profile.pens, parts = [];
         const silhouette = !roof
@@ -1900,8 +2190,13 @@
             : [[wallMin, 0], [wallMax, 0], [wallMax, eave], [maxH, eave], [maxH, ridge], [minH, ridge], [minH, eave], [wallMin, eave]];
         parts.push(`<g data-entity="${escapeHtml(roof?.id ?? 'building-outline')}">${svgPoly(silhouette.map(([h, z]) => map(h, z)), { fill: DRAFT.paper, width: P.profile, join: 'miter' })}</g>`);
         if (roof && !gable) parts.push(svgLine(map(wallMin, eave), map(wallMax, eave), { width: P.thin }));
+        // A curved wall facing the viewer shows where it meets the walls at its ends.
+        for (const wall of model.walls.filter(item => item.bulge && facesViewer(item, wallLength(item) / 2))) {
+          const level = model.levels.find(item => item.id === wall.levelId), z0 = (level?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0);
+          parts.push(`<g data-entity="${escapeHtml(wall.id)}">${[wall.start, wall.end].map(p => svgLine(map(basis.project(p), z0), map(basis.project(p), z0 + wall.heightMm), { width: P.thin })).join('')}</g>`);
+        }
         for (const opening of model.openings) {
-          const wall = model.walls.find(item => item.id === opening.wallId); if (!wall || !isVisibleWall(wall)) continue;
+          const wall = model.walls.find(item => item.id === opening.wallId); if (!wall || !showsOpening(wall, opening)) continue;
           const level = model.levels.find(item => item.id === wall.levelId);
           const h0 = basis.project(pointAlongWall(wall, opening.offsetMm)), h1 = basis.project(pointAlongWall(wall, opening.offsetMm + opening.widthMm));
           const left = Math.min(h0, h1), right = Math.max(h0, h1), bottom = (level?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0) + opening.sillMm, top = bottom + opening.heightMm;
@@ -1918,6 +2213,7 @@
           }
           parts.push(`<g data-entity="${escapeHtml(opening.id)}">${svgPoly(box, { fill: DRAFT.paper, width: P.medium })}${inner.join('')}</g>`);
         }
+        parts.push(plants.map(item => plantProfileSvg(model, item, map, basis.project(item.position), datumZ, P)).join(''));
         parts.push(verticalAnnotations(model, ctx, minH, maxH, roof));
         return parts.join('');
       }
@@ -2002,13 +2298,15 @@
 
     for (const wall of model.walls) {
       const level = levelOf(wall.levelId), base = (level?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0), t = wall.thicknessMm;
-      const u = unit2(sub(wall.end, wall.start)), nw = perp(u), L = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
-      const rect = [add(wall.start, mul(nw, t / 2)), add(wall.end, mul(nw, t / 2)), sub(wall.end, mul(nw, t / 2)), sub(wall.start, mul(nw, t / 2))];
-      const crossing = clipSegmentToConvex(section.start, section.end, rect);
+      const u = unit2(sub(wall.end, wall.start)), nw = perp(u), arcWall = wall.bulge ? wallGeometry(wall) : null, L = arcWall ? arcWall.length : Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+      const rect = arcWall ? wallBand(arcWall, 0, L, t / 2, -t / 2) : [add(wall.start, mul(nw, t / 2)), add(wall.end, mul(nw, t / 2)), sub(wall.end, mul(nw, t / 2)), sub(wall.start, mul(nw, t / 2))];
+      // A straight wall is crossed at most once; an arc wall may be crossed twice.
+      const crossings = arcWall ? segmentPolygonIntervals(section.start, section.end, rect) : [clipSegmentToConvex(section.start, section.end, rect)].filter(Boolean);
       const openings = model.openings.filter(item => item.wallId === wall.id);
-      if (crossing) {
+      const offsetOf = arcWall ? arcWall.offsetOf : q => dot2(sub(q, wall.start), nw);
+      for (const crossing of crossings) {
         const [h0, h1] = hRange([at(crossing[0]), at(crossing[1])]);
-        const along = dot2(sub(at((crossing[0] + crossing[1]) / 2), wall.start), u);
+        const along = arcWall ? arcWall.alongOf(at((crossing[0] + crossing[1]) / 2)) : dot2(sub(at((crossing[0] + crossing[1]) / 2), wall.start), u);
         const hit = openings.find(item => along >= item.offsetMm && along <= item.offsetMm + item.widthMm);
         const spans = hit ? [[base, base + hit.sillMm], [base + hit.sillMm + hit.heightMm, base + wall.heightMm]] : [[base, base + wall.heightMm]];
         for (const [z0, z1] of spans) if (z1 - z0 > 1) cut.push({ id: wall.id, kind: 'wall', h0, h1, z0, z1 });
@@ -2018,12 +2316,12 @@
           return along >= opening.offsetMm - bearing && along <= opening.offsetMm + opening.widthMm + bearing;
         }).map(header => ({ header, opening, band: headerBand(bands, header) })));
         for (const { layer, s0, s1 } of bands) {
-          const band = [add(wall.start, mul(nw, s0)), add(wall.end, mul(nw, s0)), add(wall.end, mul(nw, s1)), add(wall.start, mul(nw, s1))];
-          const c = clipSegmentToConvex(section.start, section.end, band);
+          const band = arcWall ? wallBand(arcWall, 0, L, s0, s1) : [add(wall.start, mul(nw, s0)), add(wall.end, mul(nw, s0)), add(wall.end, mul(nw, s1)), add(wall.start, mul(nw, s1))];
+          const c = arcWall ? segmentPolygonIntervals(section.start, section.end, band).find(([b0, b1]) => b1 >= crossing[0] - 1e-9 && b0 <= crossing[1] + 1e-9) : clipSegmentToConvex(section.start, section.end, band);
           if (!c) continue;
           const [lh0, lh1] = hRange([at(c[0]), at(c[1])]);
           // h of a layer face, measured where the plane actually crosses it (correct for oblique cuts).
-          const hAtFace = s => { const off = q => Math.abs(dot2(sub(q, wall.start), nw) - s); return hOf(off(at(c[0])) <= off(at(c[1])) ? at(c[0]) : at(c[1])); };
+          const hAtFace = s => { const off = q => Math.abs(offsetOf(q) - s); return hOf(off(at(c[0])) <= off(at(c[1])) ? at(c[0]) : at(c[1])); };
           const sInner = Math.abs(s0) < Math.abs(s1) ? s0 : s1, sOuter = sInner === s0 ? s1 : s0;
           let zSpans = spans.filter(([z0, z1]) => z1 - z0 > 1);
           for (const { header, opening } of headers.filter(item => item.band?.layer === layer)) {
@@ -2036,8 +2334,8 @@
           }
           for (const [z0, z1] of zSpans) regions.push({ id: wall.id, role: 'layer', h0: lh0, h1: lh1, z0, z1, layerId: layer.id, materialId: layer.materialId ?? null });
         }
-        continue;
       }
+      if (crossings.length) continue;
       const clipped = clipHalfPlane(rect, sOf);
       if (clipped.length < 3) continue;
       const [h0, h1] = hRange(clipped), depth = Math.min(...clipped.map(sOf));
@@ -2166,7 +2464,10 @@
       }
       ground.sort((a, b) => a.h - b.h);
     }
-    return { cut, beyond, roofCut, hOf, regions, members, ground };
+    // Plants beyond the cut, back to front; plants behind the viewer are left out.
+    const plants = standingPlants(model).map(planting => ({ planting, h: hOf(planting.position), depth: sOf(planting.position) }))
+      .filter(item => item.depth + plantingCanopy(model, item.planting) / 2 > 0 && item.depth <= PLANT_VIEW_DEPTH_MM).sort((a, b) => b.depth - a.depth || a.planting.id.localeCompare(b.planting.id));
+    return { cut, beyond, roofCut, hOf, regions, members, ground, plants };
   }
 
   function renderSectionSheet(model, sectionId) {
@@ -2189,6 +2490,9 @@
     // deepest cut element (at least 600 mm). The earth only joins the extent when the sheet would still
     // carry material detail with it, so it never shrinks the scale for a band it cannot draw.
     const minH = Math.min(...hs), maxH = Math.max(...hs);
+    // Plants within the drawing's width are drawn beyond the cut, at full height.
+    const sectionPlants = geometry.plants.filter(item => item.h >= minH && item.h <= maxH);
+    for (const item of sectionPlants) zs.push(plantBase(model, item.planting), plantTop(model, item.planting));
     const earthBottom = Math.min((groundProfile ? Math.min(...groundProfile.map(p => p.under ?? p.z)) : ground) - 600, Math.min(...zs) - 300);
     const fitsDetail = minZ => materialsActive(model, selectScale(profileFor(model), maxH - minH, Math.max(...zs) - minZ, drawingArea(profileFor(model)), VERTICAL_EXTRA).ratio);
     const earthId = model.site?.groundMaterialId && fitsDetail(earthBottom) ? model.site.groundMaterialId : null;
@@ -2214,8 +2518,9 @@
           const box = { h0: minH, h1: maxH, z0: earthBottom, z1: ground };
           // With terrain the earth follows the ground profile, up to the slab underside under the building.
           const points = groundProfile ? [...groundProfile.map(p => map(p.h, p.under ?? p.z)), map(groundProfile.at(-1).h, earthBottom), map(groundProfile[0].h, earthBottom)] : rect(box);
-          parts.push(`<g data-role="earth" pointer-events="none">${mats.region(points, frameOf(box), mats.resolve(earthId), profile ? `clip-earth-${section.id}` : null)}</g>`);
+          parts.push(`<g data-role="earth" pointer-events="none">${mats.region(points, frameOf(box), mats.resolve(earthId), groundProfile ? `clip-earth-${section.id}` : null)}</g>`);
         }
+        if (sectionPlants.length) parts.push(`<g data-role="plants">${sectionPlants.map(item => plantProfileSvg(model, item.planting, map, item.h, plantBase(model, item.planting), P)).join('')}</g>`);
         for (const item of [...geometry.beyond].sort((a, b) => b.depth - a.depth)) {
           const pen = item.depth < 1000 ? P.medium : P.thin;
           if (item.kind === 'roof') parts.push(`<g data-entity="${escapeHtml(item.id)}">${svgPoly(item.hull.map(p => map(p.x, p.y)), { fill: DRAFT.paper, width: P.thin })}</g>`);
@@ -2802,8 +3107,9 @@
       if (headers.length) openItems = openItems.map(item => item === 'Header size and framing' ? 'Header sizing and bearing by an engineer' : item);
       if (wall) { diagram = openingDetail(entity, wall.heightMm, { width: L(entity.widthMm), height: L(entity.heightMm), sill: L(entity.sillMm) }, headers); caption = 'Elevation in its wall, not to scale.'; }
     } else if (type === 'Wall') {
-      context = `${capitalize(entity.kind)} wall, ${levelName(entity.levelId)}`;
-      dims.push(['Length', L(Math.hypot(entity.end.x - entity.start.x, entity.end.y - entity.start.y))], ['Thickness', L(entity.thicknessMm)], ['Height', L(entity.heightMm)], ['Openings', String(model.openings.filter(item => item.wallId === entity.id).length)]);
+      context = `${capitalize(entity.kind)}${entity.bulge ? ' curved' : ''} wall, ${levelName(entity.levelId)}`;
+      dims.push(['Length', L(wallLength(entity))], ['Thickness', L(entity.thicknessMm)], ['Height', L(entity.heightMm)], ['Openings', String(model.openings.filter(item => item.wallId === entity.id).length)]);
+      if (entity.bulge) dims.push(['Radius', L(wallGeometry(entity).radius)], ['Chord', L(Math.hypot(entity.end.x - entity.start.x, entity.end.y - entity.start.y))]);
       if (entity.baseOffsetMm) dims.push(['Base offset', L(entity.baseOffsetMm)]);
       dims.push(...assemblyRows(entity));
     } else if (type === 'Room') {
@@ -3151,10 +3457,12 @@
       pushPrism(gls.triangles, column.position.x / 1000, (column.baseElevationMm + column.topElevationMm) / 2000, -column.position.y / 1000, column.shape.widthMm / 1000, (column.topElevationMm - column.baseElevationMm) / 1000, column.shape.depthMm / 1000, -(column.rotationDeg ?? 0) * Math.PI / 180, rgb(materialColor(column.materialId, '#7d858c')));
     }
     for (const wall of model.walls) {
-      const level = levelMap.get(wall.levelId); const length = Math.hypot(wall.end.x-wall.start.x,wall.end.y-wall.start.y); const openings = model.openings.filter(item => item.wallId === wall.id).sort((a,b)=>a.offsetMm-b.offsetMm);
+      const level = levelMap.get(wall.levelId); const length = wallLength(wall); const openings = model.openings.filter(item => item.wallId === wall.id).sort((a,b)=>a.offsetMm-b.offsetMm);
       const angle = Math.atan2(-(wall.end.y-wall.start.y), wall.end.x-wall.start.x); const unit = { x:(wall.end.x-wall.start.x)/length, y:(wall.end.y-wall.start.y)/length };
       const color = rgb(assemblyColor(wall, wall.thicknessMm, wall.kind === 'exterior' ? '#d6d0c3' : '#b8c7bd'));
-      const addChunk = (from,to,z0,z1) => { if (to-from < 1 || z1-z0 < 1) return; const offset=(from+to)/2; const x=wall.start.x+unit.x*offset; const y=wall.start.y+unit.y*offset; pushPrism(gls.triangles,x/1000,((level?.elevationMm??0)+(wall.baseOffsetMm??0)+z0+(z1-z0)/2)/1000,-y/1000,(to-from)/1000,(z1-z0)/1000,wall.thicknessMm/1000,angle,color); };
+      // Arc walls extrude their curved band, so pieces between openings meet without gaps.
+      const arcWall = wall.bulge ? wallGeometry(wall) : null, wallBase = (level?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0);
+      const addChunk = (from,to,z0,z1) => { if (to-from < 1 || z1-z0 < 1) return; if (arcWall) { pushExtrusion(gls.triangles, wallBand(arcWall, from, to, wall.thicknessMm / 2, -wall.thicknessMm / 2), wallBase + z0, wallBase + z1, color); return; } const offset=(from+to)/2; const x=wall.start.x+unit.x*offset; const y=wall.start.y+unit.y*offset; pushPrism(gls.triangles,x/1000,((level?.elevationMm??0)+(wall.baseOffsetMm??0)+z0+(z1-z0)/2)/1000,-y/1000,(to-from)/1000,(z1-z0)/1000,wall.thicknessMm/1000,angle,color); };
       let cursor=0; for(const opening of openings){addChunk(cursor,opening.offsetMm,0,wall.heightMm);addChunk(opening.offsetMm,opening.offsetMm+opening.widthMm,0,opening.sillMm);addChunk(opening.offsetMm,opening.offsetMm+opening.widthMm,opening.sillMm+opening.heightMm,wall.heightMm);cursor=opening.offsetMm+opening.widthMm;} addChunk(cursor,length,0,wall.heightMm);
     }
     for (const object of [...model.fixtures, ...model.equipment]) {
@@ -3588,7 +3896,7 @@
 
   const studioApi = {
     state, PROFILES, DISCIPLINES, MATERIAL_CATEGORIES, HEADER_KINDS, materialContext, materialsActive, wallBands, segmentPolygonIntervals, triangulate, pushExtrusion, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
-    bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, polygonArea, pointInPolygon,
+    bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, polygonArea, pointInPolygon, wallGeometry, wallLength, wallEndClip, terrainOf, siteExtent,
     renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport
   };
