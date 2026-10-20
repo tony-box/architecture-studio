@@ -54,7 +54,7 @@ test('a path outline keeps its width everywhere: every edge point sits half the 
 
 test('path validation names the fix', () => {
   const issue = p => [...api.centerlineIssues(p)].join(' | ');
-  assert.match(issue({ ...shapes['two curves'], cornerRadiusMm: 500 }), /under half the width \(600 mm\).*use at least 600 mm/);
+  assert.match(issue({ ...shapes['two curves'], cornerRadiusMm: 500 }), /too close to half the width \(600 mm\).*use at least \d+ mm/);
   assert.match(issue({ ...shapes['two curves'], cornerRadiusMm: 9000 }), /reduce point 1 to \d+ mm and point 2 to \d+ mm, or move the points apart/);
   assert.match(issue({ centerline: [{ x: 0, y: 0 }, { x: 0, y: 0 }], widthMm: 900 }), /coincide/);
   assert.match(issue({ centerline: [{ x: 0, y: 0 }, { x: 5000, y: 0 }, { x: 0, y: 1 }], widthMm: 900 }), /doubles back/);
@@ -190,4 +190,34 @@ test('system route lengths are unaffected by path geometry', () => {
   const edge = barn.systems[0].edges[0], expected = edge.path.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - edge.path[i].x, p.y - edge.path[i].y, p.z - edge.path[i].z), 0);
   const shown = api.entityDetails(barn, edge.id).dims.find(([label]) => label === 'Length')[1];
   assert.equal(shown, api.formatLength(expected, barn.project.coordinates.displayUnits).replace(/^0'-/, '').replace(/^0 (?=\d+\/)/, ''));
+});
+
+test('review regressions: edge-only crossings, curved-wall faces, matchWidth limits, minimum radius', () => {
+  // A narrow walk cutting straight through the house, with no vertex inside it.
+  const through = clone(site), stepping = through.surfaces.find(item => item.id === 'surface-stepping-path');
+  stepping.path.centerline = [{ x: 3000, y: 16000 }, { x: 15000, y: 16000 }];
+  stepping.path.widthMm = 100;
+  assert.ok(findings(through).some(item => item.code === 'surface.under-building' && item.entityId === 'surface-stepping-path'));
+  assert.ok(inspect(html, through, 'surface-stepping-path').clearanceToBuildingMm < 0, 'inspect reports the crossing as negative clearance');
+  // The curved bay's exterior face is the outside of the arc: the room is on the inside.
+  const bay = site.walls.find(item => item.id === 'wall-bay'), g = api.wallGeometry(bay);
+  const exterior = api.anchorPoint(site, { wallId: 'wall-bay', alongMm: Math.round(g.length / 2) }).point;
+  const interior = api.anchorPoint(site, { wallId: 'wall-bay', alongMm: Math.round(g.length / 2), face: 'interior' }).point;
+  near(Math.hypot(exterior.x - g.center.x, exterior.y - g.center.y), g.radius + bay.thicknessMm / 2, 2, 'exterior face');
+  near(Math.hypot(interior.x - g.center.x, interior.y - g.center.y), g.radius - bay.thicknessMm / 2, 2, 'interior face');
+  // matchWidth on an opening in a curved wall is refused with the alternative.
+  const curved = clone(site); curved.surfaces.find(item => item.id === 'surface-walk').path.centerline[0].anchor.openingId = 'opening-bay-window';
+  assert.ok(findings(curved).some(item => item.code === 'surface.path' && /curved wall; anchor a boundary to its start and end jambs/.test(item.message)));
+  // matchWidth on an outline vertex is reported, not ignored.
+  const outline = clone(site); outline.surfaces.find(item => item.id === 'surface-patio').boundary[0] = { anchor: { wallId: 'wall-west', alongMm: 1000, matchWidth: true } };
+  assert.ok(findings(outline).some(item => item.code === 'surface.anchor' && /only applies to the first or last point of a path/.test(item.message)));
+  // Interior partitions have rooms on both sides, so they have no exterior face to anchor to.
+  assert.match(api.anchorPoint(site, { wallId: 'wall-bedroom', alongMm: 1000 }).error ?? '', /no single exterior side/);
+  // A radius of exactly half the width is refused before it produces a broken outline.
+  const half = { centerline: [{ x: 0, y: 0 }, { x: 4000, y: 0 }, { x: 4000, y: 4000 }], widthMm: 1000, cornerRadiusMm: 500 };
+  const message = [...api.centerlineIssues(half)].join(' ');
+  assert.match(message, /too close to half the width .* use at least (\d+) mm/);
+  const minimum = Number(message.match(/at least (\d+) mm/)[1]);
+  assert.deepEqual([...api.centerlineIssues({ ...half, cornerRadiusMm: minimum })], []);
+  assert.deepEqual([...api.curveIssues(api.pathOutline({ ...half, cornerRadiusMm: minimum }))], []);
 });

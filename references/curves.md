@@ -52,7 +52,7 @@ a stake; Beziers cannot.
   `radiusMm`. `radiusMm: 0` is a sharp corner.
 - Place interior points where the straights would meet if the corner were
   sharp, not on the curve itself.
-- A radius must be at least half the width, or the inner edge folds.
+- A radius must be more than half the width, or the inner edge folds; the inner edge also needs a real arc, so validation names the exact minimum for each corner (a little over half the width for a right angle, more for gentle turns).
 - Each corner uses `radius × tan(turn / 2)` of the straight on each side of
   its point; two corners must fit on the straight between them. Validation
   names the largest radius that fits when they do not.
@@ -74,7 +74,7 @@ a stake; Beziers cannot.
 | "Move the curve east by 3 ft" | Move the points between the lead-in points east by 914 mm. If the walk has none (only lead-ins), add one where the bend should be |
 | "Make it an S-curve" | Two interior points turning opposite ways, with a straight between them |
 | "Straighten it" | Remove the interior points |
-| "Wider" / "narrower" | Change `widthMm`; check the radii are still at least half of it |
+| "Wider" / "narrower" | Change `widthMm`; check the radii are still more than half of it |
 | "Start it at the side door" | Move the first point to the middle of that door's opening, just outside the wall |
 
 ## Bowed edges (`bulge`)
@@ -123,6 +123,8 @@ model, so it lines up exactly and follows the opening if it moves.
 | "A curved patio in front of the door, its edges starting at the jambs" | Outline vertices anchored at `start` and `end`, then two more at the same jambs with `offsetMm` set to the patio depth, and a `bulge` on the far edge for the curve |
 | "The walk is 5 ft but centred on the door" | Anchor the first point at `center` without `matchWidth`, and set `widthMm: 1524` |
 | "Run the bed along the wall from the door to the corner" | Anchor its wall-side vertices to the door jamb and to the wall with `alongMm` at the wall end |
+
+`matchWidth` needs a door in a straight wall: a square path end cannot meet both jambs of an opening in a curved wall, so for those, anchor an outline's vertices to the `start` and `end` jambs instead. Interior partitions with rooms on both sides have no exterior face; anchor to exterior walls and their openings.
 
 A path end anchored to an opening must leave it square: the next centreline
 point goes straight out from the door, along the `outward` direction

@@ -79,7 +79,8 @@ interior point may override with its own `radiusMm`.
   obeys every rule in Curves and renders, cuts, and extrudes like any other
   boundary.
 - Errors: fewer than two points, coincident consecutive points, a turn of
-  nearly 180°, a radius under half the width, or neighbouring fillets that
+  nearly 180°, a radius too close to half the width for the inner edge to keep
+  a 10 mm arc, or neighbouring fillets that
   need more of a straight than it has. The messages give the largest radius
   that fits.
 
@@ -94,12 +95,16 @@ instead of `x` and `y`. It is resolved from the model before any geometry:
   wall).
 - `wallId` with `alongMm`: that distance along the wall's centreline.
 - The point lies on the wall's `exterior` face (default) or `interior` face.
-  The interior side is the side toward the centre of the level's walls. It
+  The interior side is the side with a room on it, tested just past each face
+  at the wall's midpoint (on the arc for a curved wall); when neither or both
+  sides have a room, an exterior wall falls back to the side toward the centre
+  of the level's walls, and any other wall is an error. It
   then moves `offsetMm` straight out from that face (the face normal, pointing
   away from the wall), and rounds to the millimetre.
 - `matchWidth: true` on a path's first or last point, anchored at an
   opening's centre, sets the path width to the opening width; the path then
-  has no `widthMm`. Its edges meet the jambs exactly.
+  has no `widthMm`. Its edges meet the jambs exactly. Openings in curved walls
+  do not support `matchWidth`.
 
 Anchors are resolved on every render, so a surface follows its opening or
 wall. An anchor that names a missing opening or wall, or an `alongMm` beyond

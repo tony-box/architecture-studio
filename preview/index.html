@@ -664,13 +664,16 @@
     const tol = model.project.coordinates.toleranceMm ?? 3;
     const distanceToRing = (p, ring) => Math.min(...ring.map((a, i) => { const b = ring[(i + 1) % ring.length], d = sub(b, a), t = Math.max(0, Math.min(1, dot2(sub(p, a), d) / (dot2(d, d) || 1))); return Math.hypot(p.x - a.x - d.x * t, p.y - a.y - d.y * t); }));
     const strictlyInside = (p, ring) => pointInPolygon(p, ring) && distanceToRing(p, ring) > tol + CURVE_TOLERANCE_MM;
+    // Two outlines overlap when either holds a point of the other or their edges cross; vertices alone miss
+    // a narrow walk that cuts straight through a building.
+    const edgesCross = (a, b) => a.some((p, i) => { const q = a[(i + 1) % a.length]; return b.some((r, j) => properCross(p, q, r, b[(j + 1) % b.length])); });
     const lot = site.propertyLine && !curveIssues(site.propertyLine.boundary, { bezier: false }).length ? ringOf(site.propertyLine.boundary) : null;
     const lowest = sortedLevels(model)[0], footprints = model.slabs.filter(slab => slab.levelId === lowest?.id && !curveIssues(slab.boundary).length).map(slab => ringOf(slab.boundary));
     for (const surface of (model.surfaces ?? []).filter(item => item.levelId === lowest?.id)) {
       const outline = outlineOf(model, surface); if (!outline || curveIssues(outline).length) continue;
       const ring = ringOf(outline);
-      if (lot && ring.some(p => !pointInPolygon(p, lot) && distanceToRing(p, lot) > tol + CURVE_TOLERANCE_MM)) add('warning', 'site.outside-lot', `${surface.name ?? surface.id} extends past the property line.`, surface.id);
-      if (footprints.some(foot => ring.some(p => strictlyInside(p, foot)) || foot.some(p => strictlyInside(p, ring)))) add('warning', 'surface.under-building', `${surface.name ?? surface.id} runs under the building footprint.`, surface.id);
+      if (lot && (ring.some(p => !pointInPolygon(p, lot) && distanceToRing(p, lot) > tol + CURVE_TOLERANCE_MM) || edgesCross(ring, lot))) add('warning', 'site.outside-lot', `${surface.name ?? surface.id} extends past the property line.`, surface.id);
+      if (footprints.some(foot => ring.some(p => strictlyInside(p, foot)) || foot.some(p => strictlyInside(p, ring)) || edgesCross(ring, foot))) add('warning', 'surface.under-building', `${surface.name ?? surface.id} runs under the building footprint.`, surface.id);
     }
     for (const planting of (model.plantings ?? []).filter(item => item.position && item.status === 'proposed')) {
       if (lot && !pointInPolygon(planting.position, lot)) add('warning', 'site.outside-lot', `${planting.id} is planted outside the property line.`, planting.id);
@@ -980,7 +983,11 @@
     const fillets = pathFillets(path);
     for (const f of fillets) {
       if (Math.abs(Math.abs(f.turn) - Math.PI) < 0.05) issues.push(`centerline point ${f.index} doubles back on itself`);
-      else if (f.r > 0 && f.r < w / 2) issues.push(`the radius at centerline point ${f.index} is ${f.r} mm, under half the width (${Math.ceil(w / 2)} mm), so the inner edge would fold; use at least ${Math.ceil(w / 2)} mm`);
+      // The inner edge's arc has radius R - w/2; it must stay long enough (10 mm chord) to be a real arc.
+      else if (f.r > 0 && f.tangent > 0 && f.r < w / 2 + 2 + 5 / Math.sin(Math.abs(f.turn) / 2)) {
+        const min = Math.ceil(w / 2 + 2 + 5 / Math.sin(Math.abs(f.turn) / 2));
+        issues.push(`the radius at centerline point ${f.index} is ${f.r} mm, too close to half the width (${w / 2} mm), so the inner edge would fold; use at least ${min} mm`);
+      }
     }
     // Neighbouring fillets share the straight between them; together they must fit on it.
     for (let i = 0; i < pts.length - 1; i += 1) {
@@ -1052,15 +1059,21 @@
     const face = anchor.face ?? 'exterior';
     if (!['exterior', 'interior'].includes(face)) return { error: `has face "${face}"; use exterior or interior` };
     if (anchor.offsetMm != null && !isFiniteInteger(anchor.offsetMm)) return { error: 'has a non-integer offsetMm' };
+    // A wall with rooms on both sides (or neither) has no exterior face unless it is an exterior wall.
+    if (wall.kind !== 'exterior' && wallRoomSide(model, wall) === 0) return { error: `names ${wall.id}, which has no single exterior side; anchor to an exterior wall or an opening in one` };
+    // A path end cannot be square to a curved wall and meet both jambs, so matchWidth needs a straight wall.
+    if (anchor.matchWidth && wall.bulge) return { error: `uses matchWidth on ${opening?.id ?? wall.id} in a curved wall; anchor a boundary to its start and end jambs instead` };
     // The interior side is the one toward the centre of the level's walls; the exterior face is the other.
     const interior = wallInteriorSign(model, wall), sign = face === 'exterior' ? -interior : interior;
     const outward = mul(g.normal(along), sign), p = add(g.at(along, sign * wall.thicknessMm / 2), mul(outward, anchor.offsetMm ?? 0));
     return { point: { x: Math.round(p.x), y: Math.round(p.y) }, outward, along: g.tangent(along), opening, wall };
   }
   // A vertex list with every anchor replaced by its point. Curve fields (bulge, c1, c2, radiusMm) stay.
-  function resolveAnchors(model, vertices, issues = []) {
+  // `matchWidth` only means something on a path end, so anywhere else it is reported rather than ignored.
+  function resolveAnchors(model, vertices, issues = [], allowMatchWidth = false) {
     return (vertices ?? []).map((vertex, index) => {
       if (vertex?.anchor == null) return vertex;
+      if (vertex.anchor.matchWidth && !allowMatchWidth) issues.push(`point ${index} uses matchWidth, which only applies to the first or last point of a path`);
       const found = anchorPoint(model, vertex.anchor), { anchor, ...rest } = vertex;
       if (found.error) { issues.push(`point ${index} anchor ${found.error}`); return { ...rest, x: NaN, y: NaN }; }
       return { ...rest, ...found.point };
@@ -1068,7 +1081,7 @@
   }
   // A path with its anchors resolved; a `matchWidth` anchor at an end sets the width to the opening's.
   function resolvePath(model, path, issues = []) {
-    const centerline = resolveAnchors(model, path.centerline, issues), ends = [path.centerline?.[0], path.centerline?.at(-1)].filter(Boolean);
+    const centerline = resolveAnchors(model, path.centerline, issues, true), ends = [path.centerline?.[0], path.centerline?.at(-1)].filter(Boolean);
     const matching = ends.map(p => p.anchor).filter(a => a?.matchWidth);
     let widthMm = path.widthMm;
     if (matching.length) {
@@ -1689,9 +1702,21 @@
   // Layers of a wall or slab in authored order; a single material or none becomes one full-depth layer.
   const assemblyLayers = (entity, depth) => entity.layers?.length ? entity.layers : [{ id: null, materialId: entity.materialId ?? null, thicknessMm: depth }];
   // +1 when a wall's interior (the side toward the centre of its level's walls) is its left side.
+  // Which side of a wall has a room on it: +1 left, -1 right, 0 when both or neither do. Probes sit just past
+  // each face at the wall's midpoint (on the arc for a curved wall).
+  function wallRoomSide(model, wall) {
+    const g = wallGeometry(wall), mid = g.at(g.length / 2), n = g.normal(g.length / 2), probe = wall.thicknessMm / 2 + 100;
+    const rooms = (model.spaces ?? []).filter(space => space.levelId === wall.levelId && !curveIssues(space.boundary).length).map(space => ringOf(space.boundary));
+    const left = rooms.some(ring => pointInPolygon(add(mid, mul(n, probe)), ring)), right = rooms.some(ring => pointInPolygon(add(mid, mul(n, -probe)), ring));
+    return left === right ? 0 : left ? 1 : -1;
+  }
+  // +1 when a wall's interior is its left side: the side with a room, or failing that, the side toward the
+  // centre of the level's walls.
   function wallInteriorSign(model, wall) {
+    const rooms = wallRoomSide(model, wall);
+    if (rooms) return rooms;
     const walls = model.walls.filter(item => item.levelId === wall.levelId), box = boundsOf(walls.flatMap(wallPoints));
-    const n = perp(unit2(sub(wall.end, wall.start))), mid = mul(add(wall.start, wall.end), 0.5);
+    const g = wallGeometry(wall), mid = g.at(g.length / 2), n = g.normal(g.length / 2);
     return dot2(sub({ x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 }, mid), n) >= 0 ? 1 : -1;
   }
   // Wall layers as bands across the thickness: s is the offset from the centreline, positive to the
@@ -1995,8 +2020,11 @@
       // Fills sit outside the entity group so a clipped directional fill never nests inside it.
       const fill = mats.active ? mats.region(outline, { o, u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: (box.x1 - box.x0) / ratio, T: (box.y1 - box.y0) / ratio }, mats.resolve(surface.materialId), `clip-${surface.id}`) : '';
       layers.site.push(`${fill}<g data-entity="${escapeHtml(surface.id)}">${svgRing(outlineOf(model, surface), map, ratio, { fill: DRAFT.paper, fillOpacity: 0, stroke: ink, width: P.thin })}</g>`);
-      // Labels and dimension values stay off hatched walks, patios, and drives.
-      placer.reserveShape(outline);
+      // Labels and dimension values stay off hatched walks, patios, and drives, as far as the plan draws them.
+      if (siteModel) {
+        const a = map({ x: ext.minX, y: ext.maxY }), b = map({ x: ext.maxX, y: ext.minY });
+        placer.reserveShape([p => p.x - a.x, p => b.x - p.x, p => p.y - a.y, p => b.y - p.y].reduce((points, f) => points.length >= 3 ? clipHalfPlane(points, f) : points, outline));
+      } else placer.reserveShape(outline);
     }
     for (const space of model.spaces.filter(item => item.levelId === level.id)) {
       layers.rooms.push(`<g data-entity="${escapeHtml(space.id)}">${svgRing(space.boundary, map, ratio, { fill: DRAFT.paper, fillOpacity: 0, width: 0 })}</g>`);
@@ -2264,8 +2292,13 @@
       const s = map(cropped[0]), e = map(cropped[1]), d = unit2(sub(e, s));
       const look = section.lookDirection === 'left' ? perp(unit2(sub(section.end, section.start))) : mul(perp(unit2(sub(section.end, section.start))), -1);
       const lookPaper = unit2({ x: look.x, y: -look.y }), r = 5, letter = sectionLetter(model, section.id), sheet = sectionSheetId(model, section.id);
-      // Each bubble slides outward along the cut line until it clears dimensions and other marks.
-      const clearReach = (anchor, outward) => { let reach = 8; while (reach < 40 && !placer.fits(centeredBox(add(anchor, mul(outward, reach + r)), 2 * r + 7, 2 * r + 7))) reach += 1; return reach; };
+      // Each bubble slides outward along the cut line until it clears dimensions and other marks. With no clear
+      // spot within 40 mm it stays at its usual 8 mm, inside the drawing, and the sheet says so.
+      const clearReach = (anchor, outward) => {
+        for (let reach = 8; reach < 40; reach += 1) if (placer.fits(centeredBox(add(anchor, mul(outward, reach + r)), 2 * r + 7, 2 * r + 7))) return reach;
+        warnings.push({ severity: 'warning', code: 'label.placement', message: `${section.name}: no clear position for a section mark on ${level.name}.`, entityId: section.id });
+        return 8;
+      };
       const reachStart = clearReach(s, mul(d, -1)), reachEnd = clearReach(e, d);
       const parts = [svgLine(sub(s, mul(d, reachStart)), add(e, mul(d, reachEnd)), { stroke: ink, width: P.fine, dash: '12 2 2 2' })];
       for (const c of [sub(s, mul(d, reachStart + r)), add(e, mul(d, reachEnd + r))]) {

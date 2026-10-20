@@ -12,12 +12,26 @@ import { loadStudioApi } from './export-drawings.mjs';
 import { isMain, parseArgs, readJson, resolveStudioPage } from './lib.mjs';
 
 const round = value => Math.round(value);
-function distanceToRing(p, ring) {
-  return Math.min(...ring.map((a, i) => {
-    const b = ring[(i + 1) % ring.length], dx = b.x - a.x, dy = b.y - a.y;
-    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
-    return Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t);
-  }));
+const crosses = (a, b, c, d) => {
+  const o = (p, q, r) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
+  return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
+};
+function pointToSegment(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+  return Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t);
+}
+// Smallest gap between two outlines, edge to edge; 0 when their edges cross.
+function ringGap(a, b) {
+  let gap = Infinity;
+  for (let i = 0; i < a.length; i += 1) {
+    const p = a[i], q = a[(i + 1) % a.length];
+    for (let j = 0; j < b.length; j += 1) {
+      const r = b[j], s = b[(j + 1) % b.length];
+      if (crosses(p, q, r, s)) return 0;
+      gap = Math.min(gap, pointToSegment(p, r, s), pointToSegment(q, r, s), pointToSegment(r, p, q), pointToSegment(s, p, q));
+    }
+  }
+  return gap;
 }
 
 export function inspect(html, model, id) {
@@ -55,13 +69,18 @@ export function inspect(html, model, id) {
         outline
       };
     }
-    // Clearances: negative means the shape crosses into the building or past the lot line.
+    // Clearances: negative means the shape overlaps the building or crosses the lot line, by the overlap's depth.
     const lowest = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm)[0];
     const footprints = model.slabs.filter(slab => slab.levelId === lowest.id && slab.id !== id).map(slab => api.ringOf(slab.boundary));
-    if (footprints.length) report.clearanceToBuildingMm = round(Math.min(...footprints.map(foot => Math.min(...ring.map(p => (api.pointInPolygon(p, foot) ? -1 : 1) * distanceToRing(p, foot))))));
+    const overlapDepth = (inner, outer) => Math.max(0, ...inner.filter(p => api.pointInPolygon(p, outer)).map(p => Math.min(...outer.map((a, i) => pointToSegment(p, a, outer[(i + 1) % outer.length])))));
+    if (footprints.length) report.clearanceToBuildingMm = round(Math.min(...footprints.map(foot => {
+      const gap = ringGap(ring, foot), depth = Math.max(overlapDepth(ring, foot), overlapDepth(foot, ring));
+      return depth > 0 || gap === 0 ? -Math.max(depth, 1) : gap;
+    })));
     if (model.site?.propertyLine) {
-      const lot = api.ringOf(model.site.propertyLine.boundary);
-      report.clearanceToPropertyLineMm = round(Math.min(...ring.map(p => (api.pointInPolygon(p, lot) ? 1 : -1) * distanceToRing(p, lot))));
+      const lot = api.ringOf(model.site.propertyLine.boundary), outside = ring.filter(p => !api.pointInPolygon(p, lot));
+      const gap = ringGap(ring, lot);
+      report.clearanceToPropertyLineMm = round(outside.length || gap === 0 ? -Math.max(1, ...outside.map(p => Math.min(...lot.map((a, i) => pointToSegment(p, a, lot[(i + 1) % lot.length]))))) : gap);
     }
   } else if (entity?.position) report.position = entity.position;
   // Doors and windows: the points an anchor can name, so a walk or patio can be lined up with them.
