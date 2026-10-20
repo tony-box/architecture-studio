@@ -83,3 +83,19 @@ test('the schema checker rejects malformed models', () => {
   assert.ok(errors.some(error => error.includes('walls[0].thicknessMm')));
   assert.ok(errors.some(error => error.includes('unexpected property extra')));
 });
+
+test('the schema enforces curve vertices, draped surfaces, and plantings', () => {
+  const model = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', 'hillside-garden-house', 'building.json'), 'utf8'));
+  const bad = structuredClone(model);
+  bad.surfaces[0].boundary[0] = { x: 0, y: 0, bulge: 0.5, c1: { x: 1, y: 1 }, c2: { x: 2, y: 2 } };
+  delete bad.surfaces.find(item => item.id === 'surface-patio').topElevationMm;
+  bad.plantings[0].boundary = [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 0, y: 1000 }];
+  bad.surfaces[1].boundary[0] = { x: 0, y: 0, c1: { x: 1, y: 1 } };
+  bad.site.propertyLine.boundary[1].c1 = { x: 1, y: 1 };
+  const errors = check(schema, bad).join('\n');
+  assert.match(errors, /surfaces\[0\]\.boundary\[0\]: matches a forbidden shape/);
+  assert.match(errors, /surfaces\[5\]: missing topElevationMm/);
+  assert.match(errors, /plantings\[0\]: matches a forbidden shape/);
+  assert.match(errors, /surfaces\[1\]\.boundary\[0\]: missing c2/);
+  assert.match(errors, /propertyLine\.boundary\[1\]: unexpected property c1/);
+});
