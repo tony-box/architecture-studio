@@ -34,7 +34,10 @@
       standard scale, pen hierarchy, dimension terminators, title block, and
       no `label.placement` warnings left unresolved.
 - [ ] Every section definition renders a section sheet with cut elements in
-      poché, and its section marks appear on the plans.
+      poché or material hatching, and its section marks appear on the plans.
+- [ ] On sheets with material detail, the material key lists exactly the
+      materials drawn, and no element the brief leaves open carries an
+      invented material.
 
 ## Professional Handoff
 
