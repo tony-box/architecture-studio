@@ -274,7 +274,10 @@ contours, plantings (with their canopies), and the building. It uses the site
 ladders (Scales) and reserves an 88 mm column on the right of the drawing area
 for the plant schedule. When a model has site content, floor plans frame on
 the building plus 2000 mm instead; site surfaces and section lines are cropped
-at that frame, and the site plan shows the rest.
+at that frame, and the site plan shows the rest. Those floor plans draw only
+hard surfaces (walks, patios, decks, drives, gravel); lawn, mulch beds, and
+water appear only on the site plan. A surface's `onFloorPlans` overrides this
+either way.
 
 **Hatching (studio rule).** Site surfaces on L-101 are hatched at every site
 scale, because the tiles are drawn in paper millimetres and stay legible.

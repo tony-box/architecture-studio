@@ -142,7 +142,7 @@ test('floor plans of site models frame on the building and crop site features', 
   assert.ok(['1/8" = 1\'-0"', '1/4" = 1\'-0"'].includes(plan.scaleLabel), plan.scaleLabel);
   assert.match(plan.svg, /<clipPath id="plan-frame-level-ground">/);
   assert.match(plan.svg, /<g data-layer="site" clip-path="url\(#plan-frame-level-ground\)">/);
-  assert.match(plan.svg, /<pattern id="hatch-boards"|<pattern id="hatch-lawn"/);
+  assert.match(plan.svg, /<pattern id="hatch-pavers"/);
 });
 
 test('the 3D scene adds terrain, draped surfaces, and plantings, and says when it coarsens', () => {
@@ -229,4 +229,16 @@ test('site plan layers can be hidden in the viewer without changing the scale or
   for (const id of ['surface-walk', 'contour-ex-0', 'spot-front-door', 'site-grading-limit', 'site-property-line', 'setback-front']) assert.ok(!bare.includes(`data-entity="${id}"`), id);
   assert.ok(!bare.includes('TURF LAWN'), 'hidden surfaces leave the material key');
   assert.equal(buildDrawingSet(html, model).sheets[0].svg, full.svg, 'the export always draws every layer');
+});
+
+test('floor plans of site models show hard surfaces and leave lawn, beds, and water to the site plan', () => {
+  const model = clone(site), plan = api.renderPlanSheet(model, 'level-ground').svg;
+  for (const id of ['surface-walk', 'surface-patio', 'surface-stepping-path']) assert.ok(plan.includes(`data-entity="${id}"`), `${id} on the plan`);
+  for (const id of ['surface-front-lawn', 'surface-front-bed', 'surface-pond']) assert.ok(!plan.includes(`data-entity="${id}"`), `${id} left off the plan`);
+  assert.ok(!plan.includes('TURF LAWN'), 'the material key lists only what the plan draws');
+  model.surfaces.find(item => item.id === 'surface-front-bed').onFloorPlans = true;
+  model.surfaces.find(item => item.id === 'surface-walk').onFloorPlans = false;
+  const overridden = api.renderPlanSheet(model, 'level-ground').svg;
+  assert.ok(overridden.includes('data-entity="surface-front-bed"') && !overridden.includes('data-entity="surface-walk"'));
+  assert.ok(api.renderSitePlanSheet(model).svg.includes('data-entity="surface-front-lawn"'), 'the site plan still shows the lawn');
 });

@@ -582,6 +582,7 @@
         }
       }
       if (surface.followsGrade != null && typeof surface.followsGrade !== 'boolean') add('error', 'surface.geometry', 'followsGrade must be true or false.', surface.id);
+      if (surface.onFloorPlans != null && typeof surface.onFloorPlans !== 'boolean') add('error', 'surface.geometry', 'onFloorPlans must be true or false.', surface.id);
       if (surface.followsGrade === true) {
         if (!positive(surface.thicknessMm) || (surface.gradeOffsetMm != null && !isFiniteInteger(surface.gradeOffsetMm))) add('error', 'surface.geometry', 'A surface that follows grade needs a positive integer thickness and an integer gradeOffsetMm.', surface.id);
       } else if (!positive(surface.thicknessMm) || !isFiniteInteger(surface.topElevationMm)) add('error', 'surface.geometry', 'Surface needs a positive integer thickness and an integer top elevation.', surface.id);
@@ -1621,12 +1622,12 @@
     gypsum: { label: 'Gypsum board', color: '#eceae4', style: { kind: 'pattern', patterns: ['stipple'] } },
     // Site and landscape surfaces (drafting-standard.md "Site and landscape"). `site` marks categories
     // that describe ground cover, not building assemblies.
-    lawn: { label: 'Lawn', color: '#8fb36a', site: true, style: { kind: 'pattern', patterns: ['lawn'] } },
-    mulch: { label: 'Mulch planting bed', color: '#7d5b3e', site: true, style: { kind: 'pattern', patterns: ['mulch'] } },
+    lawn: { label: 'Lawn', color: '#8fb36a', site: true, soft: true, style: { kind: 'pattern', patterns: ['lawn'] } },
+    mulch: { label: 'Mulch planting bed', color: '#7d5b3e', site: true, soft: true, style: { kind: 'pattern', patterns: ['mulch'] } },
     asphalt: { label: 'Asphalt paving', color: '#55585a', site: true, style: { kind: 'pattern', patterns: ['asphalt'] } },
     'unit-pavers': { label: 'Unit pavers', color: '#b98b6e', site: true, style: { kind: 'pattern', patterns: ['pavers'] } },
     flagstone: { label: 'Flagstone', color: '#a8a291', site: true, style: { kind: 'pattern', patterns: ['flagstone'] } },
-    water: { label: 'Water', color: '#7fa7c4', site: true, style: { kind: 'pattern', patterns: ['water'] } },
+    water: { label: 'Water', color: '#7fa7c4', site: true, soft: true, style: { kind: 'pattern', patterns: ['water'] } },
     decking: { label: 'Wood decking', color: '#b88b5a', site: true, style: { kind: 'pattern', patterns: ['boards'] } },
     generic: { label: 'Material not specified', color: '#d6d0c3', style: { kind: 'poche' } }
   };
@@ -1947,7 +1948,11 @@
 
     // Higher surfaces draw over lower ones; a surface wholly under a higher one is not visible in plan.
     // Draped surfaces lie on the ground under every flat one.
-    const levelSurfaces = (model.surfaces ?? []).filter(item => item.levelId === level.id && outlineOf(model, item));
+    // Floor plans of a site model show hard surfaces at the building (walks, patios, decks, drives) and leave lawn,
+    // beds, and water to the site plan; onFloorPlans on a surface overrides that either way.
+    const catalog = new Map((model.materials ?? []).map(item => [item.id, item]));
+    const onPlan = item => item.onFloorPlans ?? !(siteModel && MATERIAL_CATEGORIES[catalog.get(item.materialId)?.category]?.soft);
+    const levelSurfaces = (model.surfaces ?? []).filter(item => item.levelId === level.id && outlineOf(model, item) && onPlan(item));
     const flat = item => item.followsGrade !== true;
     const covered = surface => { const ring = ringOf(outlineOf(model, surface)); return levelSurfaces.some(other => { const otherRing = ringOf(outlineOf(model, other)); return other !== surface && flat(other) && flat(surface) && other.topElevationMm > surface.topElevationMm
       && ring.every(p => pointInPolygon(p, otherRing) || otherRing.some(q => samePoint(p, q, tolerance))); }); };

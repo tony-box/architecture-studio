@@ -510,6 +510,7 @@
         "topElevationMm": { "type": "integer", "description": "Flat top. Required unless the surface follows grade." },
         "thicknessMm": { "type": "integer", "minimum": 1, "description": "Vertical thickness below the top." },
         "followsGrade": { "type": "boolean", "default": false, "description": "Drape the top on the finished grade (lawn, beds, sloping walks)." },
+        "onFloorPlans": { "type": "boolean", "description": "Draw on floor plans. Defaults to true, except lawn, mulch, and water surfaces in a model with site content, which only the site plan shows." },
         "gradeOffsetMm": { "type": "integer", "default": 0, "description": "Top above finished grade when the surface follows grade." },
         "materialId": { "$ref": "#/$defs/id" },
         "evidence": { "$ref": "#/$defs/evidence" }
