@@ -10,6 +10,8 @@ const html = fs.readFileSync(path.join(skillRoot, 'assets', 'studio-template.htm
 const readFixture = name => JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', name, 'building.json'), 'utf8'));
 const fixture = readFixture('lakeside-barn-residence');
 const metricFixture = readFixture('compact-metric-studio');
+const materialFixture = readFixture('mixed-material-workshop');
+const metricMaterialFixture = readFixture('mixed-material-workshop-metric');
 
 function loadStudio() {
   return loadStudioApi(html);
@@ -322,4 +324,212 @@ test('approvals export references only real entities and the model fingerprint',
   assert.equal(exported.approvals.length, 1);
   assert.equal(exported.approvals[0].entityId, 'stair-main');
   assert.equal(exported.approvals[0].type, 'Stair');
+});
+test('material examples validate and draw every sheet without warnings', () => {
+  for (const model of [materialFixture, metricMaterialFixture]) {
+    const set = buildDrawingSet(html, structuredClone(model));
+    assert.equal(set.errors.length, 0, JSON.stringify(set.errors));
+    assert.deepEqual([...set.manifest.files.map(file => file.sheet)], ['A-101', 'A-102', 'A-201', 'A-202', 'A-203', 'A-204', 'A-301', 'A-302', 'M-101', 'M-102']);
+    for (const sheet of set.sheets) {
+      assert.equal(sheet.warnings.length, 0, `${sheet.sheetId}: ${JSON.stringify(sheet.warnings)}`);
+      const hatched = sheet.view === 'plan' || sheet.view === 'section';
+      assert.equal(/url\(#hatch-/.test(sheet.svg), hatched, `${sheet.sheetId} hatching`);
+      assert.equal(/>MATERIALS</.test(sheet.svg), hatched, `${sheet.sheetId} material key`);
+      // Every pattern a sheet uses is defined on that sheet.
+      for (const [, id] of sheet.svg.matchAll(/url\(#(hatch-[a-z-]+)\)/g)) assert.match(sheet.svg, new RegExp(`<pattern id="${id}"`), `${sheet.sheetId} defines ${id}`);
+    }
+  }
+});
+
+test('material hatching follows the drafting profile', () => {
+  const { api } = loadStudio();
+  const slabMaterial = units => {
+    const model = structuredClone(metricFixture);
+    model.project.coordinates.displayUnits = units;
+    model.materials = [{ id: 'mat-rc', name: 'Reinforced concrete', category: 'reinforced-concrete' }];
+    for (const slab of model.slabs) slab.materialId = 'mat-rc';
+    return api.renderSectionSheet(model, 'section-a').svg;
+  };
+  const imperial = slabMaterial('feet-inches'), metric = slabMaterial('metric');
+  assert.match(imperial, /url\(#hatch-concrete\)/);
+  assert.doesNotMatch(imperial, /url\(#hatch-diagonal-wide\)/, 'NCS shows reinforced concrete as plain concrete');
+  assert.match(metric, /url\(#hatch-diagonal-wide\)/, 'ISO/DIN practice adds 45-degree lines for reinforcement');
+
+  // Rigid insulation: zig-zag (NCS) against crosshatch (ISO/DIN). Sawn lumber end grain: X against rings.
+  const imperialSection = api.renderSectionSheet(structuredClone(materialFixture), 'section-aa').svg;
+  const metricSection = api.renderSectionSheet(structuredClone(metricMaterialFixture), 'section-aa').svg;
+  assert.doesNotMatch(imperialSection, /hatch-crosshatch/);
+  assert.match(metricSection, /url\(#hatch-crosshatch\)/);
+  const imperialPost = entityGroup(api.renderPlanSheet(structuredClone(materialFixture), 'level-upper').svg, 'column-ridge-post');
+  const metricPost = entityGroup(api.renderPlanSheet(structuredClone(metricMaterialFixture), 'level-upper').svg, 'column-ridge-post');
+  assert.equal((imperialPost.match(/<line/g) ?? []).length, 2, 'imperial end grain is an X');
+  assert.equal((metricPost.match(/<line/g) ?? []).length, 0);
+  assert.equal((metricPost.match(/<polygon points="(?:[^ "]+ ){23}[^ "]+"/g) ?? []).length, 2, 'metric end grain is two growth rings');
+});
+
+test('material detail falls back to poche without a catalog or at small scales', () => {
+  const { api } = loadStudio();
+  const legacy = api.renderPlanSheet(cloneFixture(), 'level-ground').svg;
+  assert.doesNotMatch(legacy, /hatch-|MATERIALS/);
+
+  const distant = structuredClone(materialFixture);
+  distant.sections[1].start.x = -60000;
+  const small = api.renderPlanSheet(distant, 'level-ground');
+  assert.ok(small.ratio > 100, `expected a small scale, got 1:${small.ratio}`);
+  assert.doesNotMatch(small.svg, /hatch-|MATERIALS/);
+  assert.match(entityGroup(small.svg, 'wall-g-south'), /fill="#4d4d4d"/);
+
+  // Unassigned elements read as "not specified" once a sheet carries material detail.
+  const partial = structuredClone(materialFixture);
+  delete partial.walls.find(wall => wall.id === 'wall-g-office').layers;
+  assert.match(api.renderPlanSheet(partial, 'level-ground').svg, />MATERIAL NOT SPECIFIED</);
+});
+
+test('validation catches material, assembly, header, and member errors', () => {
+  const { api } = loadStudio();
+  const expectError = (code, mutate) => {
+    const model = structuredClone(materialFixture);
+    mutate(model);
+    assert.ok(errorCodes(api, model).includes(code), `${code} expected, got ${errorCodes(api, model).join(', ')}`);
+  };
+  assert.equal(errorCodes(api, structuredClone(materialFixture)).length, 0);
+  expectError('material.layers', model => { model.walls[0].layers[0].thicknessMm += 10; });
+  expectError('material.conflict', model => { model.walls[0].materialId = 'mat-cmu'; });
+  expectError('reference.material', model => { model.slabs[0].layers[2].materialId = 'mat-missing'; });
+  expectError('reference.material', model => { model.beams[0].materialId = 'mat-missing'; });
+  expectError('material.category', model => { model.materials[0].category = 'adobe'; });
+  expectError('opening.header', model => { model.openings.find(item => item.id === 'opening-studio-window').headers[0].layerIndex = 9; });
+  expectError('opening.header', model => { delete model.openings.find(item => item.id === 'opening-studio-window').headers[0].plies; });
+  expectError('opening.header', model => { model.openings.find(item => item.id === 'opening-studio-window').headers[1].layerIndex = 1; });
+  expectError('opening.header-fit', model => { model.openings.find(item => item.id === 'opening-studio-window').headers[0].depthMm = 900; });
+  expectError('opening.header-fit', model => { model.openings.find(item => item.id === 'opening-overhead-door').headers[0].bearingMm = 5000; });
+  expectError('member.profile', model => { delete model.beams[0].shape.flangeThicknessMm; });
+  expectError('member.profile', model => { model.columns[0].shape.wallThicknessMm = 80; });
+  expectError('member.geometry', model => { model.columns[0].topElevationMm = -10; });
+  expectError('renderer.unsupported-foundation', model => { model.foundations[0].boundary = [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 0, y: 1000 }]; });
+  expectError('renderer.unsupported-surface', model => { model.surfaces[0].boundary = [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 0, y: 1000 }]; });
+  assert.ok(api.validateModel(structuredClone(materialFixture)).some(finding => finding.code === 'structure.review' && finding.severity === 'advisory'));
+});
+
+test('sections cut assemblies, headers, members, foundations, and site surfaces', () => {
+  const { api } = loadStudio();
+  const model = structuredClone(materialFixture);
+  const aa = api.sectionGeometry(model, model.sections[0]);
+  const headerKinds = new Map(aa.regions.filter(region => region.role === 'header').map(region => [`${region.openingId}:${region.header.kind}`, region]));
+  for (const key of ['opening-overhead-door:steel-beam', 'opening-shop-window:masonry-bond-beam', 'opening-studio-window:built-up-lumber', 'opening-studio-window:steel-angle', 'opening-studio-north-window:engineered-lumber']) assert.ok(headerKinds.has(key), `${key} is cut`);
+  const builtUp = headerKinds.get('opening-studio-window:built-up-lumber'), window = model.openings.find(item => item.id === 'opening-studio-window');
+  assert.equal(builtUp.z0, model.levels[1].elevationMm + window.sillMm + window.heightMm);
+  assert.equal(builtUp.z1 - builtUp.z0, 235);
+  // The stud layer resumes above the header; the angle lintel leaves the brick it carries in place.
+  const studAbove = aa.regions.filter(region => region.id === 'wall-u-south' && region.role === 'layer' && region.materialId === 'mat-batt').map(region => region.z0);
+  assert.ok(studAbove.includes(builtUp.z1));
+  assert.ok(aa.regions.some(region => region.id === 'wall-u-south' && region.materialId === 'mat-brick' && region.z0 === builtUp.z0));
+
+  const slab = aa.regions.filter(region => region.id === 'slab-ground');
+  assert.deepEqual([...slab.map(region => region.materialId)], ['mat-concrete', 'mat-rigid', 'mat-gravel']);
+  assert.deepEqual([...slab.map(region => region.z1 - region.z0)], [102, 51, 152]);
+  const cutIds = new Set(aa.cut.map(item => item.id));
+  for (const id of ['foundation-stem-south', 'foundation-footing-north', 'foundation-pad-2', 'surface-apron', 'surface-apron-base']) assert.ok(cutIds.has(id), `${id} is cut`);
+  assert.deepEqual([...aa.members.map(member => member.id)].sort(), ['beam-floor', 'beam-ridge']);
+
+  const bb = api.sectionGeometry(model, model.sections[1]);
+  const floorBeam = bb.beyond.find(item => item.id === 'beam-floor');
+  assert.equal(floorBeam.kind, 'member', 'a beam seen along its length draws in outline');
+  assert.equal(floorBeam.flange, 8);
+  assert.ok(bb.beyond.some(item => item.id === 'column-shop-1'));
+
+  const sheet = api.renderSectionSheet(model, 'section-aa').svg;
+  assert.match(sheet, /data-role="earth"/);
+  assert.match(sheet, />UNDISTURBED EARTH</);
+  assert.match(entityGroup(sheet, 'beam-floor'), /<path d="M[^"]+" fill="#1b1b1b"/, 'steel cut solid');
+});
+
+test('material plans miter wall corners and stop partitions at the faces they meet', () => {
+  const { api } = loadStudio();
+  const plan = api.renderPlanSheet(structuredClone(materialFixture), 'level-ground').svg;
+  const polygons = id => [...entityGroup(plan, id).matchAll(/points="([^"]+)"/g)].map(match => match[1].split(' ').map(pair => pair.split(',').map(Number)));
+  const south = polygons('wall-g-south'), office = polygons('wall-g-office');
+  const southBottom = Math.max(...south.flat().map(([, y]) => y)), officeBottom = Math.max(...office.flat().map(([, y]) => y));
+  const wallPaper = 248 / 48;
+  assert.ok(officeBottom <= southBottom - wallPaper + 0.05, 'the partition stops at the inner face of the south wall');
+  const firstLeg = south[0], leftX = firstLeg.map(([x]) => x).sort((a, b) => a - b);
+  assert.ok(leftX[1] - leftX[0] > wallPaper * 0.9, 'the south wall miters at its west corner');
+});
+
+test('review details describe assemblies, headers, and members', () => {
+  const { api } = loadStudio();
+  const model = structuredClone(materialFixture);
+  const opening = api.entityDetails(model, 'opening-studio-window'), dims = Object.fromEntries(opening.dims);
+  assert.match(dims['Header 1'], /^Built-up lumber header 3-2x10, 0?'?-?9 1\/4" deep, 3" bearing$/);
+  assert.match(dims['Header 2'], /^Steel angle lintel L4x3-1\/2x5\/16/);
+  assert.ok(opening.openItems.includes('Header sizing and bearing by an engineer'));
+  assert.ok(!opening.openItems.includes('Header size and framing'));
+  assert.match(opening.diagram, /2 headers/);
+  assert.ok(!('Header' in Object.fromEntries(api.entityDetails(model, 'opening-studio-west-window').dims)));
+
+  const wall = Object.fromEntries(api.entityDetails(model, 'wall-u-south').dims);
+  assert.equal(wall['Layer 5'], 'Brick veneer, 3 5/8"');
+  assert.equal(wall['Layer 1'], 'Gypsum board, 5/8"');
+  const beam = Object.fromEntries(api.entityDetails(model, 'beam-floor').dims);
+  assert.equal(beam.Material, 'Structural steel');
+  assert.equal(beam.Designation, 'W8x18');
+  const material = api.entityDetails(model, 'mat-gravel');
+  assert.equal(material.type, 'Material');
+  assert.equal(Object.fromEntries(material.dims)['Used by'], '3 elements');
+});
+
+test('3D scene includes members, foundations, and site surfaces', () => {
+  const { api } = loadStudio();
+  const scene = { triangles: [], lines: [] };
+  api.state.model = structuredClone(materialFixture);
+  api.buildScene(scene);
+  const full = scene.triangles.length;
+  for (const key of ['beams', 'columns', 'foundations', 'surfaces']) api.state.model[key] = [];
+  api.buildScene(scene);
+  assert.ok(full > scene.triangles.length);
+});
+
+test('review regressions: lintel draw order, near-miss corners, unequal miters, earth scale, inherited keys', () => {
+  const { api } = loadStudio();
+  // Steel angle lintels draw after (over) the brick layer they carry.
+  const section = api.renderSectionSheet(structuredClone(materialFixture), 'section-aa').svg;
+  const materials = section.match(/<g data-role="materials"[^>]*>([\s\S]*?)<\/g>/)[1];
+  const lastBrick = materials.lastIndexOf('url(#hatch-diagonal)'), firstAngle = materials.search(/<polygon points="(?:[^ "]+ ){5}[^ "]+" fill="#1b1b1b"/);
+  assert.ok(firstAngle > lastBrick, 'angle lintels follow every brick fill');
+
+  const plan = model => api.renderPlanSheet(model, 'level-ground').svg;
+  const polygons = (svg, id) => [...entityGroup(svg, id).matchAll(/points="([^"]+)"/g)].map(match => match[1].split(' ').map(pair => pair.split(',').map(Number)));
+  const area = points => Math.abs(points.reduce((sum, [x, y], i) => { const [nx, ny] = points[(i + 1) % points.length]; return sum + x * ny - nx * y; }, 0) / 2);
+  // A corner whose endpoints miss by 10 mm still miters instead of leaving a hole.
+  const gap = structuredClone(materialFixture);
+  gap.walls.find(wall => wall.id === 'wall-g-west').end = { x: 0, y: 10 };
+  const west = polygons(plan(gap), 'wall-g-west'), south = polygons(plan(gap), 'wall-g-south');
+  assert.ok(Math.max(...west.flat().map(([, y]) => y)) >= Math.max(...south.flat().map(([, y]) => y)) - 0.05, 'the west wall reaches the outer corner');
+  // Collinear walls with a small gap keep their full width.
+  const split = structuredClone(materialFixture);
+  const wall = split.walls.find(item => item.id === 'wall-g-west');
+  split.walls.push({ ...structuredClone(wall), id: 'wall-g-west-lower', start: { x: 0, y: 2990 }, end: { x: 0, y: 0 } });
+  wall.end = { x: 0, y: 3000 };
+  split.openings = split.openings.filter(item => item.wallId !== 'wall-g-west');
+  for (const id of ['wall-g-west', 'wall-g-west-lower']) assert.ok(polygons(plan(split), id).every(points => area(points) > 1), `${id} keeps its width`);
+  // Walls of different thickness miter through both face intersections.
+  const thick = structuredClone(materialFixture);
+  const thickWest = thick.walls.find(item => item.id === 'wall-g-west');
+  thickWest.thicknessMm = 400; thickWest.layers[2].thicknessMm += 152;
+  thick.openings = thick.openings.filter(item => item.wallId !== 'wall-g-west');
+  const thickWestOutline = polygons(plan(thick), 'wall-g-west')[0], thickSouthOutline = polygons(plan(thick), 'wall-g-south')[0];
+  assert.ok(Math.abs(Math.max(...thickWestOutline.map(([, y]) => y)) - Math.max(...thickSouthOutline.map(([, y]) => y))) < 0.05, 'outer faces meet at one corner');
+
+  // Earth never pushes a section out of material detail.
+  const tall = structuredClone(materialFixture);
+  tall.foundations[0].depthMm = 20000;
+  const tallSheet = api.renderSectionSheet(tall, 'section-aa');
+  assert.ok(!/data-role="earth"/.test(tallSheet.svg) || tallSheet.ratio <= 100);
+
+  const inherited = structuredClone(materialFixture);
+  inherited.materials[0].category = 'toString';
+  assert.ok(errorCodes(api, inherited).includes('material.category'));
+  const badHeader = structuredClone(materialFixture);
+  badHeader.openings[0].headers[0].kind = 'constructor';
+  assert.ok(errorCodes(api, badHeader).includes('opening.header'));
 });

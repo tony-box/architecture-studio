@@ -43,7 +43,11 @@ survey accurate, or professionally engineered.
 4. **Write the model.** Write one active model to `models/building.json`.
    Store complete alternative concepts under `models/variants/`; do not
    maintain separate plan, elevation, or 3D geometry sources. Add section
-   definitions for the cuts the handoff needs.
+   definitions for the cuts the handoff needs. When the construction is known,
+   add a `materials` catalog and assign wall and slab `layers`, opening
+   `headers`, `beams`, `columns`, `foundations`, and site `surfaces` so the
+   drawings hatch by material; never invent a material the brief does not
+   support, and leave unknown elements without one.
 5. **Validate.** Check model references, polygons, hosted openings, vertical
    datums, stairs, and system connectivity. `export-drawings.mjs` (step 9)
    prints every validation error and writes nothing until they are fixed.

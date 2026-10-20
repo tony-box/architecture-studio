@@ -53,7 +53,7 @@ before writing `models/building.json`, save it to `brief.json` (validated by
 | Field | Question | Notes |
 | --- | --- | --- |
 | `preferences.roof` | Any roof preference? | The renderer supports one axis-aligned rectangular gable roof. Say so if the user wants something else, and record it as a handoff item. |
-| `preferences.construction` | Any construction preference? | Wood frame, post frame, steel, masonry, unknown. |
+| `preferences.construction` | Any construction preference? | Wood frame, post frame, steel, masonry, unknown. Also ask about cladding (brick, siding, stucco) and foundation type (slab, crawlspace, basement) when known; these seed the material catalog. |
 | `preferences.heating` | How should it be heated and cooled? | Heat pump, furnace, radiant, wood, undecided. |
 | `preferences.water` | Water heating preference? | Tank, tankless, heat pump, undecided. |
 | `preferences.accessibility` | Any accessibility needs? | Step-free entry, main-level bedroom, wider doors. |

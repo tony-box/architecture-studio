@@ -19,6 +19,21 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
 - Every system edge references two nodes in the same system.
 - Every fixture or equipment connection references an existing system node.
 - Derived dimensions reference existing entities or explicit model points.
+- Every `materialId` (walls, wall and slab layers, slabs, stairs, headers,
+  beams, columns, foundations, surfaces, `site.groundMaterialId`) resolves to a
+  catalog material with a known category.
+- A wall or slab uses `materialId` or `layers`, not both, and its layer
+  thicknesses sum to its thickness within tolerance.
+- A header names a known kind, a positive depth, and a wall layer that exists
+  (at most one header per layer). Built-up lumber has two or more plies, a
+  steel angle has a leg thickness smaller than its depth, and a steel beam
+  header has flange and web thicknesses. The header's top stays within the
+  wall height and its bearing stays within the wall length.
+- A beam or column shape has positive width and depth. Wide-flange shapes
+  carry flange and web thicknesses that fit; hollow sections carry a wall
+  thickness that fits. Beams have length; columns have a top above the base.
+- Foundations and site surfaces are axis-aligned rectangles with positive depth
+  or thickness.
 
 ## Warnings
 
@@ -39,6 +54,8 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
 - An entity confidence is below 0.75 or has `needs-review` status.
 - Site dimensions are not based on a survey.
 - Structural member sizes, connections, loads, or foundations are unresolved.
+  Any header, beam, or column raises one `structure.review` advisory: their
+  sizes are concept placeholders.
 - Pipe, duct, conductor, breaker, equipment-capacity, or penetration sizing is
   unresolved.
 - Code research is unavailable, uses a secondary source, or has conditional

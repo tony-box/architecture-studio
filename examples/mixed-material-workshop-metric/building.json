@@ -1,0 +1,1956 @@
+{
+  "schemaVersion": "1.0.0",
+  "project": {
+    "id": "mixed-material-workshop-metric",
+    "name": "Mixed-Material Workshop (Metric)",
+    "status": "study",
+    "description": "Synthetic metric companion to mixed-material-workshop: the same layout in metric sizes, for comparing the ISO-informed material hatching with the NCS-informed one.",
+    "coordinates": {
+      "unit": "mm",
+      "origin": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "siteDatumMm": 0,
+      "trueNorthDeg": 0,
+      "toleranceMm": 3,
+      "displayUnits": "metric"
+    },
+    "jurisdiction": {
+      "country": "Example Country",
+      "stateOrRegion": "Example Region",
+      "locality": "Example Municipality",
+      "codeReviewStatus": "unavailable"
+    }
+  },
+  "materials": [
+    {
+      "id": "mat-earth",
+      "name": "Natural ground",
+      "category": "earth"
+    },
+    {
+      "id": "mat-gravel",
+      "name": "Gravel 16/32",
+      "category": "gravel"
+    },
+    {
+      "id": "mat-concrete",
+      "name": "Concrete C25/30",
+      "category": "concrete"
+    },
+    {
+      "id": "mat-concrete-reinforced",
+      "name": "Reinforced concrete C30/37",
+      "category": "reinforced-concrete"
+    },
+    {
+      "id": "mat-cmu",
+      "name": "Concrete block 175",
+      "category": "concrete-masonry"
+    },
+    {
+      "id": "mat-brick",
+      "name": "Facing brick 115",
+      "category": "brick"
+    },
+    {
+      "id": "mat-steel",
+      "name": "Structural steel S355",
+      "category": "steel"
+    },
+    {
+      "id": "mat-lumber",
+      "name": "Solid timber C24",
+      "category": "wood-framing"
+    },
+    {
+      "id": "mat-glulam",
+      "name": "Glulam GL24h",
+      "category": "engineered-wood"
+    },
+    {
+      "id": "mat-lvl",
+      "name": "Laminated veneer lumber",
+      "category": "engineered-wood"
+    },
+    {
+      "id": "mat-sheathing",
+      "name": "OSB/3 sheathing",
+      "category": "engineered-wood"
+    },
+    {
+      "id": "mat-subfloor",
+      "name": "OSB/3 floor deck",
+      "category": "engineered-wood"
+    },
+    {
+      "id": "mat-batt",
+      "name": "Mineral wool batt",
+      "category": "insulation-batt"
+    },
+    {
+      "id": "mat-rigid",
+      "name": "XPS insulation board",
+      "category": "insulation-rigid"
+    },
+    {
+      "id": "mat-gypsum",
+      "name": "Gypsum plasterboard",
+      "category": "gypsum"
+    }
+  ],
+  "site": {
+    "groundMaterialId": "mat-earth"
+  },
+  "levels": [
+    {
+      "id": "level-ground",
+      "name": "Ground Floor",
+      "elevationMm": 0,
+      "floorToFloorMm": 3200,
+      "evidence": {
+        "source": "generated",
+        "confidence": 1,
+        "status": "accepted",
+        "note": "Synthetic fixture datum."
+      }
+    },
+    {
+      "id": "level-upper",
+      "name": "Upper Floor",
+      "elevationMm": 3200,
+      "floorToFloorMm": 2400,
+      "evidence": {
+        "source": "generated",
+        "confidence": 1,
+        "status": "accepted",
+        "note": "Synthetic fixture datum."
+      }
+    }
+  ],
+  "spaces": [
+    {
+      "id": "space-office",
+      "name": "Office",
+      "levelId": "level-ground",
+      "use": "office",
+      "boundary": [
+        {
+          "x": 120,
+          "y": 120
+        },
+        {
+          "x": 3535,
+          "y": 120
+        },
+        {
+          "x": 3535,
+          "y": 5880
+        },
+        {
+          "x": 120,
+          "y": 5880
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept room."
+      }
+    },
+    {
+      "id": "space-shop",
+      "name": "Shop",
+      "levelId": "level-ground",
+      "use": "workshop",
+      "boundary": [
+        {
+          "x": 3665,
+          "y": 120
+        },
+        {
+          "x": 8880,
+          "y": 120
+        },
+        {
+          "x": 8880,
+          "y": 5880
+        },
+        {
+          "x": 3665,
+          "y": 5880
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept room."
+      }
+    },
+    {
+      "id": "space-bath",
+      "name": "Bath",
+      "levelId": "level-upper",
+      "use": "bathroom",
+      "boundary": [
+        {
+          "x": 183,
+          "y": 183
+        },
+        {
+          "x": 2635,
+          "y": 183
+        },
+        {
+          "x": 2635,
+          "y": 2335
+        },
+        {
+          "x": 183,
+          "y": 2335
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept room."
+      }
+    },
+    {
+      "id": "space-studio",
+      "name": "Studio",
+      "levelId": "level-upper",
+      "use": "living",
+      "boundary": [
+        {
+          "x": 2765,
+          "y": 183
+        },
+        {
+          "x": 8817,
+          "y": 183
+        },
+        {
+          "x": 8817,
+          "y": 5817
+        },
+        {
+          "x": 183,
+          "y": 5817
+        },
+        {
+          "x": 183,
+          "y": 2465
+        },
+        {
+          "x": 2765,
+          "y": 2465
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept room."
+      }
+    }
+  ],
+  "walls": [
+    {
+      "id": "wall-g-south",
+      "levelId": "level-ground",
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "end": {
+        "x": 9000,
+        "y": 0
+      },
+      "thicknessMm": 240,
+      "heightMm": 3200,
+      "kind": "exterior",
+      "layers": [
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        },
+        {
+          "materialId": "mat-rigid",
+          "thicknessMm": 50
+        },
+        {
+          "materialId": "mat-cmu",
+          "thicknessMm": 175
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept masonry wall: gypsum, rigid insulation, and CMU."
+      }
+    },
+    {
+      "id": "wall-g-east",
+      "levelId": "level-ground",
+      "start": {
+        "x": 9000,
+        "y": 0
+      },
+      "end": {
+        "x": 9000,
+        "y": 6000
+      },
+      "thicknessMm": 240,
+      "heightMm": 3200,
+      "kind": "exterior",
+      "layers": [
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        },
+        {
+          "materialId": "mat-rigid",
+          "thicknessMm": 50
+        },
+        {
+          "materialId": "mat-cmu",
+          "thicknessMm": 175
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept masonry wall: gypsum, rigid insulation, and CMU."
+      }
+    },
+    {
+      "id": "wall-g-north",
+      "levelId": "level-ground",
+      "start": {
+        "x": 9000,
+        "y": 6000
+      },
+      "end": {
+        "x": 0,
+        "y": 6000
+      },
+      "thicknessMm": 240,
+      "heightMm": 3200,
+      "kind": "exterior",
+      "layers": [
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        },
+        {
+          "materialId": "mat-rigid",
+          "thicknessMm": 50
+        },
+        {
+          "materialId": "mat-cmu",
+          "thicknessMm": 175
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept masonry wall: gypsum, rigid insulation, and CMU."
+      }
+    },
+    {
+      "id": "wall-g-west",
+      "levelId": "level-ground",
+      "start": {
+        "x": 0,
+        "y": 6000
+      },
+      "end": {
+        "x": 0,
+        "y": 0
+      },
+      "thicknessMm": 240,
+      "heightMm": 3200,
+      "kind": "exterior",
+      "layers": [
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        },
+        {
+          "materialId": "mat-rigid",
+          "thicknessMm": 50
+        },
+        {
+          "materialId": "mat-cmu",
+          "thicknessMm": 175
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept masonry wall: gypsum, rigid insulation, and CMU."
+      }
+    },
+    {
+      "id": "wall-g-office",
+      "levelId": "level-ground",
+      "start": {
+        "x": 3600,
+        "y": 0
+      },
+      "end": {
+        "x": 3600,
+        "y": 6000
+      },
+      "thicknessMm": 130,
+      "heightMm": 2943,
+      "kind": "interior",
+      "layers": [
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        },
+        {
+          "materialId": "mat-lumber",
+          "thicknessMm": 100
+        },
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wood stud partition."
+      }
+    },
+    {
+      "id": "wall-u-south",
+      "levelId": "level-upper",
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "end": {
+        "x": 9000,
+        "y": 0
+      },
+      "thicknessMm": 366,
+      "heightMm": 2400,
+      "kind": "exterior",
+      "layers": [
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        },
+        {
+          "materialId": "mat-batt",
+          "thicknessMm": 160
+        },
+        {
+          "materialId": "mat-sheathing",
+          "thicknessMm": 16
+        },
+        {
+          "materialId": "mat-rigid",
+          "thicknessMm": 60
+        },
+        {
+          "materialId": "mat-brick",
+          "thicknessMm": 115
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wood-frame wall with brick veneer."
+      }
+    },
+    {
+      "id": "wall-u-east",
+      "levelId": "level-upper",
+      "start": {
+        "x": 9000,
+        "y": 0
+      },
+      "end": {
+        "x": 9000,
+        "y": 6000
+      },
+      "thicknessMm": 366,
+      "heightMm": 2400,
+      "kind": "exterior",
+      "layers": [
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        },
+        {
+          "materialId": "mat-batt",
+          "thicknessMm": 160
+        },
+        {
+          "materialId": "mat-sheathing",
+          "thicknessMm": 16
+        },
+        {
+          "materialId": "mat-rigid",
+          "thicknessMm": 60
+        },
+        {
+          "materialId": "mat-brick",
+          "thicknessMm": 115
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wood-frame wall with brick veneer."
+      }
+    },
+    {
+      "id": "wall-u-north",
+      "levelId": "level-upper",
+      "start": {
+        "x": 9000,
+        "y": 6000
+      },
+      "end": {
+        "x": 0,
+        "y": 6000
+      },
+      "thicknessMm": 366,
+      "heightMm": 2400,
+      "kind": "exterior",
+      "layers": [
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        },
+        {
+          "materialId": "mat-batt",
+          "thicknessMm": 160
+        },
+        {
+          "materialId": "mat-sheathing",
+          "thicknessMm": 16
+        },
+        {
+          "materialId": "mat-rigid",
+          "thicknessMm": 60
+        },
+        {
+          "materialId": "mat-brick",
+          "thicknessMm": 115
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wood-frame wall with brick veneer."
+      }
+    },
+    {
+      "id": "wall-u-west",
+      "levelId": "level-upper",
+      "start": {
+        "x": 0,
+        "y": 6000
+      },
+      "end": {
+        "x": 0,
+        "y": 0
+      },
+      "thicknessMm": 366,
+      "heightMm": 2400,
+      "kind": "exterior",
+      "layers": [
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        },
+        {
+          "materialId": "mat-batt",
+          "thicknessMm": 160
+        },
+        {
+          "materialId": "mat-sheathing",
+          "thicknessMm": 16
+        },
+        {
+          "materialId": "mat-rigid",
+          "thicknessMm": 60
+        },
+        {
+          "materialId": "mat-brick",
+          "thicknessMm": 115
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wood-frame wall with brick veneer."
+      }
+    },
+    {
+      "id": "wall-u-bath-east",
+      "levelId": "level-upper",
+      "start": {
+        "x": 2700,
+        "y": 0
+      },
+      "end": {
+        "x": 2700,
+        "y": 2400
+      },
+      "thicknessMm": 130,
+      "heightMm": 2400,
+      "kind": "interior",
+      "layers": [
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        },
+        {
+          "materialId": "mat-lumber",
+          "thicknessMm": 100
+        },
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wood stud partition."
+      }
+    },
+    {
+      "id": "wall-u-bath-north",
+      "levelId": "level-upper",
+      "start": {
+        "x": 2700,
+        "y": 2400
+      },
+      "end": {
+        "x": 0,
+        "y": 2400
+      },
+      "thicknessMm": 130,
+      "heightMm": 2400,
+      "kind": "interior",
+      "layers": [
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        },
+        {
+          "materialId": "mat-lumber",
+          "thicknessMm": 100
+        },
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wood stud partition."
+      }
+    }
+  ],
+  "openings": [
+    {
+      "id": "opening-office-window",
+      "wallId": "wall-g-south",
+      "kind": "window",
+      "offsetMm": 1200,
+      "widthMm": 1200,
+      "heightMm": 1200,
+      "sillMm": 1000,
+      "swing": "none",
+      "headers": [
+        {
+          "kind": "steel-angle",
+          "layerIndex": 2,
+          "depthMm": 100,
+          "widthMm": 75,
+          "legThicknessMm": 8,
+          "bearingMm": 200,
+          "materialId": "mat-steel",
+          "designation": "L 100x75x8 pair"
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept office window with angle lintels in the block."
+      }
+    },
+    {
+      "id": "opening-overhead-door",
+      "wallId": "wall-g-south",
+      "kind": "overhead-door",
+      "offsetMm": 4500,
+      "widthMm": 3000,
+      "heightMm": 2500,
+      "sillMm": 0,
+      "swing": "none",
+      "headers": [
+        {
+          "kind": "steel-beam",
+          "layerIndex": 2,
+          "depthMm": 152,
+          "widthMm": 160,
+          "flangeThicknessMm": 9,
+          "webThicknessMm": 6,
+          "bearingMm": 200,
+          "materialId": "mat-steel",
+          "designation": "HEA 160"
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept shop door with a steel beam header."
+      }
+    },
+    {
+      "id": "opening-shop-door",
+      "wallId": "wall-g-east",
+      "kind": "door",
+      "offsetMm": 3800,
+      "widthMm": 1000,
+      "heightMm": 2100,
+      "sillMm": 0,
+      "swing": "right",
+      "headers": [
+        {
+          "kind": "concrete-lintel",
+          "layerIndex": 2,
+          "depthMm": 175,
+          "bearingMm": 200,
+          "materialId": "mat-concrete-reinforced",
+          "designation": "Precast lintel 175"
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept shop door with a precast lintel."
+      }
+    },
+    {
+      "id": "opening-shop-window",
+      "wallId": "wall-g-north",
+      "kind": "window",
+      "offsetMm": 2100,
+      "widthMm": 1200,
+      "heightMm": 900,
+      "sillMm": 1500,
+      "swing": "none",
+      "headers": [
+        {
+          "kind": "masonry-bond-beam",
+          "layerIndex": 2,
+          "depthMm": 240,
+          "bearingMm": 250,
+          "materialId": "mat-cmu",
+          "designation": "U-block bond beam"
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept high window under a bond beam."
+      }
+    },
+    {
+      "id": "opening-office-west-window",
+      "wallId": "wall-g-west",
+      "kind": "window",
+      "offsetMm": 1500,
+      "widthMm": 1000,
+      "heightMm": 1200,
+      "sillMm": 1000,
+      "swing": "none",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Header not yet chosen."
+      }
+    },
+    {
+      "id": "opening-office-door",
+      "wallId": "wall-g-office",
+      "kind": "door",
+      "offsetMm": 3600,
+      "widthMm": 900,
+      "heightMm": 2100,
+      "sillMm": 0,
+      "swing": "left",
+      "headers": [
+        {
+          "kind": "sawn-lumber",
+          "layerIndex": 1,
+          "depthMm": 120,
+          "bearingMm": 50,
+          "materialId": "mat-lumber",
+          "designation": "Timber 100 x 120"
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept office door."
+      }
+    },
+    {
+      "id": "opening-studio-window",
+      "wallId": "wall-u-south",
+      "kind": "window",
+      "offsetMm": 5400,
+      "widthMm": 1800,
+      "heightMm": 1200,
+      "sillMm": 900,
+      "swing": "none",
+      "headers": [
+        {
+          "kind": "built-up-lumber",
+          "layerIndex": 1,
+          "depthMm": 200,
+          "plies": 3,
+          "bearingMm": 80,
+          "materialId": "mat-lumber",
+          "designation": "3 x 50 x 200"
+        },
+        {
+          "kind": "steel-angle",
+          "layerIndex": 4,
+          "depthMm": 100,
+          "widthMm": 100,
+          "legThicknessMm": 8,
+          "bearingMm": 200,
+          "materialId": "mat-steel",
+          "designation": "L 100x100x8"
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept picture window: built-up header plus veneer lintel."
+      }
+    },
+    {
+      "id": "opening-studio-small-window",
+      "wallId": "wall-u-south",
+      "kind": "window",
+      "offsetMm": 3600,
+      "widthMm": 900,
+      "heightMm": 1200,
+      "sillMm": 900,
+      "swing": "none",
+      "headers": [
+        {
+          "kind": "built-up-lumber",
+          "layerIndex": 1,
+          "depthMm": 160,
+          "plies": 2,
+          "bearingMm": 50,
+          "materialId": "mat-lumber",
+          "designation": "2 x 60 x 160"
+        },
+        {
+          "kind": "steel-angle",
+          "layerIndex": 4,
+          "depthMm": 100,
+          "widthMm": 100,
+          "legThicknessMm": 8,
+          "bearingMm": 200,
+          "materialId": "mat-steel",
+          "designation": "L 100x100x8"
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept window: two-ply header plus veneer lintel."
+      }
+    },
+    {
+      "id": "opening-studio-east-window",
+      "wallId": "wall-u-east",
+      "kind": "window",
+      "offsetMm": 3600,
+      "widthMm": 1000,
+      "heightMm": 1000,
+      "sillMm": 1000,
+      "swing": "none",
+      "headers": [
+        {
+          "kind": "sawn-lumber",
+          "layerIndex": 1,
+          "depthMm": 200,
+          "bearingMm": 50,
+          "materialId": "mat-lumber",
+          "designation": "Timber 160 x 200"
+        },
+        {
+          "kind": "steel-angle",
+          "layerIndex": 4,
+          "depthMm": 100,
+          "widthMm": 100,
+          "legThicknessMm": 8,
+          "bearingMm": 200,
+          "materialId": "mat-steel",
+          "designation": "L 100x100x8"
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept window: solid sawn header plus veneer lintel."
+      }
+    },
+    {
+      "id": "opening-studio-north-window",
+      "wallId": "wall-u-north",
+      "kind": "window",
+      "offsetMm": 2100,
+      "widthMm": 1200,
+      "heightMm": 1200,
+      "sillMm": 900,
+      "swing": "none",
+      "headers": [
+        {
+          "kind": "engineered-lumber",
+          "layerIndex": 1,
+          "depthMm": 240,
+          "bearingMm": 50,
+          "materialId": "mat-lvl",
+          "designation": "LVL 75 x 240"
+        },
+        {
+          "kind": "steel-angle",
+          "layerIndex": 4,
+          "depthMm": 100,
+          "widthMm": 100,
+          "legThicknessMm": 8,
+          "bearingMm": 200,
+          "materialId": "mat-steel",
+          "designation": "L 100x100x8"
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept window: engineered lumber header plus veneer lintel."
+      }
+    },
+    {
+      "id": "opening-studio-west-window",
+      "wallId": "wall-u-west",
+      "kind": "window",
+      "offsetMm": 1400,
+      "widthMm": 1000,
+      "heightMm": 1200,
+      "sillMm": 900,
+      "swing": "none",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Header not yet chosen."
+      }
+    },
+    {
+      "id": "opening-bath-door",
+      "wallId": "wall-u-bath-east",
+      "kind": "door",
+      "offsetMm": 1200,
+      "widthMm": 800,
+      "heightMm": 2100,
+      "sillMm": 0,
+      "swing": "left",
+      "headers": [
+        {
+          "kind": "sawn-lumber",
+          "layerIndex": 1,
+          "depthMm": 120,
+          "bearingMm": 50,
+          "materialId": "mat-lumber",
+          "designation": "Timber 100 x 120"
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept bath door."
+      }
+    }
+  ],
+  "slabs": [
+    {
+      "id": "slab-ground",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": 80,
+          "y": 80
+        },
+        {
+          "x": 8920,
+          "y": 80
+        },
+        {
+          "x": 8920,
+          "y": 5920
+        },
+        {
+          "x": 80,
+          "y": 5920
+        }
+      ],
+      "thicknessMm": 450,
+      "layers": [
+        {
+          "materialId": "mat-concrete-reinforced",
+          "thicknessMm": 150
+        },
+        {
+          "materialId": "mat-rigid",
+          "thicknessMm": 100
+        },
+        {
+          "materialId": "mat-gravel",
+          "thicknessMm": 200
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept slab on grade over insulation and a gravel base."
+      }
+    },
+    {
+      "id": "slab-upper",
+      "levelId": "level-upper",
+      "boundary": [
+        {
+          "x": 120,
+          "y": 120
+        },
+        {
+          "x": 8880,
+          "y": 120
+        },
+        {
+          "x": 8880,
+          "y": 5880
+        },
+        {
+          "x": 120,
+          "y": 5880
+        }
+      ],
+      "thicknessMm": 257,
+      "layers": [
+        {
+          "materialId": "mat-subfloor",
+          "thicknessMm": 22
+        },
+        {
+          "materialId": "mat-lumber",
+          "thicknessMm": 220
+        },
+        {
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept framed floor; joist depth is an allowance."
+      }
+    }
+  ],
+  "roofs": [
+    {
+      "id": "roof-main",
+      "levelId": "level-upper",
+      "kind": "gable",
+      "footprint": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 9000,
+          "y": 0
+        },
+        {
+          "x": 9000,
+          "y": 6000
+        },
+        {
+          "x": 0,
+          "y": 6000
+        }
+      ],
+      "eaveElevationMm": 5600,
+      "ridgeElevationMm": 7332,
+      "ridgeAxis": "x",
+      "overhangMm": 400,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept gable roof, 1732 mm rise."
+      }
+    }
+  ],
+  "stairs": [
+    {
+      "id": "stair-shop",
+      "fromLevelId": "level-ground",
+      "toLevelId": "level-upper",
+      "start": {
+        "x": 4000,
+        "y": 5430
+      },
+      "end": {
+        "x": 8420,
+        "y": 5430
+      },
+      "widthMm": 900,
+      "riserCount": 18,
+      "treadDepthMm": 260,
+      "materialId": "mat-lumber",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept straight timber stair along the north wall; headroom unverified."
+      }
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "fixture-shop-sink",
+      "name": "Shop Sink",
+      "kind": "sink",
+      "levelId": "level-ground",
+      "position": {
+        "x": 8430,
+        "y": 470,
+        "z": 0
+      },
+      "rotationDeg": 0,
+      "size": {
+        "x": 600,
+        "y": 500,
+        "z": 900
+      },
+      "connections": [],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept placement."
+      }
+    },
+    {
+      "id": "fixture-toilet",
+      "name": "Toilet",
+      "kind": "toilet",
+      "levelId": "level-upper",
+      "position": {
+        "x": 633,
+        "y": 633,
+        "z": 3200
+      },
+      "rotationDeg": 0,
+      "size": {
+        "x": 400,
+        "y": 700,
+        "z": 750
+      },
+      "connections": [],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept placement."
+      }
+    },
+    {
+      "id": "fixture-bath-sink",
+      "name": "Bath Sink",
+      "kind": "sink",
+      "levelId": "level-upper",
+      "position": {
+        "x": 2135,
+        "y": 483,
+        "z": 3200
+      },
+      "rotationDeg": 0,
+      "size": {
+        "x": 600,
+        "y": 450,
+        "z": 850
+      },
+      "connections": [],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept placement."
+      }
+    }
+  ],
+  "equipment": [],
+  "systems": [],
+  "beams": [
+    {
+      "id": "beam-floor",
+      "levelId": "level-ground",
+      "start": {
+        "x": 0,
+        "y": 3000
+      },
+      "end": {
+        "x": 9000,
+        "y": 3000
+      },
+      "topElevationMm": 2943,
+      "shape": {
+        "kind": "wide-flange",
+        "widthMm": 200,
+        "depthMm": 190,
+        "flangeThicknessMm": 10,
+        "webThicknessMm": 7
+      },
+      "materialId": "mat-steel",
+      "designation": "HEA 200",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept steel beam carrying the upper floor; size is a placeholder."
+      }
+    },
+    {
+      "id": "beam-ridge",
+      "levelId": "level-upper",
+      "start": {
+        "x": 0,
+        "y": 3000
+      },
+      "end": {
+        "x": 9000,
+        "y": 3000
+      },
+      "topElevationMm": 7200,
+      "shape": {
+        "kind": "rectangular",
+        "widthMm": 120,
+        "depthMm": 320
+      },
+      "materialId": "mat-glulam",
+      "designation": "GL24h 120 x 320",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept glulam ridge beam; size is a placeholder."
+      }
+    }
+  ],
+  "columns": [
+    {
+      "id": "column-shop-1",
+      "levelId": "level-ground",
+      "position": {
+        "x": 3000,
+        "y": 3000
+      },
+      "rotationDeg": 0,
+      "baseElevationMm": 0,
+      "topElevationMm": 2753,
+      "shape": {
+        "kind": "hss",
+        "widthMm": 100,
+        "depthMm": 100,
+        "wallThicknessMm": 5
+      },
+      "materialId": "mat-steel",
+      "designation": "SHS 100x100x5",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept steel column; size is a placeholder."
+      }
+    },
+    {
+      "id": "column-shop-2",
+      "levelId": "level-ground",
+      "position": {
+        "x": 6000,
+        "y": 3000
+      },
+      "rotationDeg": 0,
+      "baseElevationMm": 0,
+      "topElevationMm": 2753,
+      "shape": {
+        "kind": "hss",
+        "widthMm": 100,
+        "depthMm": 100,
+        "wallThicknessMm": 5
+      },
+      "materialId": "mat-steel",
+      "designation": "SHS 100x100x5",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept steel column; size is a placeholder."
+      }
+    },
+    {
+      "id": "column-ridge-post",
+      "levelId": "level-upper",
+      "position": {
+        "x": 4500,
+        "y": 3000
+      },
+      "rotationDeg": 0,
+      "baseElevationMm": 3200,
+      "topElevationMm": 6880,
+      "shape": {
+        "kind": "rectangular",
+        "widthMm": 140,
+        "depthMm": 140
+      },
+      "materialId": "mat-lumber",
+      "designation": "C24 140 x 140",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept timber post under the ridge beam."
+      }
+    }
+  ],
+  "foundations": [
+    {
+      "id": "foundation-stem-south",
+      "kind": "stem-wall",
+      "boundary": [
+        {
+          "x": -120,
+          "y": -120
+        },
+        {
+          "x": 9120,
+          "y": -120
+        },
+        {
+          "x": 9120,
+          "y": 80
+        },
+        {
+          "x": -120,
+          "y": 80
+        }
+      ],
+      "topElevationMm": 0,
+      "depthMm": 800,
+      "materialId": "mat-concrete-reinforced",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept foundation wall; frost depth assumed."
+      }
+    },
+    {
+      "id": "foundation-stem-north",
+      "kind": "stem-wall",
+      "boundary": [
+        {
+          "x": -120,
+          "y": 5920
+        },
+        {
+          "x": 9120,
+          "y": 5920
+        },
+        {
+          "x": 9120,
+          "y": 6120
+        },
+        {
+          "x": -120,
+          "y": 6120
+        }
+      ],
+      "topElevationMm": 0,
+      "depthMm": 800,
+      "materialId": "mat-concrete-reinforced",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept foundation wall; frost depth assumed."
+      }
+    },
+    {
+      "id": "foundation-stem-west",
+      "kind": "stem-wall",
+      "boundary": [
+        {
+          "x": -120,
+          "y": 80
+        },
+        {
+          "x": 80,
+          "y": 80
+        },
+        {
+          "x": 80,
+          "y": 5920
+        },
+        {
+          "x": -120,
+          "y": 5920
+        }
+      ],
+      "topElevationMm": 0,
+      "depthMm": 800,
+      "materialId": "mat-concrete-reinforced",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept foundation wall; frost depth assumed."
+      }
+    },
+    {
+      "id": "foundation-stem-east",
+      "kind": "stem-wall",
+      "boundary": [
+        {
+          "x": 8920,
+          "y": 80
+        },
+        {
+          "x": 9120,
+          "y": 80
+        },
+        {
+          "x": 9120,
+          "y": 5920
+        },
+        {
+          "x": 8920,
+          "y": 5920
+        }
+      ],
+      "topElevationMm": 0,
+      "depthMm": 800,
+      "materialId": "mat-concrete-reinforced",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept foundation wall; frost depth assumed."
+      }
+    },
+    {
+      "id": "foundation-footing-south",
+      "kind": "strip-footing",
+      "boundary": [
+        {
+          "x": -270,
+          "y": -270
+        },
+        {
+          "x": 9270,
+          "y": -270
+        },
+        {
+          "x": 9270,
+          "y": 230
+        },
+        {
+          "x": -270,
+          "y": 230
+        }
+      ],
+      "topElevationMm": -800,
+      "depthMm": 300,
+      "materialId": "mat-concrete-reinforced",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept strip footing; bearing capacity unknown."
+      }
+    },
+    {
+      "id": "foundation-footing-north",
+      "kind": "strip-footing",
+      "boundary": [
+        {
+          "x": -270,
+          "y": 5770
+        },
+        {
+          "x": 9270,
+          "y": 5770
+        },
+        {
+          "x": 9270,
+          "y": 6270
+        },
+        {
+          "x": -270,
+          "y": 6270
+        }
+      ],
+      "topElevationMm": -800,
+      "depthMm": 300,
+      "materialId": "mat-concrete-reinforced",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept strip footing; bearing capacity unknown."
+      }
+    },
+    {
+      "id": "foundation-footing-west",
+      "kind": "strip-footing",
+      "boundary": [
+        {
+          "x": -270,
+          "y": 230
+        },
+        {
+          "x": 230,
+          "y": 230
+        },
+        {
+          "x": 230,
+          "y": 5770
+        },
+        {
+          "x": -270,
+          "y": 5770
+        }
+      ],
+      "topElevationMm": -800,
+      "depthMm": 300,
+      "materialId": "mat-concrete-reinforced",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept strip footing; bearing capacity unknown."
+      }
+    },
+    {
+      "id": "foundation-footing-east",
+      "kind": "strip-footing",
+      "boundary": [
+        {
+          "x": 8770,
+          "y": 230
+        },
+        {
+          "x": 9270,
+          "y": 230
+        },
+        {
+          "x": 9270,
+          "y": 5770
+        },
+        {
+          "x": 8770,
+          "y": 5770
+        }
+      ],
+      "topElevationMm": -800,
+      "depthMm": 300,
+      "materialId": "mat-concrete-reinforced",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept strip footing; bearing capacity unknown."
+      }
+    },
+    {
+      "id": "foundation-pad-1",
+      "kind": "pad-footing",
+      "boundary": [
+        {
+          "x": 2600,
+          "y": 2600
+        },
+        {
+          "x": 3400,
+          "y": 2600
+        },
+        {
+          "x": 3400,
+          "y": 3400
+        },
+        {
+          "x": 2600,
+          "y": 3400
+        }
+      ],
+      "topElevationMm": -450,
+      "depthMm": 300,
+      "materialId": "mat-concrete-reinforced",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept pad footing under a steel column."
+      }
+    },
+    {
+      "id": "foundation-pad-2",
+      "kind": "pad-footing",
+      "boundary": [
+        {
+          "x": 5600,
+          "y": 2600
+        },
+        {
+          "x": 6400,
+          "y": 2600
+        },
+        {
+          "x": 6400,
+          "y": 3400
+        },
+        {
+          "x": 5600,
+          "y": 3400
+        }
+      ],
+      "topElevationMm": -450,
+      "depthMm": 300,
+      "materialId": "mat-concrete-reinforced",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept pad footing under a steel column."
+      }
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "surface-apron",
+      "name": "Concrete Apron",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": 4350,
+          "y": -1320
+        },
+        {
+          "x": 7650,
+          "y": -1320
+        },
+        {
+          "x": 7650,
+          "y": -120
+        },
+        {
+          "x": 4350,
+          "y": -120
+        }
+      ],
+      "topElevationMm": 0,
+      "thicknessMm": 150,
+      "materialId": "mat-concrete",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept apron at the overhead door."
+      }
+    },
+    {
+      "id": "surface-apron-base",
+      "name": "Apron Base Course",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": 4350,
+          "y": -1320
+        },
+        {
+          "x": 7650,
+          "y": -1320
+        },
+        {
+          "x": 7650,
+          "y": -120
+        },
+        {
+          "x": 4350,
+          "y": -120
+        }
+      ],
+      "topElevationMm": -150,
+      "thicknessMm": 200,
+      "materialId": "mat-gravel",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept compacted gravel base under the apron."
+      }
+    },
+    {
+      "id": "surface-drip-edge",
+      "name": "Gravel Drip Edge",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": -120,
+          "y": -620
+        },
+        {
+          "x": 4350,
+          "y": -620
+        },
+        {
+          "x": 4350,
+          "y": -120
+        },
+        {
+          "x": -120,
+          "y": -120
+        }
+      ],
+      "topElevationMm": 0,
+      "thicknessMm": 100,
+      "materialId": "mat-gravel",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept gravel strip along the south wall."
+      }
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dimension-width",
+      "kind": "horizontal",
+      "from": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "to": {
+        "x": 9000,
+        "y": 0,
+        "z": 0
+      },
+      "offsetMm": 1900
+    },
+    {
+      "id": "dimension-depth",
+      "kind": "vertical",
+      "from": {
+        "x": 9000,
+        "y": 0,
+        "z": 0
+      },
+      "to": {
+        "x": 9000,
+        "y": 6000,
+        "z": 0
+      },
+      "offsetMm": 900
+    },
+    {
+      "id": "dimension-upper-width",
+      "kind": "horizontal",
+      "from": {
+        "x": 0,
+        "y": 0,
+        "z": 3200
+      },
+      "to": {
+        "x": 9000,
+        "y": 0,
+        "z": 3200
+      },
+      "offsetMm": 1900
+    },
+    {
+      "id": "dimension-ridge",
+      "kind": "elevation",
+      "from": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "to": {
+        "x": 0,
+        "y": 0,
+        "z": 7332
+      },
+      "offsetMm": -1000
+    }
+  ],
+  "sections": [
+    {
+      "id": "section-aa",
+      "name": "Transverse Section A-A",
+      "start": {
+        "x": 6200,
+        "y": -1570
+      },
+      "end": {
+        "x": 6200,
+        "y": 6600
+      },
+      "lookDirection": "left"
+    },
+    {
+      "id": "section-bb",
+      "name": "Longitudinal Section B-B",
+      "start": {
+        "x": -600,
+        "y": 4100
+      },
+      "end": {
+        "x": 9600,
+        "y": 4100
+      },
+      "lookDirection": "right"
+    }
+  ],
+  "viewpoints": [],
+  "assumptions": [
+    {
+      "id": "assumption-site",
+      "topic": "site",
+      "statement": "No survey, setbacks, soils report, or utility locations are known for this synthetic fixture.",
+      "impact": "high",
+      "affectedEntityIds": [],
+      "evidence": {
+        "source": "generated",
+        "confidence": 1,
+        "status": "accepted",
+        "note": "Fixture intentionally excludes survey data."
+      }
+    },
+    {
+      "id": "assumption-structure",
+      "topic": "structure",
+      "statement": "Beam, column, post, and header sizes are placeholders that exercise the drawings; a structural engineer must size every member and connection.",
+      "impact": "high",
+      "affectedEntityIds": [
+        "beam-floor",
+        "beam-ridge",
+        "column-shop-1",
+        "column-shop-2",
+        "column-ridge-post"
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 1,
+        "status": "accepted",
+        "note": "Fixture exercises material display, not structural design."
+      }
+    },
+    {
+      "id": "assumption-foundation",
+      "topic": "foundation",
+      "statement": "Footings assume an 800 mm frost depth. Verify the local frost depth and soil bearing.",
+      "impact": "medium",
+      "affectedEntityIds": [
+        "foundation-stem-south",
+        "foundation-stem-north",
+        "foundation-stem-west",
+        "foundation-stem-east",
+        "foundation-footing-south",
+        "foundation-footing-north",
+        "foundation-footing-west",
+        "foundation-footing-east",
+        "foundation-pad-1",
+        "foundation-pad-2"
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.4,
+        "status": "needs-review",
+        "note": "Assumed frost depth; verify locally."
+      }
+    },
+    {
+      "id": "assumption-veneer",
+      "topic": "envelope",
+      "statement": "Brick veneer bears on the masonry below; ties, flashing, weeps, and the drainage cavity are not modelled.",
+      "impact": "medium",
+      "affectedEntityIds": [
+        "wall-u-south",
+        "wall-u-east",
+        "wall-u-north",
+        "wall-u-west"
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept envelope only."
+      }
+    }
+  ]
+}

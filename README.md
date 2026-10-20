@@ -130,6 +130,16 @@ The profiles are informed by those standards; the drawings never claim
 conformance to them, and every title block reads "Concept - not for
 construction".
 
+When the model has a material catalog, plans and sections at 1:100
+(1/8" = 1'-0") or larger hatch every cut element by material, with a material
+key in the title block: wall and slab layers, headers over openings (sawn,
+built-up, and engineered lumber, steel angles and beams, concrete lintels,
+bond beams), steel and timber beams and columns, foundations, site surfaces
+such as gravel and concrete, and earth below grade. Where ISO/DIN and NCS
+practice differ (reinforced concrete, rigid insulation, timber end grain), each
+profile follows its own convention. Without a catalog, cut elements stay in
+solid poché.
+
 Selecting an element in any drawing opens its review details: key dimensions,
 a small detail drawing for stairs, openings, and roofs, the decisions the
 concept leaves open, and its evidence. You can approve an element there.
@@ -138,9 +148,11 @@ record your sign-off on the concept, not a professional approval.
 
 ## Limits
 
-- Slabs must be axis-aligned rectangles, and a model may contain one
-  axis-aligned rectangular gable roof. The studio blocks unsupported or invalid
-  geometry instead of approximating it.
+- Slabs, foundations, and site surfaces must be axis-aligned rectangles, and a
+  model may contain one axis-aligned rectangular gable roof. The studio blocks
+  unsupported or invalid geometry instead of approximating it.
+- Beam, column, and header sizes are concept placeholders that drive the
+  drawings. They are never structural design.
 - "Close to accurate" means model coordinates are real units and every derived
   view agrees within the declared tolerance. It does not imply structural
   adequacy, engineered system sizing, permit readiness, or construction
@@ -157,7 +169,14 @@ node scripts/build-preview.mjs --check # fail if the preview is stale
 `preview/index.html` is the studio template with the example model embedded.
 Regenerate it after changing either file. The examples in `examples/` are
 synthetic and contain no private addresses, imagery, or construction
-documents.
+documents:
+
+| Example | Units | Exercises |
+| --- | --- | --- |
+| `lakeside-barn-residence` | feet-inches | The live demo: two levels, stair, systems, sections |
+| `compact-metric-studio` | metric | Crowded labels, an L-shaped room, sections through openings |
+| `mixed-material-workshop` | feet-inches | Material hatching: CMU, brick veneer, wood frame, insulation, steel and glulam members, seven header types, footings, gravel, concrete, earth |
+| `mixed-material-workshop-metric` | metric | The same layout in metric sizes, for comparing the two hatching profiles |
 
 ## License
 

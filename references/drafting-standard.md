@@ -58,7 +58,7 @@ Plotted linework is black. Weight, not colour, carries the hierarchy.
 | `profile` | 0.50 | 0.50 | Elevation outline, ground line companion, stair cut edge |
 | `medium` | 0.35 | 0.35 | Openings, door leaves, stairs, elements beyond the cut close to it |
 | `thin` | 0.25 | 0.25 | Fixtures, equipment, treads, window glazing, far elements |
-| `fine` | 0.18 | 0.13 | Dimensions, extension lines, leaders, datums, door swing arcs, hatch |
+| `fine` | 0.18 | 0.13 | Dimensions, extension lines, leaders, datums, door swing arcs, hatch, material layer boundaries |
 | `ground` | 1.00 | 1.00 | Ground line in elevation and section |
 
 ## Line types (dash lengths in paper mm)
@@ -104,7 +104,8 @@ leader back to the anchor.
 ## Colour
 
 Architectural linework plots black (`#1b1b1b`) on white paper (`#ffffff`).
-Cut walls in plan and section are filled with dark poché (`#4d4d4d`).
+Cut walls in plan and section are filled with dark poché (`#4d4d4d`) unless
+the sheet carries material detail (see Materials).
 
 Colour is reserved for the systems overlay, where discipline is the
 information. The architectural background is screened to grey (`#9a9a9a`
@@ -118,6 +119,85 @@ lines, `#e2e2e2` poché) so the systems read first. Screened lettering stays at
 | Mechanical | `#1f7a4d` green | Dashed 5, 2 |
 
 The viewer's interface accent must never reuse a discipline colour.
+
+## Materials
+
+Cut elements are hatched by material, following the conventions below. They
+are informed by ISO 128-3 (general principles for hatching cut areas: thin
+lines, 45° to the outline, a key on the sheet) and common European building
+practice in DIN 1356-1 for the metric profile, and by the NCS Uniform Drawing
+System material indications and *Architectural Graphic Standards* for the
+imperial profile. They are not a claim of conformance.
+
+**When materials are drawn.** A sheet carries material detail when the model
+has a `materials` catalog, the sheet is a floor plan or a building section,
+and the plot scale is 1:100 (1/8" = 1'-0") or larger. Elevations, systems
+sheets, and sheets at smaller scales keep solid poché, as both profiles reduce
+walls to solid fill at small scales. Elements without a material on a
+material sheet stay in poché and appear in the key as "Material not
+specified".
+
+**Material key.** Every sheet with material detail lists, in the title block
+under "Materials", a 12 x 4 mm swatch and the catalog name of each material it
+draws, in drawing order. Nothing appears in the key that the sheet does not
+draw.
+
+**Hatching.** Hatch linework uses the `fine` pen and is authored in paper
+millimetres, so spacing is the same at every scale. 45° means rising to the
+right on the sheet.
+
+| Category | Imperial (NCS-informed) | Metric (ISO/DIN-informed) |
+|---|---|---|
+| `earth` | Groups of three short lines, alternating direction, at 45° | Same |
+| `gravel` | Small open pebbles of varying size | Same |
+| `sand` | Fine dense stipple | Same |
+| `concrete` | Stipple with small open triangles (aggregate) | Same |
+| `reinforced-concrete` | Same as concrete; reinforcement is a note, not a hatch | Concrete stipple plus 45° lines at 2 mm |
+| `concrete-masonry` | 45° lines at 2 mm with sparse stipple | Same |
+| `brick` | 45° lines at 1 mm | Same |
+| `steel` | Solid black | Solid black (thin-section blackening) |
+| `wood-framing` | Along a layer: wavy grain lines. A member cut across: an X corner to corner | Along a layer: wavy grain lines. A member cut across: growth rings |
+| `engineered-wood` | Laminations parallel to the long side | Same |
+| `insulation-batt` | Continuous wave touching both faces | Same |
+| `insulation-rigid` | Zig-zag X between the faces | 45° crosshatch at 1.2 mm |
+| `gypsum` | Sparse fine stipple | Same |
+| `generic` | Solid poché | Same |
+
+A region thinner than 0.6 mm on paper is outlined but not hatched, except
+steel, which stays solid. Directional symbols (grain, batt, zig-zag) run along
+the longer side of their region.
+
+**Assemblies.** `layers` on a wall run from its left face to its right face,
+looking from start to end; on a slab, from top to bottom. Each layer is its own
+region with a `fine` boundary line, inside the `cut` outline of the whole
+element. In plan, where two walls meet at their ends (within half the other
+wall's thickness), both are mitered on the line through their inner and outer
+face intersections; collinear walls butt square. A wall that ends part way
+along another wall stops at that wall's face.
+
+**Structural members.** A column the plan cut plane passes through is drawn
+cut, in its profile (rectangle, wide-flange I, or hollow section), with the
+`cut` pen. Beams on a plan's level show their two edges as hidden lines when
+they are above the cut plane. In section, a beam crossing the plane at more
+than about 45° is drawn cut, in profile; members cut along their length, and
+members beyond the plane, are drawn in outline (with flange lines for
+wide-flange beams), as a member seen in elevation.
+
+**Headers.** In section, a header occupies its wall layer from the opening
+head up by its depth, replacing that layer, and extends past each jamb by its
+bearing. Sawn and built-up lumber draw one end-grain symbol per ply; engineered
+lumber draws laminations; a steel beam header draws its I profile; a steel
+angle lintel draws an L at the inner edge of its layer and leaves the layer it
+carries in place; concrete lintels and bond beams add two reinforcing bars
+near the bottom.
+
+**Site.** With `site.groundMaterialId`, sections hatch earth below the ground
+line down to 300 mm under the deepest cut element (at least 600 mm), with no
+outline. The earth is left out when including it would drop the sheet below
+1:100, so it never costs a section its material detail. Foundations and site
+surfaces are cut like slabs. In plan, surfaces
+on the level are hatched with a `thin` outline; higher surfaces draw over lower
+ones, and a surface wholly under a higher one is not drawn.
 
 ## Symbols
 
@@ -158,7 +238,7 @@ Fields, top to bottom. Every field comes from the model; nothing is invented.
 3. Status: `CONCEPT - NOT FOR CONSTRUCTION`.
 4. Drawing title (for example `GROUND FLOOR PLAN`).
 5. Scale, profile, and units.
-6. Legend (systems sheets only).
+6. Legend (systems sheets only) or material key (sheets with material detail).
 7. Date: `UNDATED CONCEPT`. The renderer never stamps the current date.
 8. Sheet number.
 
