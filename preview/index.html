@@ -1321,11 +1321,20 @@
 
   // Deterministic label placement: fixed font metrics, explicit obstacles, ordered candidates.
   function createPlacer(region) {
-    const boxes = [];
+    const boxes = [], shapes = [];
     const overlaps = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+    // A box meets a polygon when either holds a corner of the other or their edges cross.
+    const boxMeetsShape = (box, shape) => {
+      if (!overlaps(box, shape.box)) return false;
+      const corners = [{ x: box.x0, y: box.y0 }, { x: box.x1, y: box.y0 }, { x: box.x1, y: box.y1 }, { x: box.x0, y: box.y1 }];
+      if (corners.some(p => pointInPolygon(p, shape.points)) || shape.points.some(p => p.x > box.x0 && p.x < box.x1 && p.y > box.y0 && p.y < box.y1)) return true;
+      return shape.points.some((p, i) => { const q = shape.points[(i + 1) % shape.points.length]; return corners.some((c, j) => segmentsIntersect(p, q, c, corners[(j + 1) % 4])); });
+    };
     return {
       boxes,
       reserve(box) { boxes.push(box); },
+      // An area labels must stay off, such as a hatched walk or patio.
+      reserveShape(points) { if (points.length >= 3) shapes.push({ points, box: boundsOf(points) }); },
       reserveSegment(a, b, halfWidth) {
         const length = Math.hypot(b.x - a.x, b.y - a.y), steps = Math.max(1, Math.ceil(length / 3));
         for (let i = 0; i <= steps; i += 1) {
@@ -1335,7 +1344,7 @@
       },
       fits(box) {
         if (region && (box.x0 < region.x0 || box.x1 > region.x1 || box.y0 < region.y0 || box.y1 > region.y1)) return false;
-        return !boxes.some(other => overlaps(box, other));
+        return !boxes.some(other => overlaps(box, other)) && !shapes.some(shape => boxMeetsShape(box, shape));
       }
     };
   }
@@ -1486,17 +1495,45 @@
   }
 
   // Dimension string in paper space. `side` is a paper unit vector pointing away from the building.
-  function dimensionPaper(a, b, axis, side, offset, value, profile, placer) {
+  // The value sits at the middle of the line when that spot is clear. Otherwise it slides along the line,
+  // then the whole string steps farther out; `options.warn` hears when no clear spot exists.
+  function dimensionPaper(a, b, axis, side, offset, value, profile, placer, options = {}) {
     const P = profile.pens, T = profile.text;
     const along = axis === 'horizontal' ? { x: 1, y: 0 } : axis === 'vertical' ? { x: 0, y: 1 } : unit2(sub(b, a));
     const normal = dot2(perp(along), side) >= 0 ? perp(along) : mul(perp(along), -1);
-    const base = Math.max(dot2(a, normal), dot2(b, normal)) + offset;
-    const A = add(a, mul(normal, base - dot2(a, normal))), B = add(b, mul(normal, base - dot2(b, normal)));
+    const tw = textWidth(value, T.note);
+    const layout = extra => {
+      const base = Math.max(dot2(a, normal), dot2(b, normal)) + offset + extra;
+      const A = add(a, mul(normal, base - dot2(a, normal))), B = add(b, mul(normal, base - dot2(b, normal)));
+      const dir = unit2(sub(B, A)), vertical = Math.abs(dir.y) > Math.abs(dir.x), length = Math.hypot(B.x - A.x, B.y - A.y);
+      // Text stays between the terminators, clear of the 2.5 mm ticks or arrows.
+      const spot = fraction => {
+        const mid = add(A, mul(sub(B, A), fraction));
+        const box = vertical ? { x0: mid.x - 1 - T.note, y0: mid.y - tw / 2, x1: mid.x, y1: mid.y + tw / 2 } : { x0: mid.x - tw / 2, y0: mid.y - 1 - T.note, x1: mid.x + tw / 2, y1: mid.y };
+        const inside = (fraction * length - tw / 2 >= 2.5 && (1 - fraction) * length - tw / 2 >= 2.5) || fraction === 0.5;
+        return { mid, box, inside };
+      };
+      return { A, B, dir, vertical, spot };
+    };
+    let chosen = null, first = layout(0);
+    if (placer) {
+      search: for (const extra of [0, 4, 8, 12, 16]) {
+        const candidate = layout(extra);
+        for (const fraction of [0.5, 0.35, 0.65, 0.2, 0.8]) {
+          const s = candidate.spot(fraction);
+          if (s.inside && placer.fits(s.box)) { chosen = { ...candidate, text: s }; break search; }
+        }
+      }
+    }
+    if (!chosen) {
+      chosen = { ...first, text: first.spot(0.5) };
+      if (placer) options.warn?.(value);
+    }
+    const { A, B, dir, vertical, text } = chosen;
     const parts = [
       svgLine(add(a, mul(normal, 1.5)), add(A, mul(normal, 2)), { width: P.fine }),
       svgLine(add(b, mul(normal, 1.5)), add(B, mul(normal, 2)), { width: P.fine })
     ];
-    const dir = unit2(sub(B, A));
     if (profile.terminator === 'tick') {
       parts.push(svgLine(sub(A, mul(dir, 1.5)), add(B, mul(dir, 1.5)), { width: P.fine }));
       const tick = mul(unit2(add(dir, perp(dir))), 1.25);
@@ -1507,15 +1544,12 @@
       parts.push(svgPoly([A, add(add(A, mul(dir, 2.5)), mul(perp(dir), w)), add(add(A, mul(dir, 2.5)), mul(perp(dir), -w))], { fill: DRAFT.ink, width: 0 }));
       parts.push(svgPoly([B, add(sub(B, mul(dir, 2.5)), mul(perp(dir), w)), add(sub(B, mul(dir, 2.5)), mul(perp(dir), -w))], { fill: DRAFT.ink, width: 0 }));
     }
-    const mid = mul(add(A, B), 0.5), tw = textWidth(value, T.note);
-    const vertical = Math.abs(dir.y) > Math.abs(dir.x);
-    if (vertical) {
-      parts.push(svgText(mid.x - 1, mid.y, value, T.note, { rotate: -90, upper: false }));
-      placer?.reserve({ x0: mid.x - 1 - T.note, y0: mid.y - tw / 2, x1: mid.x, y1: mid.y + tw / 2 });
-    } else {
-      parts.push(svgText(mid.x, mid.y - 1, value, T.note, { upper: false }));
-      placer?.reserve({ x0: mid.x - tw / 2, y0: mid.y - 1 - T.note, x1: mid.x + tw / 2, y1: mid.y });
-    }
+    // A paper backing keeps hatching and linework from running through the value.
+    const { mid, box } = text, pad = 0.4;
+    parts.push(svgRect(box.x0 - pad, box.y0, box.x1 - box.x0 + 2 * pad, box.y1 - box.y0 - (vertical ? 0 : 0.3), { fill: DRAFT.paper, width: 0, inert: true }));
+    if (vertical) parts.push(svgText(mid.x - 1, mid.y, value, T.note, { rotate: -90, upper: false }));
+    else parts.push(svgText(mid.x, mid.y - 1, value, T.note, { upper: false }));
+    placer?.reserve(box);
     placer?.reserveSegment(A, B, 0.6);
     return parts.join('');
   }
@@ -1961,6 +1995,8 @@
       // Fills sit outside the entity group so a clipped directional fill never nests inside it.
       const fill = mats.active ? mats.region(outline, { o, u: { x: 1, y: 0 }, v: { x: 0, y: -1 }, L: (box.x1 - box.x0) / ratio, T: (box.y1 - box.y0) / ratio }, mats.resolve(surface.materialId), `clip-${surface.id}`) : '';
       layers.site.push(`${fill}<g data-entity="${escapeHtml(surface.id)}">${svgRing(outlineOf(model, surface), map, ratio, { fill: DRAFT.paper, fillOpacity: 0, stroke: ink, width: P.thin })}</g>`);
+      // Labels and dimension values stay off hatched walks, patios, and drives.
+      placer.reserveShape(outline);
     }
     for (const space of model.spaces.filter(item => item.levelId === level.id)) {
       layers.rooms.push(`<g data-entity="${escapeHtml(space.id)}">${svgRing(space.boundary, map, ratio, { fill: DRAFT.paper, fillOpacity: 0, width: 0 })}</g>`);
@@ -2217,7 +2253,8 @@
       const measured = dimension.kind === 'horizontal' ? Math.abs(dimension.to.x - dimension.from.x) : dimension.kind === 'vertical' ? Math.abs(dimension.to.y - dimension.from.y) : Math.hypot(dimension.to.x - dimension.from.x, dimension.to.y - dimension.from.y);
       const side = unit2(sub(mul(add(a, b), 0.5), centerPaper));
       const offset = Math.max(Math.abs(dimension.offsetMm ?? 0) / ratio, 8);
-      layers.dims.push(`<g data-entity="${escapeHtml(dimension.id)}">${dimensionPaper(a, b, dimension.kind, side, offset, profile.dimension(measured), { ...profile, pens: P }, placer)}</g>`);
+      const warn = value => warnings.push({ severity: 'warning', code: 'dimension.placement', message: `${dimension.id}: no clear position for the ${value} dimension on ${level.name}; it may overlap other drawing.`, entityId: dimension.id });
+      layers.dims.push(`<g data-entity="${escapeHtml(dimension.id)}">${dimensionPaper(a, b, dimension.kind, side, offset, profile.dimension(measured), { ...profile, pens: P }, placer, { warn })}</g>`);
     }
 
     for (const section of model.sections ?? []) {
@@ -2384,7 +2421,8 @@
     for (const item of datums) parts.push(datum(left - 4, right + 6, map(minH, item.z).y, item.name, item.z, profile));
     for (const dimension of (model.dimensions ?? []).filter(item => item.kind === 'elevation')) {
       const a = map(minH, dimension.from.z), b = map(minH, dimension.to.z);
-      parts.push(`<g data-entity="${escapeHtml(dimension.id)}">${dimensionPaper({ x: left, y: a.y }, { x: left, y: b.y }, 'vertical', { x: -1, y: 0 }, Math.max(Math.abs(dimension.offsetMm ?? 0) / ctx.ratio, 10), profile.dimension(Math.abs(dimension.to.z - dimension.from.z)), profile, placer)}</g>`);
+      const warn = value => ctx.warnings.push({ severity: 'warning', code: 'dimension.placement', message: `${dimension.id}: no clear position for the ${value} dimension; it may overlap other drawing.`, entityId: dimension.id });
+      parts.push(`<g data-entity="${escapeHtml(dimension.id)}">${dimensionPaper({ x: left, y: a.y }, { x: left, y: b.y }, 'vertical', { x: -1, y: 0 }, Math.max(Math.abs(dimension.offsetMm ?? 0) / ctx.ratio, 10), profile.dimension(Math.abs(dimension.to.z - dimension.from.z)), profile, placer, { warn })}</g>`);
     }
     return parts.join('');
   }
@@ -3483,7 +3521,7 @@
 
   const FINDING_TOPICS = {
     'evidence.review': 'Evidence to confirm', 'stair.code': 'Stair', 'code.status': 'Code research', 'system.review': 'Systems',
-    'label.placement': 'Drawing label', 'section.empty': 'Section', 'webgl.unavailable': '3D view', 'structure.review': 'Structure',
+    'label.placement': 'Drawing label', 'dimension.placement': 'Dimension placement', 'section.empty': 'Section', 'webgl.unavailable': '3D view', 'structure.review': 'Structure',
     'material.key-overflow': 'Material key', 'material.evidence': 'Material sources', 'material.category-use': 'Material use',
     'site.survey': 'Survey', 'site.schedule-overflow': 'Plant schedule', 'site.outside-lot': 'Outside the lot', 'surface.under-building': 'Surface placement', 'planting.under-building': 'Planting placement', 'surface.path': 'Path geometry', 'surface.anchor': 'Anchor', 'surface.anchor-angle': 'Walk alignment', 'terrain.constraint-failed': 'Terrain', 'terrain.degenerate': 'Terrain', 'scene.reduced-detail': '3D view', 'wall.join-fallback': 'Wall join'
   };

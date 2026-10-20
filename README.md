@@ -203,8 +203,10 @@ node examples/build-hillside-garden-house.mjs --check    # fail if either is sta
 ```
 
 The tests freeze the drawing sets of the four examples that predate site plans
-and curves (`tests/golden/legacy-drawing-sets.json`). After an intended change
-to those drawings, rewrite the hashes with
+and curves (`tests/golden/legacy-drawing-sets.json`), and check that no
+lettering on any example sheet overlaps other lettering
+(`tests/legibility.test.mjs`). After an intended change to those drawings,
+rewrite the hashes with
 `UPDATE_GOLDEN=1 node --test tests/legacy-output.test.mjs`.
 
 `preview/index.html` is the studio template with the example model embedded.

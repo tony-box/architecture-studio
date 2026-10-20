@@ -74,6 +74,8 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
 
 - A sheet's material key has no room for every material the sheet draws
   (`material.key-overflow`).
+- A dimension value has no clear position off walls, openings, hard
+  surfaces, and other lettering (`dimension.placement`).
 - The plant schedule on L-101 has no room for every row
   (`site.schedule-overflow`).
 - A ground-level surface or proposed planting extends past the property line

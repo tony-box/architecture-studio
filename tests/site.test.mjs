@@ -242,3 +242,20 @@ test('floor plans of site models show hard surfaces and leave lawn, beds, and wa
   assert.ok(overridden.includes('data-entity="surface-front-bed"') && !overridden.includes('data-entity="surface-walk"'));
   assert.ok(api.renderSitePlanSheet(model).svg.includes('data-entity="surface-front-lawn"'), 'the site plan still shows the lawn');
 });
+
+test('dimension values stay off hatched walks and patios on floor plans', () => {
+  const model = clone(site), plan = api.renderPlanSheet(model, 'level-ground');
+  const value = plan.svg.match(/<text x="([\d.]+)" y="([\d.]+)" font-size="([\d.]+)" text-anchor="middle"[^>]*>24&#39;-0&quot;<\/text>/);
+  assert.ok(value, 'the 24 ft dimension is drawn');
+  const [x, y, s] = value.slice(1).map(Number), half = '24\'-0"'.length * s * 0.62 / 2;
+  // The walk's paper outline, from the plan's own rendering of it.
+  const d = plan.svg.match(/data-entity="surface-walk"><path d="([^"]+)"/)[1];
+  const walk = [...d.matchAll(/[ML](-?[\d.]+),(-?[\d.]+)|A[\d.]+,[\d.]+ \d \d \d (-?[\d.]+),(-?[\d.]+)/g)].map(m => [Number(m[1] ?? m[3]), Number(m[2] ?? m[4])]);
+  const inside = (p, poly) => { let hit = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [ax, ay] = poly[i], [bx, by] = poly[j]; if ((ay > p.y) !== (by > p.y) && p.x < (bx - ax) * (p.y - ay) / (by - ay) + ax) hit = !hit; } return hit; };
+  const samples = [];
+  for (let i = 0; i <= 8; i += 1) for (const dy of [-0.7 * s, -0.35 * s, 0]) samples.push({ x: x - half + 2 * half * i / 8, y: y + dy });
+  const overlapsWalk = samples.some(p => inside(p, walk));
+  assert.ok(!overlapsWalk, 'the value moved off the walk');
+  assert.match(plan.svg, /<polygon points="[^"]+" fill="#ffffff" pointer-events="none" stroke="none"\/><text x="[\d.]+" y="[\d.]+" font-size="[\d.]+" text-anchor="middle" fill="#1b1b1b">24&#39;-0&quot;/, 'a paper backing sits behind the value');
+  assert.ok(!plan.warnings.some(item => item.code === 'dimension.placement'));
+});

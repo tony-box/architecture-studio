@@ -104,7 +104,13 @@ leader back to the anchor.
 - Extension lines start 1.5 mm from the measured point and run 2 mm past the
   dimension line.
 - Text sits 1 mm above the dimension line, reading from the bottom or the
-  right edge of the sheet.
+  right edge of the sheet, on a paper backing so hatching and linework never
+  run through it. It is centred on the line when that spot is clear of walls,
+  openings, hard surfaces, and other lettering. Otherwise it slides along the
+  line (to 35%, 65%, 20%, then 80% of its length, staying clear of the
+  terminators), and if no spot is clear the whole string steps 4 mm farther
+  out, up to 16 mm (studio rule). A dimension with no clear spot keeps the
+  centre and raises a `dimension.placement` warning.
 - Imperial terminators: architectural ticks, 2.5 mm, 45°, `medium` pen.
   Values in feet and inches to the nearest 1/8".
 - Metric terminators: filled arrowheads, 2.5 mm long, 15° half angle. Values
