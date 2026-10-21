@@ -38,6 +38,12 @@
 - [ ] On sheets with material detail, the material key lists exactly the
       materials drawn, and no element the brief leaves open carries an
       invented material.
+- [ ] When the model has site content, L-101 shows the property line with
+      bearings and distances, setbacks, contours, and every planting; its
+      plant schedule shows every row with derived quantities; and the property
+      line and existing trees trace to a survey or the user.
+- [ ] Curved walls, slabs, and surfaces agree in plan, section, elevation, and
+      3D, and no `wall.join-fallback` advisory is left unexplained.
 
 ## Professional Handoff
 

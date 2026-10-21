@@ -44,6 +44,42 @@
         "The drawing set is re-exported so the manifest fingerprint matches the edited model",
         "No renderer-local opening coordinate is introduced"
       ]
+    },
+    {
+      "id": "site-plan-landscaping",
+      "prompt": "Add a site plan for my house: a curved front walk to the street, a lawn, planting beds along the front, two new maples, and keep the big oak in the back yard. The lot is 60 by 100 feet with 20 foot front and 25 foot rear setbacks, and it slopes down toward the street.",
+      "expected_output": "A model with site content that draws L-101 and keeps every lot, tree, and grade fact traceable.",
+      "assertions": [
+        "The property line and setbacks come from the user's figures and the lot is not inferred from imagery; the property line evidence is not marked as a survey",
+        "The walk uses curve vertices and the lawn and beds use landscape material categories",
+        "The existing oak is a planting with status existing, the maples are proposed, and the plant schedule counts them",
+        "Any contours are marked needs-review as a concept slope, not survey data",
+        "exports/site/site-plan.svg exists and the manifest lists L-101",
+        "The handoff asks for a boundary and topographic survey and a tree survey"
+      ]
+    },
+    {
+      "id": "curve-edit-walk",
+      "prompt": "Using the hillside garden house example, make the front walk curve more gently and swing it about 3 feet further east, keeping it 4 feet wide.",
+      "expected_output": "A predictable edit of the walk's centreline path, checked with inspect.mjs.",
+      "assertions": [
+        "The walk stays a surface path anchored to the front door with matchWidth; the door and street lead-in points stay in line with their ends",
+        "The bend moves east by about 914 mm through a point between the lead-ins, and the corner radii increase within the largest radius validation allows",
+        "inspect.mjs reports the new width, radii, and bounds, unchanged end headings, and a non-negative clearance to the building and the property line",
+        "The reply states the change in the user's terms (radius and direction), not as raw coordinates"
+      ]
+    },
+    {
+      "id": "align-patio-with-door",
+      "prompt": "In the hillside garden house, add a paver landing outside the deck door. Its sides should line up exactly with the door jambs, it should reach 6 feet out, and its far edge should bow outward about a foot.",
+      "expected_output": "A patio whose side edges are anchored to the door's jambs and whose far edge is an exact arc.",
+      "assertions": [
+        "The landing's wall-side vertices use anchors on opening-deck-door at start and end, not typed coordinates",
+        "The far vertices use the same jamb anchors with offsetMm 1829",
+        "The far edge carries a bulge of about 2 x 305 / 1829 (the bow rule), with the sign that bows it away from the house",
+        "inspect.mjs shows corners at the door's exterior jamb points and no findings",
+        "The landing does not overlap the deck slab without the reply saying so"
+      ]
     }
   ]
 }

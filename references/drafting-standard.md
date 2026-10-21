@@ -9,8 +9,8 @@ The profile is selected by `project.coordinates.displayUnits`:
 
 | `displayUnits` | Profile | Informed by |
 |---|---|---|
-| `feet-inches` | Imperial | US National CAD Standard (NCS) plotting and annotation conventions |
-| `metric` | Metric | ISO 128 (line types and widths), ISO 129 (dimensioning), ISO 5455 (scales) |
+| `feet-inches` | Imperial | US National CAD Standard (NCS) plotting and annotation conventions; NCS Uniform Drawing System discipline designators for the site plan |
+| `metric` | Metric | ISO 128 (line types and widths), ISO 129 (dimensioning), ISO 5455 (scales); ISO 11091 (landscape drawing practice) for the site plan |
 
 These profiles are informed by the named standards. They are not a claim of
 conformance, and a drawing must never describe itself as NCS or ISO compliant.
@@ -41,6 +41,9 @@ fits the drawing area.
   1/2" (1:24), 3/8" (1:32), 1/4" (1:48), 3/16" (1:64), 1/8" (1:96),
   3/32" (1:128), 1/16" (1:192), 1/32" (1:384).
 - Metric ladder: 1:20, 1:25, 1:50, 1:100, 1:200, 1:500, 1:1000.
+- Site plan (L-101) ladders. Imperial (engineer's scales): 1" = 10' (1:120),
+  20' (1:240), 30' (1:360), 40' (1:480), 50' (1:600), 60' (1:720), 100'
+  (1:1200). Metric: 1:100, 1:200, 1:250, 1:500, 1:1000.
 
 The annotation band reserves 24 mm of paper around the geometry for
 dimensions, datums, and tags.
@@ -69,6 +72,12 @@ Plotted linework is black. Weight, not colour, carries the hierarchy.
 | Hidden | 3, 1.5 | Overhead elements in plan (roof overhang, overhead doors) |
 | Centre / datum | 8, 1.5, 1.5, 1.5 | Level datums, centre lines |
 | Section cut line | 12, 2, 2, 2 at `fine` | Section line between the section marks on plans |
+| Property line (phantom) | 12, 1.5, 2, 1.5, 2, 1.5 at `profile` | Lot boundary on the site plan |
+| Setback | 4, 1.5 at `thin` | Setback lines on the site plan |
+| Limit of grading | 6, 1.5, 1, 1.5 at `thin` | Grading limit on the site plan |
+| Existing contour | 2, 1 at `fine` (index contour `thin`) | Existing ground; existing grade in sections uses 3, 1.5 at `fine` |
+| Proposed contour | solid at `thin` (index contour `medium`) | Finished grade |
+| Existing plant | 1, 0.6 | Canopies of existing plants to remain or to remove |
 
 ## Lettering
 
@@ -95,7 +104,13 @@ leader back to the anchor.
 - Extension lines start 1.5 mm from the measured point and run 2 mm past the
   dimension line.
 - Text sits 1 mm above the dimension line, reading from the bottom or the
-  right edge of the sheet.
+  right edge of the sheet, on a paper backing so hatching and linework never
+  run through it. It is centred on the line when that spot is clear of walls,
+  openings, hard surfaces, and other lettering. Otherwise it slides along the
+  line (to 35%, 65%, 20%, then 80% of its length, staying clear of the
+  terminators), and if no spot is clear the whole string steps 4 mm farther
+  out, up to 16 mm (studio rule). A dimension with no clear spot keeps the
+  centre and raises a `dimension.placement` warning.
 - Imperial terminators: architectural ticks, 2.5 mm, 45°, `medium` pen.
   Values in feet and inches to the nearest 1/8".
 - Metric terminators: filled arrowheads, 2.5 mm long, 15° half angle. Values
@@ -165,6 +180,18 @@ right on the sheet.
 | `insulation-rigid` | Zig-zag X between the faces | 45° crosshatch at 1.2 mm | B (metric), C (imperial) |
 | `gypsum` | Sparse fine stipple | Same | C |
 | `generic` | Solid poché | Same | D |
+| `lawn` | Grass tufts of three short strokes on a staggered 5 mm grid | Same | F, D |
+| `mulch` | Short random strokes with dots (bark) | Same | D |
+| `asphalt` | Dense fine stipple, heavier than sand | Same | D |
+| `unit-pavers` | Running bond, 4 x 2 mm on paper | Same | D |
+| `flagstone` | Irregular joint network (crazy paving) | Same | D |
+| `water` | Short horizontal ripples | Same | F, D |
+| `decking` | Parallel board lines 1.4 mm apart | Same | D |
+
+Landscape categories (`lawn` through `decking`) describe ground cover, not
+building assemblies; using one in a wall layer, header, beam, or column raises
+the `material.category-use` advisory. Their tiles are paper-sized and do not
+show true paver or board sizes.
 
 A region thinner than 0.6 mm on paper is outlined but not hatched, except
 steel, which stays solid (studio rule). Directional symbols (grain, batt,
@@ -179,6 +206,8 @@ region they are clipped to its outline.
 | B | DIN 1356-1:2024-04 hatch conventions as summarised by cad-markt.de, "DIN 1356-1 Schraffurdarstellungen von Baumaterialien", accessed 2026-10-19. The standard itself was not reviewed. | Secondary | Low to medium |
 | C | US practice as summarised from *Architectural Graphic Standards* and the NCS Uniform Drawing System, Module 6 (Symbols), whose content listing is at nationalcadstandard.org/ncs6/content.php (accessed 2026-10-19). The symbol sheets themselves were not reviewed. | Secondary | Low to medium |
 | D | Studio convention: no source located; chosen to keep categories distinguishable. | Studio rule | n/a |
+| E | ISO 11091:1994, *Construction drawings, Landscape drawing practice*. Catalogue title and number only; the text was not reviewed, and the metric site plan follows none of its symbols specifically. | Primary (title only) | Low |
+| F | US and European landscape drafting practice as generally taught (grass tufts, water ripples, scalloped deciduous and spiked evergreen canopies, plant keys with a schedule), and the NCS Uniform Drawing System discipline designators (L for landscape). From general knowledge; no document was reviewed for this release. | Secondary (unreviewed) | Low |
 
 Before relying on a profile difference (reinforced concrete, rigid insulation,
 timber end grain) in a handoff, confirm it against the licensed standard or
@@ -220,10 +249,105 @@ bar sizes, counts, or cover.
 **Site.** With `site.groundMaterialId`, sections hatch earth below the ground
 line down to 300 mm under the deepest cut element (at least 600 mm), with no
 outline (studio rule). The earth is left out when including it would drop the
-sheet below the material detail scale. Foundations and site surfaces may be any
-simple polygon; sections cut every interval the plane crosses. In plan,
-surfaces on the level are hatched with a `thin` outline; higher surfaces draw
-over lower ones, and a surface wholly inside a higher one is not drawn.
+sheet below the material detail scale. With terrain, the earth follows the
+ground profile. Foundations and site surfaces may be any simple polygon,
+including curves; sections cut every interval the plane crosses. In plan,
+surfaces on the level are hatched with a `thin` outline; surfaces that follow
+grade draw first, then flat surfaces from low to high, and a flat surface
+wholly inside a higher flat one is not drawn.
+
+**Curved elements.** Curved boundaries and arc walls follow
+`coordinate-contract.md` (Curves, Arc Walls). Plan outlines are exact SVG arcs
+and curves. An arc wall's layers are concentric bands; directional symbols
+(batt, grain, zig-zag, laminations) follow the arc. Windows draw concentric
+glazing lines, and a door leaf swings radially from its hinge and closes on the
+chord to the far jamb. A radius note (`R 10'-10 3/4"`, `R 3270`) sits outside
+the arc at the first clear point along it, never on a section line. In
+elevation, an arc wall facing the viewer shows vertical lines where it meets
+the walls at its ends, and its openings project at their true jamb positions,
+so they read foreshortened.
+
+## Site and Landscape
+
+A model draws a site plan, `L-101`, when it records site content: a property
+line, setbacks, a grading limit, contours, spot elevations, or plantings. The
+ground material alone is not site content. The sheet is informed by ISO 11091
+(metric) and NCS Uniform Drawing System practice for L sheets (imperial); it is
+not a claim of conformance (sources E and F above).
+
+**Framing.** L-101 frames the whole site: the property line, grading limit,
+contours, plantings (with their canopies), and the building. It uses the site
+ladders (Scales) and reserves an 88 mm column on the right of the drawing area
+for the plant schedule. When a model has site content, floor plans frame on
+the building plus 2000 mm instead; site surfaces and section lines are cropped
+at that frame, and the site plan shows the rest. Those floor plans draw only
+hard surfaces (walks, patios, decks, drives, gravel); lawn, mulch beds, and
+water appear only on the site plan. A surface's `onFloorPlans` overrides this
+either way.
+
+**Hatching (studio rule).** Site surfaces on L-101 are hatched at every site
+scale, because the tiles are drawn in paper millimetres and stay legible.
+Building materials on the other sheets keep the material detail scale.
+
+**Building.** The roof outline (with overhang) over the lowest level's slabs,
+in light poché (`#e2e2e2`) with a `profile` outline, labelled with the finished
+floor: `FF EL. 0.00'` imperial, `FFL +0.000` metric.
+
+**Property line.** Phantom line at `profile`. Each straight edge is labelled
+with its quadrant bearing from true north (`N 12°00'00" W`) outside the lot and
+its length inside: decimal feet imperial (`100.00'`), metres metric
+(`30.00 m`). Arc edges carry their radius and arc length (`R=250.90'`,
+`L=60.14'`). Text reads from the bottom or the right of the sheet.
+
+**Setbacks.** Each setback offsets its property line edge inward by its
+distance: a straight edge becomes a line clipped to the lot, an arc edge a
+concentric arc. Labelled with the distance and label (`20.00' FRONT
+SETBACK`).
+
+**Grading.** The limit of grading is labelled `LIMIT OF GRADING` at the first
+clear edge from the top of the sheet. Contours are labelled with their
+elevation (feet imperial, metres metric) near their middle, on a paper ground
+so the line reads as broken under the label; index contours are bold. Spot
+elevations are a cross with their value; existing values are italic and
+prefixed `EX`.
+
+**Plants.** Canopies are drawn at `canopyDiameterMm`, or the plant's mature
+spread, with a minimum paper size so small plants stay visible:
+
+| Kind | Proposed | Existing to remain | To remove |
+|---|---|---|---|
+| Deciduous tree | Scalloped canopy, `thin`, solid trunk dot | Dashed scalloped canopy, open trunk circle | Dashed canopy crossed out |
+| Evergreen tree | Spiked canopy, `thin` | Dashed spiked canopy, open trunk circle | Dashed canopy crossed out |
+| Shrub | Small scalloped circle, `fine`, centre dot | Dashed | Dashed, crossed out |
+| Groundcover, perennial, grass (single) | Circle, `fine`, centre dot | Dashed | Dashed, crossed out |
+
+Massed plantings are their boundary with a texture of small circles. Each
+planting carries a tag with its plant key (`AR`), `EX AR` when existing,
+`AR REMOVE` when to be removed, and `48 PT` (quantity and key) for a massed
+planting, placed clear of other annotation with a `fine` leader when it sits
+away from its plant.
+
+**Plant schedule.** Columns: symbol, key, botanical name (italic) over common
+name and status, size, quantity. One row per plant and status, ordered trees,
+shrubs, groundcover, then by key. Quantities are derived: one per single
+planting, and `ceil(area / (spacing² × 0.866))` for a massed planting
+(triangular spacing). Rows that do not fit end the table with "+N rows not
+shown" and raise a `site.schedule-overflow` warning; rows are never dropped
+silently.
+
+**Hidden layers (viewer only).** The viewer can hide trees, shrubs and
+groundcover (including massed plantings), surfaces, grading (contours, spot
+elevations, limit of grading), and property lines with setbacks. Hidden items
+also leave the plant schedule and the material key, so the sheet never lists
+what it does not draw. The scale, framing, and schedule column stay as they
+are, and the exported L-101 always draws every layer.
+
+**Plants in other views.** Elevations show plants up to 9 m in front of the
+face, standing on the elevation ground line, and sections show plants up to
+9 m beyond the cut, on the ground: trunk lines and a canopy outline (a lobed
+ellipse, or a triangle for evergreens) at `thin`, with no fill, so the building
+behind stays legible. Plants marked for removal are left out. Both views use
+the plant's `heightMm` or mature height, so tall trees may lower the scale.
 
 ## Symbols
 
@@ -264,7 +388,8 @@ Fields, top to bottom. Every field comes from the model; nothing is invented.
 3. Status: `CONCEPT - NOT FOR CONSTRUCTION`.
 4. Drawing title (for example `GROUND FLOOR PLAN`).
 5. Scale, profile, and units.
-6. Legend (systems sheets only) or material key (sheets with material detail).
+6. Legend (systems sheets only) or material key (sheets with material detail,
+   and the site plan when it draws site surfaces).
 7. Date: `UNDATED CONCEPT`. The renderer never stamps the current date.
 8. Sheet number.
 
@@ -274,6 +399,7 @@ There are no revision, approval, seal, or signature fields.
 
 | Sheet | Number |
 |---|---|
+| Site plan (models with site content) | `L-101` |
 | Floor plans | `A-101`, `A-102`, … in level order |
 | Exterior elevations | `A-201` north, `A-202` east, `A-203` south, `A-204` west |
 | Building sections | `A-301`, `A-302`, … in model order |

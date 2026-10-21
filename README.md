@@ -4,7 +4,8 @@ An [Agent Skill](https://agentskills.io) for exploring building concepts with
 the coding agent you already use. Describe a house, workshop, cabin, or studio,
 and your agent builds one real-unit coordinate model that drives:
 
-- drafted floor plans, elevations, sections, and systems sheets,
+- drafted site plans with property lines, setbacks, contours, landscaping, and
+  a plant schedule, plus floor plans, elevations, sections, and systems sheets,
 - an exportable SVG drawing set,
 - conceptual plumbing, electrical, and mechanical layouts,
 - advisory, cited local building-code research,
@@ -104,6 +105,7 @@ All scripts live in `scripts/` and run with plain `node`.
 | `node scripts/init.mjs <project>` | Create a project folder. `--update` replaces only the viewer with this skill's version. |
 | `node scripts/serve.mjs <project>` | Serve the project on `127.0.0.1` and open the default browser. Live reload is on by default. Options: `--port`, `--no-open`, `--no-watch`, `--json`. |
 | `node scripts/export-drawings.mjs --project <project>` | Validate the model and write `exports/**/*.svg` plus `exports/manifest.json`. Writes nothing while the model has errors. |
+| `node scripts/inspect.mjs --project <project> --id <id>` | Report one element as numbers (size, area, path width and radii, clearance to the building and the lot, its findings), so the agent can check a curve edit without looking at a drawing. For a door or window it lists the jamb and centre points anchors can use. Without `--id` it lists the elements. |
 | `node scripts/bundle.mjs <project>` | Write one self-contained HTML file to `exports/` for sharing. It opens with a double-click and needs no server. |
 
 `serve.mjs` picks a port derived from the project path, so a project always
@@ -111,8 +113,12 @@ opens at the same address and keeps the approvals the viewer stores in the
 browser.
 
 The viewer accepts query parameters: `view` (`plan`, `elevation`, `section`,
-`systems`, `model`, `code`, `assumptions`), `level`, `section`, `elevation`,
-and `model` (a path to an alternative model file).
+`systems`, `site`, `model`, `code`, `assumptions`), `level`, `section`,
+`elevation`, `hide` (site plan layers to hide: `trees`, `plants`, `surfaces`,
+`grading`, `lot`), and `model` (a path to an alternative model file). The Site
+tab appears only for models with site content; its toolbar toggles show or
+hide trees, shrubs and groundcover, surfaces, grading, and property lines in
+the viewer. The exported L-101 always shows everything.
 
 ## Drawings
 
@@ -142,6 +148,25 @@ profile (reinforced concrete, rigid insulation, timber end grain); confirm
 those against the licensed standard before relying on them. Without a catalog,
 cut elements stay in solid poché.
 
+When the model records a property line, setbacks, contours, a grading limit,
+or plantings, the set starts with a site plan, L-101, at engineer's scales
+(imperial) or 1:100 to 1:1000 (metric). It shows the lot with bearings and
+distances, setbacks, existing and proposed contours, spot elevations, the
+building footprint, lawn, beds, walks, drives, decks, and water in their
+hatches, trees and shrubs (existing, proposed, or to remove), and a plant
+schedule with derived quantities. Contours build an existing and a proposed
+ground surface: sections cut the terrain, lawns and walks can drape on it,
+and the 3D view shows the ground and the plants. Curved walks, beds, decks,
+and rooms use arc (`bulge`) or Bezier vertices, and walls can curve too. Walks,
+paths, and drives are best drawn as a centreline with a width and corner
+radii; the outline is derived exactly, so asking the agent to "curve the walk
+more" or "move it east" changes a radius or a point, never the width. Points
+can be anchored to a door, window, or wall, so "make the walk as wide as the
+door" or "start the patio edge at the door jamb" lines up exactly and follows
+the door if it moves.
+[`references/curves.md`](references/curves.md) is the agent's guide to
+turning such requests into numbers.
+
 Selecting an element in any drawing opens its review details: key dimensions,
 a small detail drawing for stairs, openings, and roofs, the decisions the
 concept leaves open, and its evidence. You can approve an element there.
@@ -150,10 +175,14 @@ record your sign-off on the concept, not a professional approval.
 
 ## Limits
 
-- Slabs must be axis-aligned rectangles, and a model may contain one
-  axis-aligned rectangular gable roof. Foundations and site surfaces may be any
-  simple polygon. The studio blocks unsupported or invalid geometry instead of
-  approximating it.
+- A model may contain one axis-aligned rectangular gable roof; curved roofs
+  are not supported yet. Slabs, foundations, site surfaces, and rooms may be
+  any simple outline, straight or curved, and walls may be straight or arcs.
+  The studio blocks unsupported or invalid geometry instead of approximating
+  it.
+- Property lines, setbacks, and existing trees must come from a survey, a plat,
+  or the user. Terrain is triangulated from the contours you give it and is
+  concept-level; it is not a grading or drainage design.
 - Beam, column, and header sizes are concept placeholders that drive the
   drawings. They are never structural design.
 - "Close to accurate" means model coordinates are real units and every derived
@@ -169,7 +198,16 @@ node scripts/build-preview.mjs                           # regenerate preview/in
 node scripts/build-preview.mjs --check                   # fail if the preview is stale
 node examples/build-mixed-material-workshop.mjs          # regenerate both mixed-material examples
 node examples/build-mixed-material-workshop.mjs --check  # fail if either is stale
+node examples/build-hillside-garden-house.mjs            # regenerate both site examples
+node examples/build-hillside-garden-house.mjs --check    # fail if either is stale
 ```
+
+The tests freeze the drawing sets of the four examples that predate site plans
+and curves (`tests/golden/legacy-drawing-sets.json`), and check that no
+lettering on any example sheet overlaps other lettering
+(`tests/legibility.test.mjs`). After an intended change to those drawings,
+rewrite the hashes with
+`UPDATE_GOLDEN=1 node --test tests/legacy-output.test.mjs`.
 
 `preview/index.html` is the studio template with the example model embedded.
 Regenerate it after changing either file. The examples in `examples/` are
@@ -182,6 +220,8 @@ documents:
 | `compact-metric-studio` | metric | Crowded labels, an L-shaped room, sections through openings |
 | `mixed-material-workshop` | feet-inches | Material hatching: CMU, brick veneer, wood frame, insulation, steel and glulam members, seven header types, footings, gravel, concrete, an L-shaped walk, earth. Generated by `examples/build-mixed-material-workshop.mjs`; edit the generator, not the JSON |
 | `mixed-material-workshop-metric` | metric | The same layout in metric sizes, from the same generator, for comparing the two hatching profiles |
+| `hillside-garden-house` | feet-inches | Site plan and landscaping: a sloping lot with a curved frontage, setbacks, existing and proposed contours, a graded pad, a curved bay wall, a curved deck, draped lawn, beds, and walks, a pond, trees to keep, remove, and plant, shrubs, and massed plantings. Generated by `examples/build-hillside-garden-house.mjs` |
+| `hillside-garden-house-metric` | metric | The same site on a 300 mm module, from the same generator |
 
 ## License
 

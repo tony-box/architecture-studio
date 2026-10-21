@@ -39,7 +39,8 @@ survey accurate, or professionally engineered.
    require at least one trusted calibration dimension.
 3. **Read the contracts.** Read `references/coordinate-contract.md`,
    `references/building.schema.json`, `references/model-validation.md`, and
-   `references/drafting-standard.md` before authoring geometry.
+   `references/drafting-standard.md` before authoring geometry, and
+   `references/curves.md` before authoring anything curved.
 4. **Write the model.** Write one active model to `models/building.json`.
    Store complete alternative concepts under `models/variants/`; do not
    maintain separate plan, elevation, or 3D geometry sources. Add section
@@ -47,12 +48,25 @@ survey accurate, or professionally engineered.
    add a `materials` catalog and assign wall and slab `layers`, opening
    `headers`, `beams`, `columns`, `foundations`, and site `surfaces` so the
    drawings hatch by material; never invent a material the brief does not
-   support, and leave unknown elements without one.
+   support, and leave unknown elements without one. Draw walks, paths, and
+   drives as surface `path`s (a centreline, a width, and corner radii), bowed
+   edges and curved decks, rooms, and walls with `bulge`, and only free-form
+   beds with Bezier controls. Anchor any point that should line up with a door,
+   window, or wall instead of typing its coordinates. Follow
+   `references/curves.md` for every curved shape and every curve edit: it turns
+   requests like "curve it more", "move it east", or "line it up with the door"
+   into numbers. When the site matters, add the property
+   line, setbacks, contours, a grading limit, and `plants` with `plantings`;
+   the model then draws a site plan, L-101. Lot lines, setbacks, and existing
+   trees come from a survey or the user, never from imagery or a guess.
 5. **Validate.** Check model references, polygons, hosted openings, vertical
    datums, stairs, and system connectivity. `export-drawings.mjs` (step 9)
    prints every validation error and writes nothing until they are fixed.
    Resolve every error before handoff. Preserve warnings and advisories in the
-   diagnostics and assumptions outputs.
+   diagnostics and assumptions outputs. After adding or changing a curved
+   element, run `node <skill>/scripts/inspect.mjs --project <project> --id <id>`
+   and check its width, radii, bounds, and clearances as numbers; never judge a
+   curve by guessing how it looks.
 6. **Research the code.** If the user allowed network research, research
    adopted building codes and local amendments from official sources
    following `references/code-research.md`. Otherwise inspect user-provided
@@ -103,6 +117,7 @@ sources/                          # user-supplied sketches, photos, documents
 models/building.json
 models/variants/*.json            # optional complete alternatives
 exports/manifest.json             # written by export-drawings.mjs
+exports/site/site-plan.svg        # L-101 site plan, when the model has site content
 exports/plans/*.svg               # A-1xx floor plans
 exports/elevations/*.svg          # A-2xx exterior elevations
 exports/sections/*.svg            # A-3xx building sections

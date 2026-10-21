@@ -11,7 +11,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { isMain, parseArgs, printFindings, readJson, resolveStudioPage } from './lib.mjs';
 
-const DRAWING_DIRS = ['plans', 'elevations', 'sections', 'systems'];
+const DRAWING_DIRS = ['site', 'plans', 'elevations', 'sections', 'systems'];
 const HANDOFF_ARTIFACTS = ['brief.json', 'models/building.json', 'ASSUMPTIONS.md', 'HANDOFF.md', 'reviews/code-findings.json', 'reviews/code-review.md'];
 
 export function extractStudioScript(html) {

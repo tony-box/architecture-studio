@@ -46,9 +46,13 @@ test('fixture is renderable while invalid and unsupported geometry is blocked', 
   unknownRoofLevel.roofs[0].levelId = 'missing-level';
   assert.ok(errorCodes(api, unknownRoofLevel).includes('reference.level'));
 
-  const unsupportedSlab = cloneFixture();
-  unsupportedSlab.slabs[0].boundary = [{ x: 0, y: 0 }, { x: 9600, y: 0 }, { x: 9600, y: 6000 }, { x: 4800, y: 6000 }, { x: 4800, y: 13200 }, { x: 0, y: 13200 }];
-  assert.ok(errorCodes(api, unsupportedSlab).includes('renderer.unsupported-slab'));
+  const lShapedSlab = cloneFixture();
+  lShapedSlab.slabs[0].boundary = [{ x: 0, y: 0 }, { x: 9600, y: 0 }, { x: 9600, y: 6000 }, { x: 4800, y: 6000 }, { x: 4800, y: 13200 }, { x: 0, y: 13200 }];
+  assert.ok(!errorCodes(api, lShapedSlab).includes('renderer.unsupported-slab'), 'any simple slab outline renders');
+
+  const unsupportedRoof = cloneFixture();
+  unsupportedRoof.roofs[0].kind = 'hip';
+  assert.ok(errorCodes(api, unsupportedRoof).includes('renderer.unsupported-roof'));
 });
 
 test('system plans are level-specific and reject disconnected paths', () => {
@@ -551,7 +555,9 @@ const HATCH_CONTRACT = {
   earth: [['earth'], ['earth']], gravel: [['gravel'], ['gravel']], sand: [['sand'], ['sand']], concrete: [['concrete'], ['concrete']],
   'reinforced-concrete': [['concrete'], ['concrete', 'diagonal-wide']], 'concrete-masonry': [['concrete-sparse', 'diagonal-wide'], ['concrete-sparse', 'diagonal-wide']],
   brick: [['diagonal'], ['diagonal']], gypsum: [['stipple'], ['stipple']], 'insulation-rigid': ['zigzag', ['crosshatch']],
-  steel: ['solid', 'solid'], 'wood-framing': ['grain', 'grain'], 'engineered-wood': ['laminated', 'laminated'], 'insulation-batt': ['batt', 'batt'], generic: ['poche', 'poche']
+  steel: ['solid', 'solid'], 'wood-framing': ['grain', 'grain'], 'engineered-wood': ['laminated', 'laminated'], 'insulation-batt': ['batt', 'batt'], generic: ['poche', 'poche'],
+  lawn: [['lawn'], ['lawn']], mulch: [['mulch'], ['mulch']], asphalt: [['asphalt'], ['asphalt']], 'unit-pavers': [['pavers'], ['pavers']],
+  flagstone: [['flagstone'], ['flagstone']], water: [['water'], ['water']], decking: [['boards'], ['boards']]
 };
 
 test('every material category draws its documented hatch in both profiles', () => {
