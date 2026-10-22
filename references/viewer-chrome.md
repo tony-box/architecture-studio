@@ -172,14 +172,26 @@ table".
   distance (with the line's ends, length, and end accuracy once marked),
   Type that distance, and Save it for your agent (Copy it for your agent on a
   page that cannot write). Below a hairline, "Named
-  features" (with the count at the right) lists the draft's reference points
-  and areas; the tools themselves live only in the toolbar. With marks, a
-  note says they come from Reference point and Area in the toolbar and go to
-  the agent with the calibration; without, a hint names those tools. The
+  features" (with the count at the right) lists the image's recorded
+  reference points and areas first, then the draft's new ones; the tools
+  themselves live only in the toolbar. With marks, a note says new ones come
+  from Reference point and Area in the toolbar and any can be renamed or
+  removed before saving; without, a hint names those tools. The
   marks read as a schedule, like the plant schedule on L-101:
-  a ruled table with the mark's symbol, an inline label field ("Name it"
-  until named), where it is (the pixel position rounded, or the area's
-  corner count, in data type), and a quiet × to remove it. An area's size,
+  a ruled table with the mark's symbol, an inline label field, where it is
+  (the pixel position rounded, or the area's corner count, in data type; a
+  draft mark adds a muted "New"), and a quiet × to remove it. A new mark
+  starts as "Point N" or "Area N", the smallest N no recorded or draft mark of
+  that kind uses, focused with its label selected so typing renames it.
+  Editing a recorded label renames it on save; its × strikes the label
+  through with "Removed on save" and turns into Undo ("Keep <label>"), and the
+  mark leaves the stage. The count leaves out removed marks. A problem with a
+  label (empty, or the same as another mark of its kind) or an area still being
+  outlined shows in the error colour directly under the table, with the
+  input's border in the error colour, as well as by the Save button. Save
+  closes an outline of 3 or more corners under its default label first; a
+  shorter one blocks it. Start over drops the new marks and the renames and
+  removals. An area's size,
   uncertainty, and perimeter sit on a muted line under its row. "Image details"
   is a closed disclosure with the revision, placement, north, the single
   scale, the calibrations, recorded areas, and the file check. The toolbar's

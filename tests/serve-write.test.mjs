@@ -203,8 +203,22 @@ test('calibration records the viewer payload like apply and refuses a stale one'
     assert.equal(broken.json.code, 'invalid');
     const empty = await calibrate(port, token, payloadFor(after, { calibration: undefined, references: undefined }));
     assert.equal(empty.status, 400);
-    assert.match(empty.json.error, /no calibration, reference points, or areas/);
+    assert.match(empty.json.error, /no calibration, reference points, areas, or marks to remove/);
+    const unknown = await calibrate(port, token, payloadFor(after, { calibration: undefined, references: undefined, removeReferences: ['Gate'] }));
+    assert.equal(unknown.status, 400);
+    assert.equal(unknown.json.code, 'invalid');
+    assert.match(unknown.json.error, /No reference point named "Gate" on plan\. Known: NE house corner\./);
     assert.equal(manifestOf(dir).sources[0].calibrationRevision, 1, 'refusals record nothing');
+
+    // A rename in the viewer: the old label is removed and the point added under the new one.
+    const renamed = await calibrate(port, token, payloadFor(after, { calibration: undefined, removeReferences: ['NE house corner'], references: [{ label: 'NE corner', pixel: { x: 812.3, y: 140.5 } }] }));
+    assert.equal(renamed.status, 200);
+    assert.deepEqual(renamed.json.messages, ['Removed reference point(s) from plan: NE house corner.', 'Recorded 1 reference point(s) on plan: NE corner.']);
+    assert.deepEqual(manifestOf(dir).sources[0].references, [{ label: 'NE corner', pixel: { x: 812.3, y: 140.5 } }]);
+    const removed = await calibrate(port, token, payloadFor(after, { calibration: undefined, references: undefined, removeReferences: ['NE corner'] }));
+    assert.equal(removed.status, 200);
+    assert.equal(removed.json.source.calibrationRevision, 1, 'marks do not change calibrations');
+    assert.deepEqual(manifestOf(dir).sources[0].references, []);
   });
   await withStudio(t, { calibrationLimit: 64 }, async ({ port, token }) => {
     assert.equal((await calibrate(port, token, { type: 'x'.repeat(200) })).status, 413);

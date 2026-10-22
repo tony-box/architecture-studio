@@ -766,6 +766,48 @@ test('apply records labelled areas; list measures them live and to-model convert
   assertValid(dir);
 });
 
+test('apply removes recorded marks before adding, so a rename can replace another mark', async t => {
+  const { dir } = await planProject(t);
+  const rect = [{ x: 100, y: 100 }, { x: 400, y: 100 }, { x: 400, y: 300 }];
+  const marks = (overrides = {}) => payloadFor(sourceOf(dir, 'plan'), { calibration: undefined, references: undefined, ...overrides });
+  await ok('apply', dir, marks({
+    references: [{ label: 'Gate', pixel: { x: 10, y: 20 } }, { label: 'Point 1', pixel: { x: 30, y: 40 } }, { label: 'Well', pixel: { x: 50, y: 60 } }],
+    areas: [{ label: 'Bed', points: rect }, { label: 'Area 1', points: rect.map(p => ({ x: p.x + 300, y: p.y })) }]
+  }));
+  const before = sourceOf(dir, 'plan');
+  assert.equal(before.calibrationRevision, 0);
+
+  // Unknown labels refuse the whole paste, naming the known ones.
+  const unknown = await cli('apply', dir, marks({ removeReferences: ['Gate', 'Pond'] }));
+  assert.equal(unknown.code, 1);
+  assert.match(unknown.err, /No reference point named "Pond" on plan\. Known: Gate, Point 1, Well\./);
+  assert.match((await cli('apply', dir, marks({ removeAreas: ['Shed'] }))).err, /No area named "Shed" on plan\. Known: Bed, Area 1\./);
+  for (const bad of [{ removeReferences: 'Gate' }, { removeAreas: [''] }, { removeReferences: [3] }]) {
+    assert.match((await cli('apply', dir, marks(bad))).err, /removeReferences and removeAreas must be lists of labels/);
+  }
+  assert.deepEqual(sourceOf(dir, 'plan'), before, 'a refused paste records nothing');
+
+  // A removal alone is a valid paste.
+  const removed = await ok('apply', dir, marks({ removeReferences: [' Well '], removeAreas: ['Area 1'] }));
+  assert.match(removed.out, /Removed reference point\(s\) from plan: Well\./);
+  assert.match(removed.out, /Removed area\(s\) from plan: Area 1\./);
+  let source = sourceOf(dir, 'plan');
+  assert.deepEqual(source.references.map(ref => ref.label), ['Gate', 'Point 1']);
+  assert.deepEqual(source.areas.map(area => area.label), ['Bed']);
+  assert.equal(source.calibrationRevision, 0, 'removing marks does not change calibrations');
+  assertValid(dir);
+
+  // Renaming Point 1 to Gate: Point 1 and Gate go first, then the point is added as Gate where Point 1 was.
+  const renamed = applyCalibration(dir, JSON.parse(marks({ removeReferences: ['Point 1', 'Gate'], references: [{ label: 'Gate', pixel: { x: 30, y: 40 } }], removeAreas: ['Bed'], areas: [{ label: 'Garden bed', points: rect }] }).split('\n')[1]));
+  assert.deepEqual(renamed.messages.slice(0, 3), ['Removed reference point(s) from plan: Point 1, Gate.', 'Removed area(s) from plan: Bed.', 'Recorded 1 reference point(s) on plan: Gate.']);
+  source = sourceOf(dir, 'plan');
+  assert.deepEqual(source.references, [{ label: 'Gate', pixel: { x: 30, y: 40 } }]);
+  assert.deepEqual(source.areas, [{ label: 'Garden bed', points: rect }]);
+  assert.equal(source.calibrationRevision, 0);
+  assertValid(dir);
+  assert.match((await cli('apply', dir, marks())).err, /no calibration, reference points, areas, or marks to remove/);
+});
+
 // ---------------------------------------------------------------- check
 
 test('check flags outdated and unknown evidence references and accepted ones', async t => {

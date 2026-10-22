@@ -228,7 +228,13 @@
   .marks input { width: 100%; min-width: 0; min-height: 30px; padding: 2px 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink); font: 600 14px/1.2 var(--sans); }
   .marks input:hover, .marks input:focus { border-color: var(--control-line); background: var(--sheet); }
   .marks input::placeholder { color: var(--muted); font-weight: 400; }
+  .marks input[aria-invalid="true"] { border-color: var(--error); }
   .marks-where { color: var(--muted); font: 12px/1.3 var(--mono); white-space: nowrap; }
+  .marks-new { margin-left: 6px; color: var(--muted); font: 600 12px/1 var(--sans); }
+  .marks-gone { display: block; padding: 2px 7px; color: var(--muted); font: 600 14px/1.2 var(--sans); text-decoration: line-through; }
+  .marks-removed .marks-where { font-family: var(--sans); }
+  .marks-undo { min-height: 28px; padding: 0 6px; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--ink); font: 600 12px/1 var(--sans); text-decoration: underline; white-space: nowrap; }
+  .marks-undo:hover { border-color: var(--control-line); }
   .marks-area td { padding-bottom: 0; border-bottom: 0; }
   .marks-size td { padding-top: 0; color: var(--muted); }
   .marks-x { width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--muted); font-size: 14px; line-height: 1; }
@@ -4172,9 +4178,12 @@
 
   // The calibration the viewer hands to the agent, as an object: scripts/serve.mjs saves it as posted, and
   // calibrationPayload wraps it as the text scripts/import-image.mjs apply reads. Pixels are canonical
-  // (natural image pixels), rounded to 0.1 px.
+  // (natural image pixels), rounded to 0.1 px, except a recorded mark's (`exact`), which is sent as stored.
+  // removeReferences and removeAreas name recorded marks to drop before the additions; a rename is a removal
+  // of the old label plus the mark under its new one.
   function calibrationPayloadObject(source, input = {}) {
-    const px = p => ({ x: round1(p.x), y: round1(p.y) });
+    const px = (p, exact) => (exact ? { x: p.x, y: p.y } : { x: round1(p.x), y: round1(p.y) });
+    const names = list => [...new Set((list ?? []).map(label => String(label ?? '').trim()).filter(Boolean))];
     const body = {
       type: 'architecture-studio/source-calibration', version: 1, sourceId: source.id, contentHash: source.contentHash,
       pixels: { width: source.pixels.width, height: source.pixels.height }, sourceRevision: source.revision, calibrationRevision: source.calibrationRevision
@@ -4183,16 +4192,19 @@
     if (c) {
       body.calibration = { from: px(c.from), to: px(c.to), distanceMm: c.distanceMm, entered: String(c.entered ?? '').trim(), uncertaintyPx: round1(Math.max(0.5, c.uncertaintyPx ?? 0.5)) };
     }
-    const references = (input.references ?? []).map(item => ({ label: String(item.label ?? '').trim(), pixel: px(item.pixel) })).filter(item => item.label);
+    const removeReferences = names(input.removeReferences), removeAreas = names(input.removeAreas);
+    if (removeReferences.length) body.removeReferences = removeReferences;
+    if (removeAreas.length) body.removeAreas = removeAreas;
+    const references = (input.references ?? []).map(item => ({ label: String(item.label ?? '').trim(), pixel: px(item.pixel, item.exact) })).filter(item => item.label);
     if (references.length) body.references = references;
     const areas = (input.areas ?? []).map(item => {
       const label = String(item.label ?? '').trim();
       if (!label) throw new Error('Label every area.');
       if (!(item.points?.length >= 3)) throw new Error('An area needs at least 3 points.');
-      return { label, points: item.points.map(px) };
+      return { label, points: item.points.map(p => px(p, item.exact)) };
     });
     if (areas.length) body.areas = areas;
-    if (!body.calibration && !body.references && !body.areas) throw new Error('A calibration needs a scale line, a labelled reference point, or a labelled area.');
+    if (!body.calibration && !body.references && !body.areas && !body.removeReferences && !body.removeAreas) throw new Error('A calibration needs a scale line, a labelled reference point, or a labelled area.');
     return body;
   }
   // The text the viewer copies for the agent; scripts/import-image.mjs apply reads the JSON between the
@@ -4498,14 +4510,39 @@
       .map(([source, asset]) => ({ href: asset.href, width: source.pixels.width, height: source.pixels.height, transform: source.placement.transform, opacity: state.underlayOpacity }));
   }
 
-  const newDraft = sourceId => ({ sourceId, from: null, to: null, fromU: 0.5, toU: 0.5, distanceText: '', references: [], areas: [], areaPoints: [], payload: '', copied: null, saving: null, saveError: null });
+  const newDraft = sourceId => ({ sourceId, from: null, to: null, fromU: 0.5, toU: 0.5, distanceText: '', references: [], areas: [], areaPoints: [], saved: { references: {}, areas: {} }, payload: '', copied: null, saving: null, saveError: null });
   function sourceDraft() {
     if (state.draft?.sourceId !== state.sourceId) state.draft = newDraft(state.sourceId);
     return state.draft;
   }
-  // What the draft would copy (`input`), or why it cannot be copied yet.
+  // The source's recorded reference points and areas with the draft's edits to them, keyed by the recorded
+  // label: `label` is the label to save, `removed` drops the mark on save.
+  function savedMarks(source, draft) {
+    const list = (items, edits) => (items ?? []).map(item => {
+      const edit = edits?.[item.label];
+      return { ...item, original: item.label, label: edit?.label ?? item.label, removed: Boolean(edit?.removed) };
+    });
+    return { references: list(source?.references, draft?.saved?.references), areas: list(source?.areas, draft?.saved?.areas) };
+  }
+  // A new mark's label, "Point N" or "Area N", with the smallest N that no recorded or draft mark of that kind uses.
+  function nextMarkLabel(source, draft, kind) {
+    const key = kind === 'area' ? 'areas' : 'references', prefix = kind === 'area' ? 'Area' : 'Point';
+    const used = new Set([...savedMarks(source, draft)[key].flatMap(item => [item.original, item.label]), ...(draft[key] ?? []).map(item => item.label)].map(label => String(label ?? '').trim()));
+    let n = 1;
+    while (used.has(`${prefix} ${n}`)) n += 1;
+    return `${prefix} ${n}`;
+  }
+  // The draft with the outline in progress closed under its default label, as Save and Copy close it; the
+  // same draft when there is no outline of 3 or more corners around an area to close.
+  function closeOpenArea(source, draft) {
+    const points = draft.areaPoints ?? [];
+    if (points.length < 3 || polygonArea(points) < 1) return draft;
+    return { ...draft, areas: [...(draft.areas ?? []), { label: nextMarkLabel(source, draft, 'area'), points }], areaPoints: [] };
+  }
+  // What the draft would copy (`input`), or why it cannot be copied yet. A problem with the named features
+  // sets `markProblem` and lists the label inputs to flag in `invalidIds`.
   function draftCheck(source, draft, size) {
-    const result = { input: null, problem: '', distanceError: '', distanceNote: '', distanceWarning: '', calibration: null };
+    const result = { input: null, problem: '', markProblem: false, invalidIds: [], distanceError: '', distanceNote: '', distanceWarning: '', calibration: null };
     const text = draft.distanceText.trim(), parsed = text ? parseLength(text) : null;
     if (parsed?.error) result.distanceError = parsed.error;
     else if (parsed) result.distanceNote = sourceUnits() === 'metric' ? formatLength(parsed.mm, 'metric') : `${formatLength(parsed.mm, 'feet-inches')} (${+parsed.mm.toFixed(1)} mm)`;
@@ -4529,16 +4566,32 @@
       calibration = { from: draft.from, to: draft.to, distanceMm: parsed.mm, entered: text, uncertaintyPx: Math.max(draft.fromU, draft.toU) };
       result.calibration = calibration;
     }
-    const labels = draft.references.map(item => item.label.trim());
-    if (labels.some(label => !label)) return { ...result, problem: 'Label every reference point.' };
-    if (new Set(labels).size < labels.length) return { ...result, problem: 'Give each reference point its own label.' };
-    const areas = draft.areas ?? [], areaLabels = areas.map(item => item.label.trim());
-    if (draft.areaPoints?.length) return { ...result, problem: 'Finish or cancel the area you are outlining.' };
-    if (areas.some(item => item.points.length < 3)) return { ...result, problem: 'An area needs at least 3 points.' };
-    if (areaLabels.some(label => !label)) return { ...result, problem: 'Label every area.' };
-    if (new Set(areaLabels).size < areaLabels.length) return { ...result, problem: 'Give each area its own label.' };
-    if (!calibration && !labels.length && !areas.length) return result;
-    return { ...result, input: { calibration, references: draft.references, areas } };
+    // Save closes an outline of 3 or more corners, so only one it cannot close blocks it.
+    const prepared = closeOpenArea(source, draft), saved = savedMarks(source, prepared);
+    const blame = (problem, ids = []) => ({ ...result, problem, markProblem: true, invalidIds: ids });
+    const rows = (savedItems, draftItems, savedId, draftId) => [
+      ...savedItems.map((item, i) => ({ id: `${savedId}-${i}`, label: item.label.trim(), removed: item.removed })).filter(row => !row.removed),
+      ...(draftItems ?? []).map((item, i) => ({ id: `${draftId}-${i}`, label: item.label.trim(), points: item.points }))
+    ];
+    const unlabelled = list => list.filter(row => !row.label).map(row => row.id);
+    const repeated = list => list.filter(row => row.label && list.some(other => other !== row && other.label === row.label)).map(row => row.id);
+    const refRows = rows(saved.references, prepared.references, 'cal-saved-ref', 'cal-ref');
+    if (unlabelled(refRows).length) return blame('Label every reference point.', unlabelled(refRows));
+    if (repeated(refRows).length) return blame('Give each reference point its own label.', repeated(refRows));
+    if (prepared.areaPoints?.length) return blame('Finish or cancel the area you are outlining.');
+    const areaRows = rows(saved.areas, prepared.areas, 'cal-saved-area', 'cal-area');
+    const small = areaRows.filter(row => row.points && !(row.points.length >= 3)).map(row => row.id);
+    if (small.length) return blame('An area needs at least 3 points.', small);
+    if (unlabelled(areaRows).length) return blame('Label every area.', unlabelled(areaRows));
+    if (repeated(areaRows).length) return blame('Give each area its own label.', repeated(areaRows));
+    // A renamed recorded mark is removed under its old label and added, where it was, under the new one.
+    const renamed = item => !item.removed && item.label.trim() !== item.original;
+    const removeReferences = saved.references.filter(item => item.removed || renamed(item)).map(item => item.original);
+    const removeAreas = saved.areas.filter(item => item.removed || renamed(item)).map(item => item.original);
+    const references = [...saved.references.filter(renamed).map(item => ({ label: item.label, pixel: item.pixel, exact: true })), ...(prepared.references ?? [])];
+    const areas = [...saved.areas.filter(renamed).map(item => ({ label: item.label, points: item.points, exact: true })), ...(prepared.areas ?? [])];
+    if (!calibration && !references.length && !areas.length && !removeReferences.length && !removeAreas.length) return result;
+    return { ...result, input: { calibration, references, areas, removeReferences, removeAreas } };
   }
 
   function selectSource(id) {
@@ -4596,8 +4649,10 @@
     for (const item of source.calibrations ?? []) {
       if (item.from && item.to) parts.push(seg(item.from, item.to, 'ov-ink'), dot(item.from, 'ov-ink'), dot(item.to, 'ov-ink'), label({ x: (item.from.x + item.to.x) / 2, y: (item.from.y + item.to.y) / 2 }, `${item.id} ${METHOD_LABELS[item.method] ?? item.method}`));
     }
-    for (const item of source.references ?? []) parts.push(dot(item.pixel, 'ov-ink'), label(item.pixel, item.label));
-    for (const item of source.areas ?? []) if (item.points?.length >= 3) parts.push(outline(item.points, 'ov-ink'), label(middle(item.points), item.label));
+    // Recorded marks show their edited labels; one removed in the draft is no longer drawn.
+    const saved = savedMarks(source, draft);
+    for (const item of saved.references) if (!item.removed) parts.push(dot(item.pixel, 'ov-ink'), label(item.pixel, item.label.trim() || item.original));
+    for (const item of saved.areas) if (!item.removed && item.points?.length >= 3) parts.push(outline(item.points, 'ov-ink'), label(middle(item.points), item.label.trim() || item.original));
     if (draft.from && draft.to) parts.push(seg(draft.from, draft.to, 'ov-draft'));
     for (const p of [draft.from, draft.to].filter(Boolean)) parts.push(dot(p, 'ov-draft'));
     draft.references.forEach((item, i) => parts.push(dot(item.pixel, 'ov-draft'), label(item.pixel, item.label.trim() || `Point ${i + 1}`)));
@@ -4680,18 +4735,29 @@
     const line = draft.from ? `<dl class="key-dims"><div><dt>From</dt><dd>${pt(draft.from)}</dd></div><div><dt>To</dt><dd>${draft.to ? pt(draft.to) : 'Not set'}</dd></div>${lengthPx != null ? `<div><dt>Length</dt><dd>${lengthPx} px</dd></div><div><dt>End accuracy</dt><dd>± ${round1(Math.max(draft.fromU, draft.toU))} px</dd></div>` : ''}</dl>` : '<p>No line yet.</p>';
     const example = sourceUnits() === 'metric' ? '3810 mm' : '12\'-6"';
     const distance = `<label class="text-field" for="cal-distance">Distance between the ends<input id="cal-distance" type="text" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(`For example ${example}`)}" value="${escapeHtml(draft.distanceText)}" aria-describedby="cal-distance-note"></label><p id="cal-distance-note" class="field-note"></p>`;
-    // The marks read as a schedule, like the drawings' plant schedule: symbol, label, where, remove.
-    const where = p => `${Math.round(p.x)}, ${Math.round(p.y)}`;
-    const refRows = draft.references.map((item, i) => `<tr><td>${MARK_ICONS.point}</td><td><input id="cal-ref-${i}" data-ref-index="${i}" type="text" autocomplete="off" value="${escapeHtml(item.label)}" placeholder="Name it" aria-label="${escapeHtml(`Label for reference point at ${pt(item.pixel)}`)}"></td><td class="marks-where" title="${escapeHtml(pt(item.pixel))}">${escapeHtml(where(item.pixel))}</td><td><button type="button" class="marks-x" data-ref-remove="${i}" aria-label="Remove reference point ${i + 1}">&times;</button></td></tr>`).join('');
-    const areaRows = draft.areas.map((item, i) => `<tr class="marks-area"><td>${MARK_ICONS.area}</td><td><input id="cal-area-${i}" data-area-index="${i}" type="text" autocomplete="off" value="${escapeHtml(item.label)}" placeholder="Name it" aria-label="${escapeHtml(`Label for area ${i + 1}`)}" aria-describedby="cal-area-${i}-size"></td><td class="marks-where">${item.points.length} corners</td><td><button type="button" class="marks-x" data-area-remove="${i}" aria-label="Remove area ${i + 1}">&times;</button></td></tr><tr class="marks-size"><td></td><td colspan="3" id="cal-area-${i}-size"></td></tr>`).join('');
-    const count = draft.references.length + draft.areas.length;
+    // The marks read as a schedule, like the drawings' plant schedule: symbol, label, where, remove. Recorded
+    // marks come first and can be renamed or removed; draft marks follow, tagged New.
+    const where = p => `${Math.round(p.x)}, ${Math.round(p.y)}`, isNew = '<span class="marks-new">New</span>';
+    const saved = savedMarks(source, draft);
+    const gone = (icon, item, kind, i) => `<tr class="marks-removed"><td>${icon}</td><td><span class="marks-gone">${escapeHtml(item.original)}</span></td><td class="marks-where">Removed on save</td><td><button type="button" class="marks-undo" data-saved-${kind}-keep="${i}" aria-label="${escapeHtml(`Keep ${item.original}`)}">Undo</button></td></tr>`;
+    const refInput = (id, attr, item) => `<input id="${id}" ${attr} type="text" autocomplete="off" value="${escapeHtml(item.label)}" placeholder="Name it" aria-label="${escapeHtml(`Label for reference point at ${pt(item.pixel)}`)}">`;
+    const areaInput = (id, attr, item, n) => `<input id="${id}" ${attr} type="text" autocomplete="off" value="${escapeHtml(item.label)}" placeholder="Name it" aria-label="${escapeHtml(`Label for area ${n}`)}" aria-describedby="${id}-size">`;
+    const savedRefRows = saved.references.map((item, i) => item.removed ? gone(MARK_ICONS.point, item, 'ref', i)
+      : `<tr><td>${MARK_ICONS.point}</td><td>${refInput(`cal-saved-ref-${i}`, `data-saved-ref-index="${i}"`, item)}</td><td class="marks-where" title="${escapeHtml(pt(item.pixel))}">${escapeHtml(where(item.pixel))}</td><td><button type="button" class="marks-x" data-saved-ref-remove="${i}" aria-label="${escapeHtml(`Remove ${item.original}`)}">&times;</button></td></tr>`).join('');
+    const refRows = draft.references.map((item, i) => `<tr><td>${MARK_ICONS.point}</td><td>${refInput(`cal-ref-${i}`, `data-ref-index="${i}"`, item)}</td><td class="marks-where" title="${escapeHtml(pt(item.pixel))}">${escapeHtml(where(item.pixel))}${isNew}</td><td><button type="button" class="marks-x" data-ref-remove="${i}" aria-label="Remove reference point ${i + 1}">&times;</button></td></tr>`).join('');
+    const savedAreaRows = saved.areas.map((item, i) => item.removed ? gone(MARK_ICONS.area, item, 'area', i)
+      : `<tr class="marks-area"><td>${MARK_ICONS.area}</td><td>${areaInput(`cal-saved-area-${i}`, `data-saved-area-index="${i}"`, item, item.original)}</td><td class="marks-where">${item.points?.length ?? 0} corners</td><td><button type="button" class="marks-x" data-saved-area-remove="${i}" aria-label="${escapeHtml(`Remove ${item.original}`)}">&times;</button></td></tr><tr class="marks-size"><td></td><td colspan="3" id="cal-saved-area-${i}-size"></td></tr>`).join('');
+    const areaRows = draft.areas.map((item, i) => `<tr class="marks-area"><td>${MARK_ICONS.area}</td><td>${areaInput(`cal-area-${i}`, `data-area-index="${i}"`, item, i + 1)}</td><td class="marks-where">${item.points.length} corners${isNew}</td><td><button type="button" class="marks-x" data-area-remove="${i}" aria-label="Remove area ${i + 1}">&times;</button></td></tr><tr class="marks-size"><td></td><td colspan="3" id="cal-area-${i}-size"></td></tr>`).join('');
+    const kept = saved.references.filter(item => !item.removed).length + saved.areas.filter(item => !item.removed).length;
+    const count = kept + draft.references.length + draft.areas.length, rowCount = saved.references.length + saved.areas.length + draft.references.length + draft.areas.length;
     const open = draft.areaPoints.length;
     const outlining = open ? `<p class="field-note">${escapeHtml(open < 3 ? `${open} of at least 3 points. Mark the next corner.` : `${open} points. Click the first point or press Finish area to close it. Backspace removes the last point.`)}</p><div class="calibrate-actions"><button type="button" class="tool" id="cal-area-finish"${open < 3 ? ' disabled' : ''}>Finish area</button><button type="button" class="tool" id="cal-area-cancel">Cancel area</button></div>` : '';
     const hint = photo ? 'Optional. Choose Reference point or Area in the toolbar to name a feature for placing the photo, or to outline and label one.' : 'Optional. Choose Reference point or Area in the toolbar to name a feature, such as a house corner, or outline one, such as a garden bed. Area sizes come from the scale line.';
     const also = `<div class="src-also"><div class="marks-head"><h4>Named features</h4>${count ? `<span aria-label="${count} named features">${count}</span>` : ''}</div>`
-      + (count ? '<p class="field-note">From Reference point and Area in the toolbar. They go to your agent with the calibration.</p>' : '')
-      + (count ? `<table class="marks"><thead><tr><th scope="col"><span class="visually-hidden">Kind</span></th><th scope="col">Label</th><th scope="col">Where</th><th scope="col"><span class="visually-hidden">Remove</span></th></tr></thead><tbody>${refRows}${areaRows}</tbody></table>` : '')
-      + outlining + (count || open ? '' : `<p class="field-note">${escapeHtml(hint)}</p>`) + '</div>';
+      + (rowCount ? `<p class="field-note">New ones come from Reference point and Area in the toolbar. Rename or remove any of them, then ${state.writable ? 'save' : 'copy'} for your agent.</p>` : '')
+      + (rowCount ? `<table class="marks"><thead><tr><th scope="col"><span class="visually-hidden">Kind</span></th><th scope="col">Label</th><th scope="col">Where</th><th scope="col"><span class="visually-hidden">Remove</span></th></tr></thead><tbody>${savedRefRows}${savedAreaRows}${refRows}${areaRows}</tbody></table>` : '')
+      + '<p id="marks-problem" class="field-note field-note--error"></p>'
+      + outlining + (rowCount || open ? '' : `<p class="field-note">${escapeHtml(hint)}</p>`) + '</div>';
     const copied = draft.copied === 'ok' ? '<div id="cal-copied"><p class="field-note">Copied.</p></div>'
       : draft.copied === 'failed' ? `<div id="cal-copied"><p class="field-note">Copying is blocked here. Copy this text yourself.</p><textarea id="cal-payload" class="payload" readonly aria-label="Calibration text to copy">${escapeHtml(draft.payload)}</textarea></div>` : '';
     const copy = '<p id="cal-copy-help">Paste it to your agent, which records it with scripts/import-image.mjs apply, then reload this page.</p>'
@@ -4750,22 +4816,49 @@
       updateCalibrationStatus();
     };
     $('#cal-distance')?.addEventListener('input', event => { draft.distanceText = event.target.value; edited(); });
+    // A new mark's default label is selected on its first focus, so typing replaces it.
+    const selectFresh = (input, item) => input.addEventListener('focus', () => { if (item?.fresh) { delete item.fresh; input.select?.(); } });
+    const leave = event => { if (event.key === 'Enter') { event.preventDefault(); viewport.focus(); } };
     inspector.querySelectorAll('[data-ref-index]').forEach(input => {
-      input.addEventListener('input', () => { draft.references[Number(input.dataset.refIndex)].label = input.value; edited(); drawSourceOverlay(); });
-      input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); viewport.focus(); } });
+      const item = draft.references[Number(input.dataset.refIndex)];
+      selectFresh(input, item);
+      input.addEventListener('input', () => { item.label = input.value; edited(); drawSourceOverlay(); });
+      input.addEventListener('keydown', leave);
     });
     inspector.querySelectorAll('[data-ref-remove]').forEach(button => button.addEventListener('click', () => {
       draft.references.splice(Number(button.dataset.refRemove), 1); draft.copied = null; draft.saveError = null;
       renderSourcesInspector(); drawSourceOverlay(); announce('Reference point removed.');
     }));
     inspector.querySelectorAll('[data-area-index]').forEach(input => {
-      input.addEventListener('input', () => { draft.areas[Number(input.dataset.areaIndex)].label = input.value; edited(); drawSourceOverlay(); });
-      input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); viewport.focus(); } });
+      const item = draft.areas[Number(input.dataset.areaIndex)];
+      selectFresh(input, item);
+      input.addEventListener('input', () => { item.label = input.value; edited(); drawSourceOverlay(); });
+      input.addEventListener('keydown', leave);
     });
     inspector.querySelectorAll('[data-area-remove]').forEach(button => button.addEventListener('click', () => {
       draft.areas.splice(Number(button.dataset.areaRemove), 1); draft.copied = null; draft.saveError = null;
       renderSourcesInspector(); drawSourceOverlay(); announce('Area removed.');
     }));
+    // Recorded marks: a rename or a removal is kept in the draft, by recorded label, until Save.
+    const saved = savedMarks(source, draft);
+    const savedEdit = (key, item) => (draft.saved[key][item.original] ??= { label: item.original, removed: false });
+    for (const [kind, key, noun] of [['ref', 'references', 'Reference point'], ['area', 'areas', 'Area']]) {
+      const camel = kind === 'ref' ? 'Ref' : 'Area';
+      inspector.querySelectorAll(`[data-saved-${kind}-index]`).forEach(input => {
+        const item = saved[key][Number(input.dataset[`saved${camel}Index`])];
+        input.addEventListener('input', () => { savedEdit(key, item).label = input.value; edited(); drawSourceOverlay(); });
+        input.addEventListener('keydown', leave);
+      });
+      const toggle = (index, removed) => {
+        const item = saved[key][index];
+        savedEdit(key, item).removed = removed; draft.copied = null; draft.saveError = null;
+        renderSourcesInspector(); drawSourceOverlay();
+        $(removed ? `[data-saved-${kind}-keep="${index}"]` : `#cal-saved-${kind}-${index}`)?.focus();
+        announce(removed ? `${noun} ${item.original} will be removed when you save.` : `${noun} ${item.original} kept.`);
+      };
+      inspector.querySelectorAll(`[data-saved-${kind}-remove]`).forEach(button => button.addEventListener('click', () => toggle(Number(button.dataset[`saved${camel}Remove`]), true)));
+      inspector.querySelectorAll(`[data-saved-${kind}-keep]`).forEach(button => button.addEventListener('click', () => toggle(Number(button.dataset[`saved${camel}Keep`]), false)));
+    }
     $('#cal-area-finish')?.addEventListener('click', closeArea);
     $('#cal-area-cancel')?.addEventListener('click', () => { cancelArea(); viewport.focus(); });
     if (state.writable) {
@@ -4787,15 +4880,40 @@
     }
     $('#cal-distance')?.setAttribute('aria-invalid', String(Boolean(check.distanceError)));
     $('#cal-problem').textContent = check.problem;
-    sourceDraft().areas.forEach((item, i) => { const size = $(`#cal-area-${i}-size`); if (size) size.textContent = areaSummary(source, areaMeasure(source, item.points, check.calibration)); });
-    copy.disabled = !check.input || Boolean(sourceDraft().saving);
+    // A problem with a mark also shows under the Named features table, on the label inputs it concerns.
+    const draft = sourceDraft(), saved = savedMarks(source, draft), invalid = new Set(check.invalidIds ?? []);
+    const marksProblem = $('#marks-problem');
+    if (marksProblem) marksProblem.textContent = check.markProblem ? check.problem : '';
+    const ids = [
+      ...saved.references.map((item, i) => (item.removed ? null : `cal-saved-ref-${i}`)), ...saved.areas.map((item, i) => (item.removed ? null : `cal-saved-area-${i}`)),
+      ...draft.references.map((_, i) => `cal-ref-${i}`), ...draft.areas.map((_, i) => `cal-area-${i}`)
+    ].filter(Boolean);
+    for (const id of ids) {
+      const input = $(`#${id}`);
+      if (!input) continue;
+      const bad = invalid.has(id), describedBy = [id.includes('area') ? `${id}-size` : '', bad ? 'marks-problem' : ''].filter(Boolean).join(' ');
+      input.setAttribute('aria-invalid', String(bad));
+      if (describedBy) input.setAttribute('aria-describedby', describedBy); else input.removeAttribute?.('aria-describedby');
+    }
+    saved.areas.forEach((item, i) => { const size = !item.removed && $(`#cal-saved-area-${i}-size`); if (size) size.textContent = areaSummary(source, areaMeasure(source, item.points, check.calibration)); });
+    draft.areas.forEach((item, i) => { const size = $(`#cal-area-${i}-size`); if (size) size.textContent = areaSummary(source, areaMeasure(source, item.points, check.calibration)); });
+    copy.disabled = !check.input || Boolean(draft.saving);
     return check;
+  }
+  // Save and Copy close an outline in progress first, as Finish area would, when it has 3 or more corners.
+  function closeOutlineForHandoff(source, draft) {
+    const closed = closeOpenArea(source, draft);
+    if (closed === draft) return false;
+    Object.assign(draft, { areas: closed.areas, areaPoints: [] });
+    areaHover = null;
+    return true;
   }
   async function copyCalibration() {
     const source = selectedSource(), asset = source && sourceAssets.get(source.id);
     if (!source || !assetUsable(asset)) return;
-    const draft = sourceDraft(), check = draftCheck(source, draft, asset);
-    if (!check.input) return;
+    const draft = sourceDraft(), closed = closeOutlineForHandoff(source, draft), check = draftCheck(source, draft, asset);
+    if (closed) drawSourceOverlay();
+    if (!check.input) { if (closed) renderSourcesInspector(); return; }
     draft.payload = calibrationPayload(source, check.input);
     try { await navigator.clipboard.writeText(draft.payload); draft.copied = 'ok'; } catch { draft.copied = 'failed'; }
     renderSourcesInspector();
@@ -4808,8 +4926,9 @@
     if (!source || !assetUsable(asset) || !state.writable) return;
     const draft = sourceDraft();
     if (draft.saving) return;
-    const check = draftCheck(source, draft, asset);
-    if (!check.input) return;
+    const closed = closeOutlineForHandoff(source, draft), check = draftCheck(source, draft, asset);
+    if (closed) drawSourceOverlay();
+    if (!check.input) { if (closed) renderSourcesInspector(); return; }
     let payload;
     try { payload = calibrationPayloadObject(source, check.input); } catch (error) { $('#cal-problem').textContent = error.message; return; }
     Object.assign(draft, { saving: 'pending', saveError: null });
@@ -5027,9 +5146,10 @@
       const count = draft.areaPoints.length;
       announce(`Area point ${count} at ${point.x}, ${point.y}. ${count < 3 ? 'Mark the next corner.' : 'Mark the next corner, or close the area on the first point or with Finish area.'}`);
     } else {
-      draft.references.push({ label: '', pixel: point });
+      const label = nextMarkLabel(source, draft, 'point');
+      draft.references.push({ label, pixel: point, fresh: true });
       focus = `#cal-ref-${draft.references.length - 1}`;
-      announce(`Reference point at ${point.x}, ${point.y}. Type its label.`);
+      announce(`${label} at ${point.x}, ${point.y}. Type to rename it.`);
     }
     renderSourcesInspector();
     drawSourceOverlay();
@@ -5043,17 +5163,18 @@
     renderSourcesInspector();
     drawSourceOverlay();
   }
-  // Closes the area being outlined; it then needs a label, like a reference point.
+  // Closes the area being outlined under the next free "Area N" label, selected so typing renames it.
   function closeArea() {
     const draft = sourceDraft(), points = draft.areaPoints;
     if (points.length < 3) { announce('An area needs at least 3 points.'); return; }
     if (polygonArea(points) < 1) { announce('Those points lie on one line. Mark corners around the area.'); return; }
-    draft.areas.push({ label: '', points });
+    const label = nextMarkLabel(selectedSource(), draft, 'area');
+    draft.areas.push({ label, points, fresh: true });
     draft.areaPoints = []; draft.copied = null; areaHover = null;
     renderSourcesInspector();
     drawSourceOverlay();
     $(`#cal-area-${draft.areas.length - 1}`)?.focus();
-    announce(`Area closed with ${points.length} points. Type its label.`);
+    announce(`${label} closed with ${points.length} points. Type to rename it.`);
   }
   function cancelArea() {
     const draft = sourceDraft();
@@ -5390,7 +5511,7 @@
     bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, centerlineIssues, pathOutline, pathFillets, centerlineLength, outlineOf, anchorPoint, resolvePath, resolveAnchors, polygonArea, pointInPolygon, wallGeometry, wallLength, wallEndClip, terrainOf, siteExtent,
     renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, siteCategories, parseSiteHidden, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport,
-    parseLength, sourceScale, calibrationPayload, calibrationPayloadObject, sourcesWritable, uploadFileProblem, formatBytes, draftCheck, areaMeasure, areaSummary, sourcesProblem, placementStale, underlaySvg, start, sourcesChecked: () => sourceChecks
+    parseLength, sourceScale, calibrationPayload, calibrationPayloadObject, sourcesWritable, uploadFileProblem, formatBytes, draftCheck, savedMarks, nextMarkLabel, closeOpenArea, areaMeasure, areaSummary, sourcesProblem, placementStale, underlaySvg, start, sourcesChecked: () => sourceChecks
   };
   if (typeof globalThis.__ARCHITECTURE_STUDIO_API__ === 'function') globalThis.__ARCHITECTURE_STUDIO_API__(studioApi);
   else start();

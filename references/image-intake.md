@@ -143,6 +143,15 @@ the scale bar or dimensions that belong to it.
    or pasted anything. When the user asks, or the session starts, check
    `list` for a new manual calibration, labelled points, or areas.
 
+   The viewer lists the recorded points and areas too, so the user can
+   rename or remove them. The payload then carries `removeReferences` and
+   `removeAreas`, lists of recorded labels that `apply` drops before it adds
+   anything; a rename is the old label removed plus the mark added under the
+   new label at its recorded position. A label that names no recorded mark
+   refuses the whole payload. Removing or renaming marks does not change
+   `calibrationRevision`, and a placement keeps its stored pixel pairs, so
+   removing a point never moves it.
+
    Where the page cannot write (the single-file bundle, a plain static
    server, a file opened from disk), the viewer offers **Copy calibration**
    instead, and the user pastes the text back to you. Pass the whole pasted

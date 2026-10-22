@@ -1155,7 +1155,9 @@ export function checkCalibrationPayload(payload) {
   const isPoint = p => p && Number.isFinite(p.x) && Number.isFinite(p.y);
   if (typeof payload.sourceId !== 'string' || typeof payload.contentHash !== 'string' || !Number.isInteger(payload.pixels?.width) || !Number.isInteger(payload.pixels?.height)
     || !Number.isInteger(payload.sourceRevision) || !Number.isInteger(payload.calibrationRevision)) fail('The pasted calibration is missing sourceId, contentHash, pixels, sourceRevision, or calibrationRevision.');
-  if (!payload.calibration && !(payload.references?.length) && !(payload.areas?.length)) fail('The pasted text has no calibration, reference points, or areas.');
+  const labels = list => list === undefined || (Array.isArray(list) && list.every(label => typeof label === 'string' && label.trim()));
+  if (!labels(payload.removeReferences) || !labels(payload.removeAreas)) fail('The pasted removeReferences and removeAreas must be lists of labels.');
+  if (!payload.calibration && !(payload.references?.length) && !(payload.areas?.length) && !(payload.removeReferences?.length) && !(payload.removeAreas?.length)) fail('The pasted text has no calibration, reference points, areas, or marks to remove.');
   const cal = payload.calibration;
   if (cal && (!isPoint(cal.from) || !isPoint(cal.to) || !(cal.distanceMm > 0) || !(cal.uncertaintyPx >= 0))) fail('The pasted calibration needs from, to, a positive distanceMm, and uncertaintyPx.');
   if (cal && cal.region !== undefined) fail(REGIONS_REMOVED);
@@ -1177,9 +1179,11 @@ async function cmdApply(args, out, io) {
   return 0;
 }
 
-// Records a viewer calibration payload (scale line, reference points, labelled areas): `apply` from the
-// CLI, and Save calibration through scripts/serve.mjs. Returns { source, messages, warnings }; refusals
-// throw CliError, with code "stale" when the payload was made on another version of the manifest entry.
+// Records a viewer calibration payload (scale line, reference points, labelled areas, and recorded marks to
+// remove): `apply` from the CLI, and Save calibration through scripts/serve.mjs. Removals happen before
+// additions, so a rename (remove the old label, add the new) can also replace another mark. Returns
+// { source, messages, warnings }; refusals throw CliError, with code "stale" when the payload was made on
+// another version of the manifest entry.
 export function applyCalibration(projectDir, payloadInput, forward = null) {
   const out = collector(forward);
   const root = projectRoot(projectDir);
@@ -1195,6 +1199,12 @@ export function applyCalibration(projectDir, payloadInput, forward = null) {
   if (payload.pixels.width !== source.pixels.width || payload.pixels.height !== source.pixels.height) stale(`The calibration was made on a ${payload.pixels.width}x${payload.pixels.height} image, but ${source.id} is ${source.pixels.width}x${source.pixels.height}. ${redo}`);
   if (payload.sourceRevision !== source.revision) stale(`The calibration was made on revision ${payload.sourceRevision} of ${source.id}; it is now revision ${source.revision}. ${redo}`);
   if (payload.calibrationRevision !== source.calibrationRevision) stale(`The pasted calibration is stale: ${source.id}'s calibrations changed since the viewer loaded them (calibrationRevision ${payload.calibrationRevision}, now ${source.calibrationRevision}). ${redo}`);
+  const removals = (list, items, noun) => [...new Set((list ?? []).map(label => label.trim()))].map(label => {
+    if (!(items ?? []).some(item => item.label === label)) fail(`No ${noun} named "${label}" on ${source.id}. Known: ${(items ?? []).map(item => item.label).join(', ') || 'none'}.`);
+    return label;
+  });
+  const removeReferences = removals(payload.removeReferences, source.references, 'reference point');
+  const removeAreas = removals(payload.removeAreas, source.areas, 'area');
   const references = (payload.references ?? []).map(ref => {
     const pixel = { x: round(ref.pixel.x, 2), y: round(ref.pixel.y, 2) };
     checkInImage(pixel, source.pixels, `Reference "${ref.label}"`);
@@ -1223,6 +1233,15 @@ export function applyCalibration(projectDir, payloadInput, forward = null) {
     checkInImage(to, source.pixels, 'The calibration end');
     const entered = typeof c.entered === 'string' && c.entered.trim() ? c.entered.trim() : `${round(c.distanceMm, 1)} mm`;
     cal = twoPointCalibration(source, { method: 'manual', from, to, distanceMm: round(c.distanceMm, 3), uncertaintyPx: round(c.uncertaintyPx, 2), estimated: false, provenance: `manual calibration in the viewer: ${entered}` });
+  }
+  // Marks do not change the scale, so removing or adding them leaves calibrationRevision alone.
+  if (removeReferences.length) {
+    source.references = source.references.filter(item => !removeReferences.includes(item.label));
+    out.log(`Removed reference point(s) from ${source.id}: ${removeReferences.join(', ')}.`);
+  }
+  if (removeAreas.length) {
+    source.areas = source.areas.filter(item => !removeAreas.includes(item.label));
+    out.log(`Removed area(s) from ${source.id}: ${removeAreas.join(', ')}.`);
   }
   for (const ref of references) {
     const existing = source.references.find(item => item.label === ref.label);
@@ -1401,7 +1420,9 @@ pixels and is not rescaled by --seen. Lengths need units: 3810mm, 3.81m, 381cm,
 One image has one scale. A sheet drawn at more than one scale (an enlarged detail, a
 location map inset) is cropped into one image per scale and each part added as its
 own source.
-apply records the viewer's scale line, reference points, and labelled areas. list
+apply records the viewer's scale line, reference points, and labelled areas, and
+drops the ones listed in removeReferences / removeAreas (a rename in the viewer is a
+removal plus the mark under its new label). list
 gives each area's size from the current scale; to-model --area <label> converts an
 area's outline to model millimetres.`;
 

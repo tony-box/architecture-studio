@@ -849,6 +849,86 @@ test('areas are measured from the scale and copied with labels', () => {
   assert.throws(() => api.calibrationPayload(bare, { areas: [{ label: ' ', points: rect }] }), /Label every area/);
 });
 
+test('named features take default labels, and recorded ones can be renamed or removed', () => {
+  const { api } = loadStudio();
+  const rect = [{ x: 100, y: 100 }, { x: 400, y: 100 }, { x: 400, y: 300 }];
+  const size = { width: 4000, height: 3000 };
+  const source = testSource([], { references: [{ label: 'Point 1', pixel: { x: 10.25, y: 20.5 } }, { label: 'Gate', pixel: { x: 5, y: 5 } }], areas: [{ label: 'Area 2', points: rect }] });
+  const draft = (extra = {}) => ({ from: null, to: null, fromU: 0.5, toU: 0.5, distanceText: '', references: [], areas: [], areaPoints: [], saved: { references: {}, areas: {} }, ...extra });
+  const payload = check => plain(api.calibrationPayloadObject(source, check.input));
+
+  // "Point N" and "Area N" take the smallest N no recorded or draft mark of that kind uses.
+  assert.equal(api.nextMarkLabel(source, draft(), 'point'), 'Point 2');
+  assert.equal(api.nextMarkLabel(source, draft({ references: [{ label: 'Point 2', pixel: { x: 1, y: 1 } }] }), 'point'), 'Point 3');
+  assert.equal(api.nextMarkLabel(source, draft(), 'area'), 'Area 1', 'points and areas are numbered apart');
+  assert.equal(api.nextMarkLabel(source, draft({ areas: [{ label: ' Area 1 ', points: rect }] }), 'area'), 'Area 3');
+  assert.equal(api.nextMarkLabel(source, draft({ saved: { references: { 'Point 1': { label: 'Point 2', removed: false } }, areas: {} } }), 'point'), 'Point 3', 'a recorded label stays taken until saved');
+  assert.equal(api.nextMarkLabel(testSource(), { references: [] }, 'point'), 'Point 1');
+
+  const listed = api.savedMarks(source, draft({ saved: { references: { Gate: { label: 'Gate', removed: true } }, areas: {} } }));
+  assert.deepEqual(plain(listed.references.map(item => [item.original, item.label, item.removed])), [['Point 1', 'Point 1', false], ['Gate', 'Gate', true]]);
+  assert.deepEqual(plain(listed.areas[0].points), rect);
+
+  // Nothing edited: nothing to save.
+  assert.equal(api.draftCheck(source, draft(), size).input, null);
+  assert.throws(() => api.calibrationPayloadObject(source, { removeReferences: [], removeAreas: [' '] }), /a scale line, a labelled reference point, or a labelled area/);
+
+  // Labels are checked across recorded and draft marks, and the problem names the inputs.
+  const clash = api.draftCheck(source, draft({ references: [{ label: ' Gate ', pixel: { x: 1, y: 1 } }] }), size);
+  assert.equal(clash.problem, 'Give each reference point its own label.');
+  assert.equal(clash.markProblem, true);
+  assert.deepEqual(plain(clash.invalidIds), ['cal-saved-ref-1', 'cal-ref-0']);
+  const cleared = api.draftCheck(source, draft({ saved: { references: { 'Point 1': { label: '  ', removed: false } }, areas: {} } }), size);
+  assert.deepEqual(plain([cleared.problem, cleared.invalidIds]), ['Label every reference point.', ['cal-saved-ref-0']]);
+  const areaClash = api.draftCheck(source, draft({ areas: [{ label: 'Area 2', points: rect }] }), size);
+  assert.deepEqual(plain([areaClash.problem, areaClash.invalidIds]), ['Give each area its own label.', ['cal-saved-area-0', 'cal-area-0']]);
+  const replaced = api.draftCheck(source, draft({ references: [{ label: 'Gate', pixel: { x: 1, y: 1 } }], saved: { references: { Gate: { label: 'Gate', removed: true } }, areas: {} } }), size);
+  assert.equal(replaced.problem, '', 'a removed label is free again');
+  assert.deepEqual(payload(replaced).removeReferences, ['Gate']);
+  const unscaled = api.draftCheck(source, draft({ distanceText: '3 m' }), size);
+  assert.equal(unscaled.markProblem, false, 'a scale line problem is not a mark problem');
+  assert.deepEqual(plain(unscaled.invalidIds), []);
+
+  // A rename removes the old label and adds the mark, where it was recorded, under the new one.
+  const renamed = api.draftCheck(source, draft({ saved: { references: { 'Point 1': { label: ' NE corner ', removed: false } }, areas: { 'Area 2': { label: 'Bed', removed: false } } } }), size);
+  assert.equal(renamed.problem, '');
+  const body = payload(renamed);
+  assert.deepEqual(body.removeReferences, ['Point 1']);
+  assert.deepEqual(body.references, [{ label: 'NE corner', pixel: { x: 10.25, y: 20.5 } }], 'the recorded pixel is sent as stored');
+  assert.deepEqual(body.removeAreas, ['Area 2']);
+  assert.deepEqual(body.areas, [{ label: 'Bed', points: rect }]);
+  assert.deepEqual(Object.keys(body).slice(-4), ['removeReferences', 'removeAreas', 'references', 'areas'], 'removals come first');
+  const same = api.draftCheck(source, draft({ saved: { references: { 'Point 1': { label: ' Point 1 ', removed: false } }, areas: {} } }), size);
+  assert.equal(same.input, null, 'a label typed back to the recorded one is no change');
+
+  // A removal alone is a valid payload.
+  const removed = api.draftCheck(source, draft({ saved: { references: { Gate: { label: 'Gate', removed: true } }, areas: {} } }), size);
+  const removal = payload(removed);
+  assert.deepEqual(removal.removeReferences, ['Gate']);
+  for (const key of ['calibration', 'references', 'areas', 'removeAreas']) assert.equal(key in removal, false, `no ${key}`);
+  const text = api.calibrationPayload(source, removed.input);
+  assert.deepEqual(JSON.parse(text.slice(text.indexOf('{'))), removal, 'Copy calibration carries the same removal');
+  const fresh = payload(api.draftCheck(source, draft({ references: [{ label: 'Point 2', pixel: { x: 1.04, y: 1 } }] }), size));
+  assert.equal('removeReferences' in fresh || 'removeAreas' in fresh, false, 'the removal lists appear only when non-empty');
+  assert.deepEqual(fresh.references, [{ label: 'Point 2', pixel: { x: 1, y: 1 } }]);
+
+  // Save closes an outline of 3 or more corners under its default label; a shorter one still blocks it.
+  const outlining = draft({ areaPoints: rect });
+  const closed = api.closeOpenArea(source, outlining);
+  assert.notEqual(closed, outlining);
+  assert.deepEqual(plain(closed.areas), [{ label: 'Area 1', points: rect }]);
+  assert.deepEqual(plain(closed.areaPoints), []);
+  assert.equal(outlining.areaPoints.length, 3, 'the draft itself is not changed');
+  const two = draft({ areaPoints: rect.slice(0, 2) }), line = draft({ areaPoints: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 0 }] });
+  assert.equal(api.closeOpenArea(source, two), two);
+  assert.equal(api.closeOpenArea(source, line), line, 'points on one line are not closed');
+  const open = api.draftCheck(source, outlining, size);
+  assert.equal(open.problem, '');
+  assert.deepEqual(payload(open).areas, [{ label: 'Area 1', points: rect }]);
+  const short = api.draftCheck(source, two, size);
+  assert.deepEqual(plain([short.problem, short.markProblem, short.invalidIds, short.input]), ['Finish or cancel the area you are outlining.', true, [], null]);
+});
+
 test('a manual distance that disagrees with the estimate warns before copying', () => {
   const { api } = loadStudio();
   const source = testSource([cal('cal-1', 'scale-bar', 10, 0.01)]);
@@ -1061,15 +1141,44 @@ test('the Area tool outlines, closes, and copies a labelled area', async () => {
   assert.equal(api.state.draft.areas.length, 1);
   // 300 x 200 px at the 10 mm/px scale bar.
   assert.equal(element('#cal-area-0-size').textContent, `64.6 sq ft ± 1.3 sq ft, perimeter 32'-9 3/4", estimated`);
+  assert.equal(api.state.draft.areas[0].label, 'Area 1', 'a closed area takes the next free default label');
+  assert.match(element('#inspector').innerHTML, /<input id="cal-area-0" data-area-index="0" type="text" autocomplete="off" value="Area 1"[^>]*><\/td><td class="marks-where">4 corners<span class="marks-new">New<\/span><\/td>/);
+  assert.equal(element('#cal-problem').textContent, '');
+  assert.equal(element('#copy-calibration').disabled, false);
+
+  // A cleared label is flagged on its input and under the table, as well as by the button.
+  const refresh = () => element('#cal-distance').dispatch('input');
+  api.state.draft.areas[0].label = ' ';
+  refresh();
   assert.equal(element('#cal-problem').textContent, 'Label every area.');
+  assert.equal(element('#marks-problem').textContent, 'Label every area.');
+  assert.equal(element('#cal-area-0').attributes['aria-invalid'], 'true');
+  assert.equal(element('#cal-area-0').attributes['aria-describedby'], 'cal-area-0-size marks-problem');
   assert.equal(element('#copy-calibration').disabled, true);
 
   api.state.draft.areas[0].label = ' Garden bed ';
+  refresh();
+  assert.equal(element('#marks-problem').textContent, '');
+  assert.equal(element('#cal-area-0').attributes['aria-invalid'], 'false');
+  assert.equal(element('#cal-area-0').attributes['aria-describedby'], 'cal-area-0-size');
   element('#copy-calibration').dispatch('click');
   await settle();
   const payload = JSON.parse(clipboard.at(-1).slice(clipboard.at(-1).indexOf('{')));
   assert.equal(payload.calibration, undefined);
   assert.deepEqual(payload.areas, [{ label: 'Garden bed', points: [{ x: 50, y: 50 }, { x: 350, y: 50 }, { x: 350, y: 250 }, { x: 50, y: 250 }] }]);
+
+  // An outline of 2 corners blocks copying; from 3 corners Copy closes it under its default label.
+  click(100, 100); click(300, 100);
+  assert.equal(element('#marks-problem').textContent, 'Finish or cancel the area you are outlining.');
+  assert.equal(element('#copy-calibration').disabled, true);
+  click(200, 200);
+  assert.equal(element('#marks-problem').textContent, '');
+  assert.equal(element('#copy-calibration').disabled, false);
+  element('#copy-calibration').dispatch('click');
+  await settle();
+  assert.equal(api.state.draft.areaPoints.length, 0);
+  assert.deepEqual(plain(api.state.draft.areas.map(item => item.label.trim())), ['Garden bed', 'Area 1']);
+  assert.deepEqual(JSON.parse(clipboard.at(-1).slice(clipboard.at(-1).indexOf('{'))).areas.map(item => item.label), ['Garden bed', 'Area 1']);
 });
 
 test('an image has one scale: no scale region tool, and a disagreement suggests cropping', async () => {
@@ -1308,6 +1417,65 @@ test('served by serve.mjs, step 3 saves the calibration instead of copying it', 
   await plainPage.settle();
   assert.match(plainPage.element('#inspector').innerHTML, /<li><b>Copy it for your agent<\/b>[\s\S]*id="copy-calibration"/);
   assert.doesNotMatch(plainPage.element('#inspector').innerHTML, /save-calibration|Save it for your agent/);
+});
+
+test('Named features lists the recorded marks first, and saves new, renamed, and removed ones', async () => {
+  const bed = [{ x: 50, y: 50 }, { x: 150, y: 50 }, { x: 150, y: 150 }];
+  const files = sourceFiles({ './sources/sources.json': sourcesJson({ calibrations: [cal('cal-1', 'scale-bar', 10, 0.01)], references: [{ label: 'Gate', pixel: { x: 5.25, y: 6 } }], areas: [{ label: 'Bed', points: bed }] }) });
+  const h = startHarness({ files, token: 'abc', search: '?view=sources', post: async () => [200, { ok: true, source: {}, messages: [], warnings: [] }] });
+  await h.api.start();
+  await h.settle();
+  let inspector = h.element('#inspector').innerHTML;
+  assert.match(inspector, /<h4>Named features<\/h4><span aria-label="2 named features">2<\/span>/);
+  assert.match(inspector, /<tbody><tr><td><svg[^]*?<\/svg><\/td><td><input id="cal-saved-ref-0" data-saved-ref-index="0" type="text" autocomplete="off" value="Gate" placeholder="Name it" aria-label="Label for reference point at 5\.25, 6"><\/td><td class="marks-where" title="5\.25, 6">5, 6<\/td><td><button type="button" class="marks-x" data-saved-ref-remove="0" aria-label="Remove Gate">&times;<\/button>/);
+  assert.match(inspector, /<input id="cal-saved-area-0" data-saved-area-index="0" type="text" autocomplete="off" value="Bed" placeholder="Name it" aria-label="Label for area Bed" aria-describedby="cal-saved-area-0-size"><\/td><td class="marks-where">3 corners<\/td>/);
+  assert.match(inspector, /<p id="marks-problem" class="field-note field-note--error"><\/p>/);
+  assert.match(h.element('#cal-saved-area-0-size').textContent, /^5\.4 sq ft ± /, 'the recorded area is measured from the current scale');
+  assert.equal(h.element('#save-calibration').disabled, true, 'recorded marks alone are nothing to save');
+
+  // A new point takes the next free label and is tagged New, after the recorded marks.
+  const click = (x, y) => {
+    const at = { clientX: 16 + x * 1.92, clientY: 12 + y * 1.92, pointerId: 1 };
+    h.element('#sheet-viewport').dispatch('pointerdown', at);
+    h.element('#sheet-viewport').dispatch('pointerup', at);
+  };
+  const point = h.tools.find(tool => tool.dataset.tool === 'point');
+  point.dispatch('click');
+  click(200, 100);
+  assert.deepEqual(plain(h.api.state.draft.references), [{ label: 'Point 1', pixel: { x: 200, y: 100 }, fresh: true }]);
+  inspector = h.element('#inspector').innerHTML;
+  assert.match(inspector, /<span aria-label="3 named features">3<\/span>/);
+  assert.match(inspector, /value="Bed"[^]*<input id="cal-ref-0" data-ref-index="0" type="text" autocomplete="off" value="Point 1"[^>]*><\/td><td class="marks-where" title="200, 100">200, 100<span class="marks-new">New<\/span>/);
+  assert.match(h.element('.source-overlay@child').innerHTML, />Point 1<\/text>/);
+  assert.equal(h.element('#save-calibration').disabled, false);
+
+  // Removing a recorded mark strikes it through until Save; Undo keeps it.
+  h.api.state.draft.saved.references.Gate = { label: 'Gate', removed: true };
+  h.api.state.draft.saved.areas.Bed = { label: 'Garden bed', removed: false };
+  point.dispatch('click');
+  inspector = h.element('#inspector').innerHTML;
+  assert.match(inspector, /<tr class="marks-removed"><td><svg[^]*?<\/svg><\/td><td><span class="marks-gone">Gate<\/span><\/td><td class="marks-where">Removed on save<\/td><td><button type="button" class="marks-undo" data-saved-ref-keep="0" aria-label="Keep Gate">Undo<\/button><\/td><\/tr>/);
+  assert.match(inspector, /<span aria-label="2 named features">2<\/span>/);
+  assert.doesNotMatch(h.element('.source-overlay@child').innerHTML, />Gate<\/text>/, 'a removed mark is not drawn');
+  assert.match(h.element('.source-overlay@child').innerHTML, />Garden bed<\/text>/, 'a renamed mark shows its new label');
+
+  h.element('#save-calibration').dispatch('click');
+  await tick();
+  const body = JSON.parse(h.posts[0].body);
+  assert.deepEqual(body.removeReferences, ['Gate']);
+  assert.deepEqual(body.removeAreas, ['Bed']);
+  assert.deepEqual(body.references, [{ label: 'Point 1', pixel: { x: 200, y: 100 } }]);
+  assert.deepEqual(body.areas, [{ label: 'Garden bed', points: bed }]);
+  assert.deepEqual(plain(h.api.state.draft.saved), { references: {}, areas: {} }, 'the edits are cleared once saved');
+
+  // Start over drops the draft marks and the edits to recorded ones.
+  const again = startHarness({ files, token: 'abc', search: '?view=sources' });
+  await again.api.start();
+  await again.settle();
+  again.api.state.draft.saved.references.Gate = { label: 'Gate', removed: true };
+  again.element('#cal-reset').dispatch('click');
+  assert.deepEqual(plain(again.api.state.draft.saved), { references: {}, areas: {} });
+  assert.match(again.element('#inspector').innerHTML, /value="Gate"/);
 });
 
 test('Add image imports a dropped or chosen file, offers to replace an existing id, and opens the new image', async () => {
