@@ -377,6 +377,43 @@ export function estimateConflict(calibrations, cal) {
 // Relative uncertainty of a measured length: sqrt(u_scale² + (2ε / L)²).
 export const measureUncertainty = (scaleUncertainty, endpointPx, lengthPx) => Math.sqrt(scaleUncertainty ** 2 + (2 * endpointPx / lengthPx) ** 2);
 
+// ---------------------------------------------------------------- labelled areas
+
+export const polygonPixelArea = points => Math.abs(points.reduce((sum, p, i) => { const q = points[(i + 1) % points.length]; return sum + p.x * q.y - q.x * p.y; }, 0)) / 2;
+const polygonPerimeterPx = points => points.reduce((sum, p, i) => sum + distance(p, points[(i + 1) % points.length]), 0);
+
+export function formatArea(mm2, units) {
+  return units === 'metric' ? `${(mm2 / 1e6).toFixed(2)} m²` : `${(mm2 / 304.8 ** 2).toFixed(1)} sq ft`;
+}
+
+// An area's size from the active scale of the group containing all its points: pixel area × mmPerPx²,
+// with twice the scale's relative uncertainty. null fields when no scale applies or the group disagrees.
+export function measureArea(source, area, units = 'feet-inches') {
+  const group = source.kind === 'photo' ? { region: null, scale: null } : scaleFor(source, area.points);
+  const out = { label: area.label, points: area.points, region: group.region ?? null };
+  const { scale } = group;
+  const note = source.kind === 'photo' ? 'photos have no scale' : !scale ? 'no scale applies' : scale.disagreement ? 'its calibrations disagree' : null;
+  if (note) return { ...out, areaMm2: null, areaDisplay: null, areaUncertaintyDisplay: null, perimeterMm: null, perimeterDisplay: null, relativeUncertainty: null, calibrationIds: scale?.calibrationIds ?? [], methods: scale?.methods ?? [], estimated: scale?.estimated ?? null, notMeasured: note };
+  const areaMm2 = polygonPixelArea(area.points) * scale.mmPerPx ** 2;
+  const perimeterMm = polygonPerimeterPx(area.points) * scale.mmPerPx;
+  const relativeUncertainty = 2 * scale.relativeUncertainty;
+  return {
+    ...out,
+    areaMm2: Math.round(areaMm2),
+    areaDisplay: formatArea(areaMm2, units),
+    areaUncertaintyDisplay: formatArea(areaMm2 * relativeUncertainty, units),
+    perimeterMm: Math.round(perimeterMm),
+    perimeterDisplay: formatLength(perimeterMm, units),
+    relativeUncertainty: round(relativeUncertainty, 6),
+    calibrationIds: scale.calibrationIds,
+    methods: scale.methods,
+    estimated: scale.estimated,
+    notMeasured: null
+  };
+}
+
+const areaSummary = measured => (measured.notMeasured ? `not measured (${measured.notMeasured})` : `${measured.areaDisplay} ± ${measured.areaUncertaintyDisplay}, perimeter ${measured.perimeterDisplay} (${measured.calibrationIds.join(', ')}, ${measured.methods.join(', ')}${measured.estimated ? ', estimated' : ''})`);
+
 // ---------------------------------------------------------------- placement
 
 export function applyTransform(t, p) {
@@ -818,7 +855,7 @@ function cmdAdd(args, out) {
   writeManifest(root, manifest);
 
   out.log(`${existing ? 'Replaced' : 'Imported'} ${id}: ${relPath}, ${kind}, ${info.format.toUpperCase()} ${info.width}x${info.height} px${info.exifOrientation !== 1 ? ` (EXIF orientation ${info.exifOrientation} applied)` : ''}, revision ${source.revision}.`);
-  if (existing) out.log('Its calibrations, north, references, and placement were cleared: the pixels may have moved. Calibrate it again.');
+  if (existing) out.log('Its calibrations, north, references, areas, and placement were cleared: the pixels may have moved. Calibrate it again.');
   if (brief.changed) out.log('Registered it in brief.json sources.');
   if (source.legacyCalibration) out.log(`brief.json had a calibration for it ("${source.legacyCalibration.description}", ${source.legacyCalibration.valueMm} mm) with no pixel points. Locate it on the image and record it with calibrate.`);
   if (kind === 'photo') out.log('Photos are context only: they are never calibrated or placed.');
@@ -1096,17 +1133,27 @@ function cmdToModel(args, out) {
   if (staleReason) fail(`The placement of ${source.id} is stale: ${staleReason}. Re-run place.`);
   const seen = parseSeen(single(args, 'seen'), source.pixels);
   const inputs = args._.slice(3);
-  if (!inputs.length) fail('Give one or more pixel points: to-model <project> <id> x,y [x,y ...].');
+  const areaLabel = text(args, 'area');
+  if (!inputs.length && areaLabel === undefined) fail('Give one or more pixel points, or --area <label>: to-model <project> <id> x,y [x,y ...] [--area <label>].');
+  const toModel = pixel => {
+    const model = applyTransform(source.placement.transform, pixel);
+    return { x: Math.round(model.x), y: Math.round(model.y) };
+  };
   const points = inputs.map(item => {
     const pixel = parsePixel(item, source, seen, item);
-    const model = applyTransform(source.placement.transform, pixel);
-    return { input: item, pixel, model: { x: Math.round(model.x), y: Math.round(model.y) } };
+    return { input: item, pixel, model: toModel(pixel) };
   });
   const result = { sourceId: source.id, view: source.placement.view, reference: evidenceReference(source), points };
+  if (areaLabel !== undefined) {
+    const area = (source.areas ?? []).find(item => item.label === areaLabel.trim());
+    if (!area) fail(`${source.id} has no area labelled "${areaLabel}". Known: ${(source.areas ?? []).map(item => item.label).join(', ') || 'none'}.`);
+    result.area = { label: area.label, points: area.points.map(pixel => ({ pixel, model: toModel(pixel) })) };
+  }
   if (single(args, 'json')) out.log(JSON.stringify(result, null, 2));
   else {
     out.log(`Model millimetres on ${result.view} (${result.reference}):`);
     for (const point of points) out.log(`  ${point.input} -> ${point.model.x}, ${point.model.y}`);
+    if (result.area) out.log(`  area "${result.area.label}": ${result.area.points.map(point => `${point.model.x}, ${point.model.y}`).join('; ')}`);
   }
   return 0;
 }
@@ -1128,10 +1175,11 @@ export function parseCalibrationPayload(input) {
   const isPoint = p => p && Number.isFinite(p.x) && Number.isFinite(p.y);
   if (typeof payload.sourceId !== 'string' || typeof payload.contentHash !== 'string' || !Number.isInteger(payload.pixels?.width) || !Number.isInteger(payload.pixels?.height)
     || !Number.isInteger(payload.sourceRevision) || !Number.isInteger(payload.calibrationRevision)) fail('The pasted calibration is missing sourceId, contentHash, pixels, sourceRevision, or calibrationRevision.');
-  if (!payload.calibration && !(payload.references?.length)) fail('The pasted text has neither a calibration nor reference points.');
+  if (!payload.calibration && !(payload.references?.length) && !(payload.areas?.length)) fail('The pasted text has no calibration, reference points, or areas.');
   const cal = payload.calibration;
   if (cal && (!isPoint(cal.from) || !isPoint(cal.to) || !(cal.distanceMm > 0) || !(cal.uncertaintyPx >= 0))) fail('The pasted calibration needs from, to, a positive distanceMm, and uncertaintyPx.');
   if (payload.references !== undefined && (!Array.isArray(payload.references) || payload.references.some(ref => typeof ref?.label !== 'string' || !ref.label.trim() || !isPoint(ref.pixel)))) fail('The pasted reference points need a label and a pixel.');
+  if (payload.areas !== undefined && (!Array.isArray(payload.areas) || payload.areas.some(area => typeof area?.label !== 'string' || !area.label.trim() || !Array.isArray(area.points) || !area.points.every(isPoint)))) fail('The pasted areas need a label and a list of points.');
   return payload;
 }
 
@@ -1159,6 +1207,19 @@ async function cmdApply(args, out, io) {
     checkInImage(pixel, source.pixels, `Reference "${ref.label}"`);
     return { label: ref.label.trim(), pixel };
   });
+  const areas = (payload.areas ?? []).map(area => {
+    const label = area.label.trim();
+    if (area.points.length < 3) fail(`Area "${label}" needs at least 3 points; it has ${area.points.length}.`);
+    const points = area.points.map((p, i) => {
+      const pixel = { x: round(p.x, 2), y: round(p.y, 2) };
+      checkInImage(pixel, source.pixels, `Point ${i + 1} of area "${label}"`);
+      return pixel;
+    });
+    if (polygonPixelArea(points) < 1) fail(`Area "${label}" has no area: its points lie on one line. Outline it again in the viewer.`);
+    return { label, points };
+  });
+  const duplicate = areas.find((area, i) => areas.findIndex(item => item.label === area.label) !== i);
+  if (duplicate) fail(`Two pasted areas are labelled "${duplicate.label}". Give each area its own label in the viewer.`);
   let cal = null;
   if (payload.calibration) {
     refuseCalibratingPhoto(source);
@@ -1188,6 +1249,19 @@ async function cmdApply(args, out, io) {
     const conflict = estimateConflict(source.calibrations, cal);
     if (conflict) out.warn(`Note: ${conflict.message}`);
     calibrationChanged(root, source, out, cal);
+  }
+  if (areas.length) {
+    source.areas ??= [];
+    for (const area of areas) {
+      const index = source.areas.findIndex(item => item.label === area.label);
+      if (index === -1) source.areas.push(area);
+      else source.areas[index] = area;
+    }
+    const units = displayUnits(root);
+    out.log(`Recorded ${areas.length} area(s) on ${source.id}: ${areas.map(area => {
+      const measured = measureArea(source, area, units);
+      return `${area.label} (${measured.notMeasured ? `not measured: ${measured.notMeasured}` : `${measured.areaDisplay} ± ${measured.areaUncertaintyDisplay}`})`;
+    }).join(', ')}.`);
   }
   writeManifest(root, manifest);
   return 0;
@@ -1279,12 +1353,13 @@ function cmdList(args, out) {
   const root = projectRoot(args._[1]);
   const manifest = readManifest(root);
   const model = (() => { try { return readModel(root); } catch { return null; } })();
+  const units = displayUnits(root);
   const rows = manifest.sources.map(source => {
     const status = sourceStatus(root, source);
-    return { source, status, groups: groupsWithScale(source) };
+    return { source, status, groups: groupsWithScale(source), areas: (source.areas ?? []).map(area => measureArea(source, area, units)) };
   });
   if (single(args, 'json')) {
-    out.log(JSON.stringify(rows.map(({ source, status, groups }) => ({
+    out.log(JSON.stringify(rows.map(({ source, status, groups, areas }) => ({
       id: source.id, path: source.path, kind: source.kind, format: source.format, pixels: source.pixels,
       revision: source.revision, calibrationRevision: source.calibrationRevision, reference: evidenceReference(source),
       stale: status.stale, reason: status.reason, north: source.north ?? null,
@@ -1292,17 +1367,19 @@ function cmdList(args, out) {
       calibrations: source.calibrations.map(cal => ({ id: cal.id, method: cal.method, estimated: cal.estimated, provenance: cal.provenance, region: cal.region ?? null, ...(cal.acceptedByUser !== undefined ? { acceptedByUser: cal.acceptedByUser } : {}) })),
       placement: source.placement ? { view: source.placement.view, pairs: source.placement.pairs, residualsMm: source.placement.residualsMm, stale: isPlacementStale(source, model) } : null,
       references: source.references,
+      areas,
       notes: source.notes ?? null,
       legacyCalibration: source.legacyCalibration ?? null
     })), null, 2));
     return 0;
   }
   if (!rows.length) { out.log(`No source images yet. Import one with: import-image.mjs add <project> <file> --kind <kind>`); return 0; }
-  for (const { source, status, groups } of rows) {
+  for (const { source, status, groups, areas } of rows) {
     out.log(`${source.id}  ${source.kind}  ${source.path}  ${source.pixels.width}x${source.pixels.height} ${source.format}  ${evidenceReference(source)}  ${status.stale ? `STALE (${status.reason})` : 'current'}`);
     for (const group of groups) out.log(`  scale, ${describeScale(group)}${group.scale?.disagreement ? ' [calibrations disagree]' : ''}`);
     if (source.north) out.log(`  north: ${source.north.deg}° (${source.north.source})`);
     if (source.references.length) out.log(`  references: ${source.references.map(ref => ref.label).join(', ')}`);
+    for (const area of areas) out.log(`  area "${area.label}", ${area.points.length} points: ${areaSummary(area)}`);
     if (source.placement) out.log(`  placed on ${source.placement.view}: ${source.placement.pairs.length} pair(s), residuals ${source.placement.residualsMm.join(', ')} mm${isPlacementStale(source, model) ? ' (STALE)' : ''}`);
     if (source.legacyCalibration) out.log(`  brief.json calibration without pixels: ${source.legacyCalibration.description} (${source.legacyCalibration.valueMm} mm)`);
   }
@@ -1324,7 +1401,7 @@ export const USAGE = `Usage: node <skill>/scripts/import-image.mjs <command> <pr
   place       <project> <id> --view site|<levelId> --pair px,py=mx,my[=label] [--pair ...]
                 [--seen WxH] [--uncertainty-px n] [--estimated true|false] [--force]
   measure     <project> <id> --from x,y --to x,y [--seen WxH] [--uncertainty-px n] [--force] [--json]
-  to-model    <project> <id> x,y [x,y ...] [--seen WxH] [--json]
+  to-model    <project> <id> [x,y ...] [--area <label>] [--seen WxH] [--json]
   apply       <project> [<pasted text> | --file <path> | -]
   check       <project> [--json]
   list        <project> [--json]
@@ -1334,7 +1411,10 @@ Pixels are canonical: the upright image (after EXIF rotation), origin top-left, 
 A pixel point may be ref:<label> for a stored reference point. --seen WxH rescales
 coordinates read from a resized copy; --uncertainty-px is always in full-size image
 pixels and is not rescaled by --seen. Lengths need units: 3810mm, 3.81m, 381cm,
-12.5ft, 12', 12'-6", 150in. Model points are millimetres.`;
+12.5ft, 12', 12'-6", 150in. Model points are millimetres.
+apply records the viewer's scale line, reference points, and labelled areas. list
+gives each area's size from the current scale; to-model --area <label> converts an
+area's outline to model millimetres.`;
 
 const COMMANDS = { add: cmdAdd, calibrate: cmdCalibrate, uncalibrate: cmdUncalibrate, north: cmdNorth, reference: cmdReference, place: cmdPlace, measure: cmdMeasure, 'to-model': cmdToModel, apply: cmdApply, check: cmdCheck, list: cmdList };
 

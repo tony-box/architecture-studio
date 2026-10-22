@@ -63,7 +63,7 @@ Never accept a crop that cuts off the scale bar or the dimensions you need.
    `brief.json` `sources[]` (running it twice is harmless). It refuses a file
    or id that already exists. When the user sends a new version of the same
    image, run `add` again with `--replace`; that clears its calibrations,
-   north, references, and placement, so redo them and re-derive anything taken
+   north, references, areas, and placement, so redo them and re-derive anything taken
    from it. A calibration recorded in an older `brief.json` arrives as
    `legacyCalibration`, without pixel points: find it on the image and record
    it as a real calibration (step 3).
@@ -124,7 +124,8 @@ Never accept a crop that cuts off the scale bar or the dimensions you need.
    1. Open the Sources tab and select the image.
    2. Click the two ends of the longest distance you trust, and type it.
    3. Optionally mark labelled points, such as house corners, for placing the
-      image.
+      image, and outline labelled areas, such as a garden bed or an existing
+      shed, with the Area tool.
    4. Press **Copy calibration** and paste the text back to me.
 
    Pass the whole pasted text to `apply`, through stdin or a scratch file
@@ -193,6 +194,16 @@ Never accept a crop that cuts off the scale bar or the dimensions you need.
      overhang`).
    - Keep a list of image-derived dimensions, with method and uncertainty, for
      `HANDOFF.md`.
+
+   **Labelled areas.** Areas the user outlined in the viewer arrive through
+   `apply` and are context: they say what the user means by "the garden bed"
+   or "the existing shed". `list --json` gives each one's `areaMm2`,
+   `perimeterMm`, and `relativeUncertainty`, computed from the current scale
+   every time (`null` when no scale applies). To turn one into a boundary
+   (a surface, planting, or existing structure), place the image and run
+   `import-image.mjs to-model <project> <id> --area <label>`, then author clean
+   geometry from those model points with evidence per the table above and the
+   `reference`. An area never sets a property line or setback.
 8. **Check.** Run `import-image.mjs check <project>` after changing a source or
    anything derived from one, and before handoff. For each item it lists:
    re-import a stale file with `add --replace`; re-derive entities whose source

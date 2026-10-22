@@ -163,12 +163,23 @@ table".
   Not verified, Placement out of date, Calibrations disagree), followed by the
   selected image's details and the Calibrate panel. The stage shows the image
   at natural pixel size with the sheet's pan and zoom, a pixel readout in the
-  corner, and the recorded calibration lines, regions, and labelled reference
-  points on top. The toolbar holds the zoom group ("Fit image") and the
-  calibration tools Scale line, Region, and Reference point as pressed toggles.
-  With a tool chosen, a click marks a point, a drag with Region draws a
-  rectangle, and Enter on the focused stage marks the point under a centre
-  crosshair, so every step works from the keyboard. Escape steps back. The
+  corner, and the recorded calibration lines, scale regions, labelled reference
+  points, and labelled areas on top, in ink. The toolbar holds the zoom group
+  ("Fit image") and the calibration tools Scale line, Scale region, Reference
+  point, and Area as pressed toggles. Scale region is described as "Only for
+  part of a sheet drawn at its own scale, such as a detail or inset. It needs
+  its own scale line." With a tool chosen, a click marks a point, a drag with
+  Scale region draws a rectangle, and Enter on the focused stage marks the
+  point under a centre crosshair, so every step works from the keyboard.
+  Escape steps back. Area adds polygon corners: the outline previews in the
+  accent, Backspace removes the last corner, Escape cancels it, and clicking
+  the first corner (from 3 corners) or "Finish area" closes it. Each closed
+  area takes a label and shows its size and perimeter in the project's units
+  (sq ft to 0.1 with a feet-inches perimeter, or m² to 0.01 with a metric
+  one), with ±, from the draft's scale line when it has one and otherwise the
+  image's active scale; without a scale it reads "Not measured: add a scale
+  line" and can still be copied. Photos take labelled areas but never a size.
+  The inspector lists the recorded areas with their current sizes. The
   draft draws in the accent, as the current selection. Under the distance, a
   note gives the resulting scale; when it is more than 5% off the image's
   automatic estimate, the note turns to the warning colour and says that the

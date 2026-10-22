@@ -54,7 +54,7 @@
         "kind": { "enum": ["satellite", "survey", "site-plan", "floor-plan", "framing-plan", "elevation", "photo", "sketch", "other"] },
         "format": { "enum": ["png", "jpeg", "webp"] },
         "contentHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "description": "Hash of the file bytes at import. A file that no longer matches is stale: nothing measures or draws from it until it is re-imported with add --replace." },
-        "revision": { "type": "integer", "minimum": 1, "description": "Increments each time the file is replaced. Replacing clears calibrations, north, and placement." },
+        "revision": { "type": "integer", "minimum": 1, "description": "Increments each time the file is replaced. Replacing clears calibrations, north, references, areas, and placement." },
         "calibrationRevision": { "type": "integer", "minimum": 0, "description": "Increments whenever calibrations or the placement change (a new or recomputed placement transform). Placements, pasted viewer payloads, and evidence references record the value they were made against." },
         "pixels": {
           "type": "object",
@@ -81,6 +81,19 @@
             "properties": {
               "label": { "type": "string", "minLength": 1 },
               "pixel": { "$ref": "#/$defs/pixel" }
+            }
+          }
+        },
+        "areas": {
+          "description": "Labelled outlines the user drew on the image, such as a garden bed. Their sizes are not stored: list computes them from the current scale. They never set property lines or setbacks.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "points"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1 },
+              "points": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/pixel" } }
             }
           }
         },

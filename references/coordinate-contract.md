@@ -270,6 +270,9 @@ Images the user supplies are recorded in `sources/sources.json`
 - A measured distance has a relative uncertainty of
   `sqrt(u_scale² + (2ε / L)²)`, where `ε` is the endpoint uncertainty in
   pixels and `L` the measured length in pixels.
+- A labelled area measures `pixel area × mmPerPx²` with the active scale of
+  the group containing all its points, with a relative uncertainty of
+  `2 × u_scale`.
 - `photo` sources are never calibrated: perspective is not a uniform scale.
 
 ### Placement

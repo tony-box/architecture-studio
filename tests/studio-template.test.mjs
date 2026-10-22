@@ -797,7 +797,61 @@ test('the calibration payload is the exact text the apply command reads', () => 
   assert.deepEqual(parsed.references, [{ label: 'Gate', pixel: { x: 5, y: 5 } }]);
   const unlabelled = api.calibrationPayload(source, { calibration: { from: { x: 0, y: 0 }, to: { x: 3000, y: 0 }, distanceMm: 1000, entered: '1 m', uncertaintyPx: 2 } });
   assert.deepEqual(JSON.parse(unlabelled.slice(unlabelled.indexOf('{'))).calibration, { from: { x: 0, y: 0 }, to: { x: 3000, y: 0 }, distanceMm: 1000, entered: '1 m', uncertaintyPx: 2 });
-  assert.throws(() => api.calibrationPayload(source, {}), /scale line or at least one labelled reference/);
+  assert.throws(() => api.calibrationPayload(source, {}), /a scale line, a labelled reference point, or a labelled area/);
+});
+
+test('areas are measured from the scale and copied with labels', () => {
+  const { api } = loadStudio();
+  api.state.model = cloneFixture();
+  assert.equal(api.state.model.project.coordinates.displayUnits, 'feet-inches');
+  // A 300 x 200 px rectangle at 10 mm/px: 60000 px² x 100 = 6 m² = 64.58 sq ft; perimeter 1000 px = 10 m.
+  const rect = [{ x: 100, y: 100 }, { x: 400, y: 100 }, { x: 400, y: 300 }, { x: 100, y: 300 }];
+  const scaled = testSource([cal('cal-1', 'scale-bar', 10, 0.01)]);
+  const measure = api.areaMeasure(scaled, rect);
+  near(measure.areaMm2, 6e6, 1e-6, 'area');
+  near(measure.perimeterMm, 10000, 1e-9, 'perimeter');
+  near(measure.relativeUncertainty, 0.02, 1e-12, 'twice the scale uncertainty');
+  assert.equal(api.areaSummary(scaled, measure), `64.6 sq ft ± 1.3 sq ft, perimeter 32'-9 3/4", estimated`);
+  assert.equal(api.areaSummary(scaled, measure, 'metric'), '6.00 m² ± 0.12 m², perimeter 10.00 m, estimated');
+
+  // The draft's own scale line, 3000 px = 15 m (5 mm/px), takes precedence over the scale bar: 1.5 m².
+  const draft = (areas, extra = {}) => ({ from: { x: 0, y: 0 }, to: { x: 3000, y: 0 }, fromU: 0.5, toU: 0.5, distanceText: '15 m', region: null, regionLabel: '', references: [], areas, areaPoints: [], ...extra });
+  const size = { width: 4000, height: 3000 };
+  const check = api.draftCheck(scaled, draft([{ label: 'Garden bed', points: rect }]), size);
+  const fromLine = api.areaMeasure(scaled, rect, check.calibration);
+  near(fromLine.areaMm2, 1.5e6, 1e-6, 'area from the draft line');
+  near(fromLine.relativeUncertainty, 2 * (2 * 0.5 / 3000), 1e-12, 'uncertainty of the draft line');
+  assert.equal(fromLine.fromDraft, true);
+  assert.equal(api.areaSummary(scaled, fromLine), `16.1 sq ft ± 0.0 sq ft, perimeter 16'-4 7/8"`);
+  // A draft line in a scale region does not measure an area outside it.
+  const detail = { x0: 0, y0: 0, x1: 3500, y1: 50 };
+  near(api.areaMeasure(scaled, rect, { ...check.calibration, region: detail }).areaMm2, 6e6, 1e-6, 'outside the draft region');
+
+  // Without a scale the area is not measured but can still be labelled and copied.
+  const bare = testSource();
+  assert.equal(api.areaMeasure(bare, rect), null);
+  assert.equal(api.areaSummary(bare, null), 'Not measured: add a scale line.');
+  const photo = testSource([], { kind: 'photo' });
+  assert.equal(api.areaMeasure(photo, rect), null);
+  assert.equal(api.areaSummary(photo, null), 'Not measured: photos have no scale.');
+  const onlyArea = api.draftCheck(bare, draft([{ label: '  Existing shed ', points: [{ x: 10.04, y: 20.06 }, { x: 110, y: 20 }, { x: 60.56, y: 90 }] }], { from: null, to: null, distanceText: '' }), size);
+  assert.equal(onlyArea.problem, '');
+  assert.equal(onlyArea.calibration, null);
+  const text = api.calibrationPayload(bare, onlyArea.input);
+  assert.equal(text, 'Architecture Studio calibration for survey-plat. Paste this to your agent; it applies it with scripts/import-image.mjs apply.\n'
+    + `{"type":"architecture-studio/source-calibration","version":1,"sourceId":"survey-plat","contentHash":"${HASH}","pixels":{"width":4000,"height":3000},"sourceRevision":2,"calibrationRevision":3,`
+    + '"areas":[{"label":"Existing shed","points":[{"x":10,"y":20.1},{"x":110,"y":20},{"x":60.6,"y":90}]}]}');
+
+  // Areas follow references in the payload.
+  const both = JSON.parse(api.calibrationPayload(bare, { references: [{ label: 'Gate', pixel: { x: 5, y: 5 } }], areas: [{ label: 'Bed', points: rect }] }).split('\n')[1]);
+  assert.deepEqual(Object.keys(both).slice(-2), ['references', 'areas']);
+
+  assert.equal(api.draftCheck(bare, draft([{ label: '', points: rect }], { from: null, to: null, distanceText: '' }), size).problem, 'Label every area.');
+  assert.equal(api.draftCheck(bare, draft([{ label: 'A', points: rect }, { label: 'A ', points: rect }], { from: null, to: null, distanceText: '' }), size).problem, 'Give each area its own label.');
+  assert.equal(api.draftCheck(bare, draft([], { from: null, to: null, distanceText: '', areaPoints: [{ x: 1, y: 1 }] }), size).problem, 'Finish or cancel the area you are outlining.');
+  assert.equal(api.draftCheck(bare, draft([{ label: 'Strip', points: rect.slice(0, 2) }], { from: null, to: null, distanceText: '' }), size).problem, 'An area needs at least 3 points.');
+  assert.throws(() => api.calibrationPayload(bare, { areas: [{ label: 'Strip', points: rect.slice(0, 2) }] }), /at least 3 points/);
+  assert.throws(() => api.calibrationPayload(bare, { areas: [{ label: ' ', points: rect }] }), /Label every area/);
 });
 
 test('a manual distance that disagrees with the estimate warns before copying', () => {
@@ -907,7 +961,7 @@ function startHarness({ files, search = '' }) {
   const tabs = [...html.matchAll(/<button class="tab" role="tab" id="(tab-[a-z]+)" data-view="([a-z]+)"[^>]*?( hidden)?>/g)].map(([, id, view, hidden]) => {
     const tab = element(`#${id}`); Object.assign(tab, { id, dataset: { view }, hidden: Boolean(hidden) }); return tab;
   });
-  const tools = ['line', 'region', 'point'].map(tool => Object.assign(element(`tool-${tool}`), { dataset: { tool } }));
+  const tools = ['line', 'region', 'point', 'area'].map(tool => Object.assign(element(`tool-${tool}`), { dataset: { tool } }));
   const clipboard = [];
   const response = (body, status = 200) => ({ ok: status === 200, status, json: async () => JSON.parse(body), arrayBuffer: async () => new Uint8Array(body).buffer });
   let api;
@@ -967,6 +1021,49 @@ test('without a valid model the Sources view still calibrates', async () => {
   assert.match(element('#stage-status').innerHTML, /Model unavailable/);
   assert.match(element('#inspector').innerHTML, /Model unavailable/);
   assert.equal(element('#stage-status').classList.contains('hidden-view'), false);
+});
+
+test('the Area tool outlines, closes, and copies a labelled area', async () => {
+  const files = { './sources/sources.json': sourcesJson({ calibrations: [cal('cal-1', 'scale-bar', 10, 0.01)] }), './sources/survey-plat.png': imageBytes };
+  const { api, element, tools, clipboard, settle } = startHarness({ files, search: '?view=sources' });
+  await api.start();
+  await settle();
+  const viewport = element('#sheet-viewport');
+  const click = (x, y) => {
+    const at = { clientX: 16 + x * 1.92, clientY: 12 + y * 1.92, pointerId: 1 };
+    viewport.dispatch('pointerdown', at);
+    viewport.dispatch('pointerup', at);
+  };
+  const area = tools.find(tool => tool.dataset.tool === 'area');
+  area.dispatch('click');
+  assert.equal(api.state.tool, 'area');
+  assert.equal(area.attributes['aria-pressed'], 'true');
+
+  click(10, 10);
+  viewport.dispatch('keydown', { key: 'Escape' });
+  assert.equal(api.state.draft.areaPoints.length, 0, 'Escape cancels the area in progress');
+  assert.equal(api.state.tool, 'area');
+
+  click(50, 50); click(350, 50); click(200, 200);
+  viewport.dispatch('keydown', { key: 'Backspace' });
+  assert.deepEqual(plain(api.state.draft.areaPoints), [{ x: 50, y: 50 }, { x: 350, y: 50 }], 'Backspace removes the last point');
+  click(350, 250); click(50, 250);
+  assert.match(element('#inspector').innerHTML, /id="cal-area-finish">Finish area/);
+  assert.match(element('.source-overlay@child').innerHTML, /<polyline class="ov-draft"|<polygon class="ov-draft"/);
+  click(50.5, 50.5);
+  assert.equal(api.state.draft.areaPoints.length, 0, 'clicking the first point closes the area');
+  assert.equal(api.state.draft.areas.length, 1);
+  // 300 x 200 px at the 10 mm/px scale bar.
+  assert.equal(element('#cal-area-0-size').textContent, `64.6 sq ft ± 1.3 sq ft, perimeter 32'-9 3/4", estimated`);
+  assert.equal(element('#cal-problem').textContent, 'Label every area.');
+  assert.equal(element('#copy-calibration').disabled, true);
+
+  api.state.draft.areas[0].label = ' Garden bed ';
+  element('#copy-calibration').dispatch('click');
+  await settle();
+  const payload = JSON.parse(clipboard.at(-1).slice(clipboard.at(-1).indexOf('{')));
+  assert.equal(payload.calibration, undefined);
+  assert.deepEqual(payload.areas, [{ label: 'Garden bed', points: [{ x: 50, y: 50 }, { x: 350, y: 50 }, { x: 350, y: 250 }, { x: 50, y: 250 }] }]);
 });
 
 test('start keeps the old blocked page when there are no sources, and flags stale files', async () => {

@@ -671,6 +671,65 @@ test('apply takes the viewer payload and refuses stale or mismatched ones', asyn
   assert.throws(() => parseCalibrationPayload('{"type":"architecture-studio/source-calibration","version":2}'), /version/);
 });
 
+test('apply records labelled areas; list measures them live and to-model converts them', async t => {
+  const { dir, image } = await planProject(t);
+  const rect = [{ x: 100, y: 100 }, { x: 400, y: 100 }, { x: 400, y: 300 }, { x: 100, y: 300 }];
+  const areasOnly = areas => payloadFor(sourceOf(dir, 'plan'), { calibration: undefined, references: undefined, areas });
+  const unscaled = await ok('apply', dir, areasOnly([{ label: ' Garden bed ', points: rect }]));
+  assert.match(unscaled.out, /Recorded 1 area\(s\) on plan: Garden bed \(not measured: no scale applies\)\./);
+  assert.deepEqual(sourceOf(dir, 'plan').areas, [{ label: 'Garden bed', points: rect }]);
+  assert.equal(sourceOf(dir, 'plan').calibrationRevision, 0, 'areas do not change calibrations');
+  assertValid(dir);
+  let [listed] = JSON.parse((await ok('list', dir, '--json')).out);
+  assert.equal(listed.areas[0].areaMm2, null);
+  assert.equal(listed.areas[0].notMeasured, 'no scale applies');
+
+  // Calibrating afterwards measures the stored area: 300 x 200 px at 10 mm/px is 6 m² (64.6 sq ft),
+  // perimeter 1000 px = 10 m; relative uncertainty 2 x (2 x 2 px / 500 px) = 0.016.
+  await ok('calibrate', dir, 'plan', '--method', 'printed-dimension', '--from', '100,700', '--to', '600,700', '--distance', '5000mm', '--uncertainty-px', '2', '--provenance', 'south wall');
+  [listed] = JSON.parse((await ok('list', dir, '--json')).out);
+  assert.deepEqual(listed.areas, [{
+    label: 'Garden bed', points: rect, region: null, areaMm2: 6000000, areaDisplay: '64.6 sq ft', areaUncertaintyDisplay: '1.0 sq ft',
+    perimeterMm: 10000, perimeterDisplay: `32'-9 3/4"`, relativeUncertainty: 0.016, calibrationIds: ['cal-1'], methods: ['printed-dimension'], estimated: true, notMeasured: null
+  }]);
+  assert.match((await ok('list', dir)).out, /area "Garden bed", 4 points: 64\.6 sq ft ± 1\.0 sq ft, perimeter 32'-9 3\/4" \(cal-1, printed-dimension, estimated\)/);
+
+  // A label already recorded is replaced; a new one is added.
+  const bed = [{ x: 500, y: 100 }, { x: 700, y: 100 }, { x: 500, y: 300 }];
+  const shed = [{ x: 600, y: 400 }, { x: 800, y: 400 }, { x: 800, y: 550 }, { x: 600, y: 550 }];
+  const both = await ok('apply', dir, areasOnly([{ label: 'Garden bed', points: bed }, { label: 'Shed', points: shed }]));
+  assert.match(both.out, /Recorded 2 area\(s\) on plan: Garden bed \(21\.5 sq ft ± 0\.3 sq ft\), Shed \(32\.3 sq ft ± 0\.5 sq ft\)\./);
+  assert.deepEqual(sourceOf(dir, 'plan').areas, [{ label: 'Garden bed', points: bed }, { label: 'Shed', points: shed }]);
+  assertValid(dir);
+
+  for (const [areas, message] of [
+    [[{ label: 'Strip', points: rect.slice(0, 2) }], /Area "Strip" needs at least 3 points; it has 2/],
+    [[{ label: 'Off', points: [...rect.slice(0, 2), { x: 1200, y: 10 }] }], /Point 3 of area "Off" \(1200, 10\) is outside the 1000x800 image/],
+    [[{ label: 'Line', points: [{ x: 0, y: 0 }, { x: 100, y: 100 }, { x: 200, y: 200 }] }], /Area "Line" has no area: its points lie on one line/],
+    [[{ label: ' ', points: rect }], /need a label and a list of points/],
+    [[{ label: 'Pond', points: rect }, { label: 'Pond ', points: bed }], /Two pasted areas are labelled "Pond"/]
+  ]) {
+    const refused = await cli('apply', dir, areasOnly(areas));
+    assert.equal(refused.code, 1);
+    assert.match(refused.err, message);
+  }
+  assert.equal(sourceOf(dir, 'plan').areas.length, 2, 'a refused paste records nothing');
+
+  // θ = 90°: model.x = 10·py − 1000, model.y = 10·px − 1000.
+  await ok('place', dir, 'plan', '--view', 'level-ground', '--pair', '100,100=0,0', '--pair', '500,100=0,4000');
+  const converted = JSON.parse((await ok('to-model', dir, 'plan', '300,400', '--area', 'Shed', '--json')).out);
+  assert.deepEqual(converted.points.map(point => point.model), [{ x: 3000, y: 2000 }]);
+  assert.equal(converted.area.label, 'Shed');
+  assert.deepEqual(converted.area.points.map(point => point.model), [{ x: 3000, y: 5000 }, { x: 3000, y: 7000 }, { x: 4500, y: 7000 }, { x: 4500, y: 5000 }]);
+  assert.match((await ok('to-model', dir, 'plan', '--area', 'Shed')).out, /area "Shed": 3000, 5000; 3000, 7000; 4500, 7000; 4500, 5000/);
+  assert.match((await cli('to-model', dir, 'plan', '--area', 'Pond')).err, /no area labelled "Pond"\. Known: Garden bed, Shed/);
+
+  const replaced = await ok('add', dir, image('plan.png', png(1000, 800, 'b')), '--replace');
+  assert.match(replaced.out, /references, areas, and placement were cleared/);
+  assert.equal(sourceOf(dir, 'plan').areas, undefined);
+  assertValid(dir);
+});
+
 // ---------------------------------------------------------------- check
 
 test('check flags outdated and unknown evidence references and accepted ones', async t => {
