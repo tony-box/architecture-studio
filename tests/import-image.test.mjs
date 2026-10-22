@@ -617,6 +617,17 @@ function payloadFor(source, overrides = {}) {
   return `Architecture Studio calibration for ${source.id}. Paste this to your agent; it applies it with scripts/import-image.mjs apply.\n${JSON.stringify(payload)}\n`;
 }
 
+test('a manual calibration that disagrees with the estimate warns but still wins', async t => {
+  const { dir } = await planProject(t);
+  await ok('calibrate', dir, 'plan', '--method', 'scale-bar', '--from', '100,700', '--to', '600,700', '--distance', '5000mm', '--provenance', 'bar');
+  const agreeing = await ok('apply', dir, payloadFor(sourceOf(dir, 'plan'), { references: [] }));
+  assert.doesNotMatch(agreeing.err, /differs from/);
+  const wrong = { from: { x: 100, y: 700 }, to: { x: 600, y: 700 }, distanceMm: 2500, entered: '2.5 m', uncertaintyPx: 0.5 };
+  const result = await ok('apply', dir, payloadFor(sourceOf(dir, 'plan'), { calibration: wrong, references: [] }));
+  assert.match(result.err, /Warning: cal-3 \(manual, 5 mm\/px\) differs from the scale-bar estimate \(cal-1, 10 mm\/px\) by 100%/);
+  assert.match(result.err, /remove it with uncalibrate/);
+});
+
 test('apply takes the viewer payload and refuses stale or mismatched ones', async t => {
   const { dir } = await planProject(t);
   let source = sourceOf(dir, 'plan');

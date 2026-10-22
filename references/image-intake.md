@@ -139,7 +139,10 @@ Never accept a crop that cuts off the scale bar or the dimensions you need.
    If `apply` rejects the paste as stale or mismatched, ask the user to reload
    the viewer and calibrate again. A manual calibration replaces the estimated
    ones in its region, and measurements are no longer estimated. Never record
-   `--method manual` yourself.
+   `--method manual` yourself. When `apply` warns that the manual calibration
+   differs from the estimate by more than 5%, do not trace from it yet: tell
+   the user both scales and the length each gives the line they marked, and
+   ask which is right. Remove the wrong one with `uncalibrate`.
 5. **Set north** on every plan-type image (not elevations or photos):
 
    ```text

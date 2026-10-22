@@ -800,6 +800,19 @@ test('the calibration payload is the exact text the apply command reads', () => 
   assert.throws(() => api.calibrationPayload(source, {}), /scale line or at least one labelled reference/);
 });
 
+test('a manual distance that disagrees with the estimate warns before copying', () => {
+  const { api } = loadStudio();
+  const source = testSource([cal('cal-1', 'scale-bar', 10, 0.01)]);
+  const draft = text => ({ from: { x: 0, y: 0 }, to: { x: 3000, y: 0 }, fromU: 0.5, toU: 0.5, distanceText: text, region: null, regionLabel: '', references: [] });
+  const size = { width: 4000, height: 3000 };
+  assert.equal(api.draftCheck(source, draft('30 m'), size).distanceWarning, '', 'agreeing with the scale bar');
+  const wrong = api.draftCheck(source, draft('20 m'), size);
+  assert.match(wrong.distanceWarning, /^This is 50% off the scale bar estimate, which makes this line about 98'-5 1\/8"\./);
+  assert.ok(wrong.input, 'a warning never blocks copying');
+  const manualOnly = testSource([cal('cal-1', 'manual', 10, 0.01)]);
+  assert.equal(api.draftCheck(manualOnly, draft('20 m'), size).distanceWarning, '', 'only automatic estimates are compared');
+});
+
 test('underlays map image pixels through the plan and site sheet maps', () => {
   const { api } = loadStudio();
   const pixels = { width: 4000, height: 3000 };

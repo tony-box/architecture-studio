@@ -197,6 +197,7 @@
   .field-note { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
   .field-note:empty { display: none; }
   .field-note--error { color: var(--error); }
+  .field-note--warning { color: var(--warning); }
   .ref-list { display: grid; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
   .ref-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
   .ref-list .text-field { margin: 0; }
@@ -4349,7 +4350,7 @@
   }
   // What the draft would copy (`input`), or why it cannot be copied yet.
   function draftCheck(source, draft, size) {
-    const result = { input: null, problem: '', distanceError: '', distanceNote: '' };
+    const result = { input: null, problem: '', distanceError: '', distanceNote: '', distanceWarning: '' };
     const text = draft.distanceText.trim(), parsed = text ? parseLength(text) : null;
     if (parsed?.error) result.distanceError = parsed.error;
     else if (parsed) result.distanceNote = sourceUnits() === 'metric' ? formatLength(parsed.mm, 'metric') : `${formatLength(parsed.mm, 'feet-inches')} (${+parsed.mm.toFixed(1)} mm)`;
@@ -4363,6 +4364,14 @@
       result.distanceNote += lengthPx > 0 ? ` over ${round1(lengthPx)} px: ${+(parsed.mm / lengthPx).toPrecision(4)} mm/px.` : '';
       if (lengthPx < 0.1 * Math.hypot(size.width, size.height)) return { ...result, problem: 'The two ends must be at least 10% of the image diagonal apart.' };
       if (draft.region && !(rectContains(draft.region, draft.from) && rectContains(draft.region, draft.to))) return { ...result, problem: 'The scale line must lie inside the region.' };
+      // A manual scale replaces the agent's estimates, so a mistyped distance would otherwise win silently.
+      const automatic = { ...source, calibrations: (source.calibrations ?? []).filter(item => !PRECISE_METHODS.includes(item.method)) };
+      const estimate = sourceScale(automatic, draft.region ?? undefined), mmPerPx = parsed.mm / lengthPx;
+      if (estimate && (!draft.region || estimate.region) && Math.max(mmPerPx, estimate.mmPerPx) > Math.min(mmPerPx, estimate.mmPerPx) * 1.05) {
+        const off = Math.round((Math.max(mmPerPx, estimate.mmPerPx) / Math.min(mmPerPx, estimate.mmPerPx) - 1) * 100);
+        const method = estimate.methods.join(', ').replace(/-/g, ' ');
+        result.distanceWarning = `This is ${off}% off the ${method} estimate, which makes this line about ${formatLength(lengthPx * estimate.mmPerPx, sourceUnits())}. Check the distance and both ends before copying.`;
+      }
       calibration = { from: draft.from, to: draft.to, distanceMm: parsed.mm, entered: text, uncertaintyPx: Math.max(draft.fromU, draft.toU), region: draft.region ? { ...draft.region, label: draft.regionLabel } : null };
     } else if (draft.region) return { ...result, problem: 'A region needs a scale line inside it.' };
     const labels = draft.references.map(item => item.label.trim());
@@ -4546,7 +4555,11 @@
     const source = selectedSource(), asset = source && sourceAssets.get(source.id), copy = $('#copy-calibration');
     if (!source || !assetUsable(asset) || !copy) return null;
     const check = draftCheck(source, sourceDraft(), asset), note = $('#cal-distance-note');
-    if (note) { note.textContent = check.distanceError || check.distanceNote; note.classList.toggle('field-note--error', Boolean(check.distanceError)); }
+    if (note) {
+      note.textContent = check.distanceError || [check.distanceNote, check.distanceWarning].filter(Boolean).join(' ');
+      note.classList.toggle('field-note--error', Boolean(check.distanceError));
+      note.classList.toggle('field-note--warning', !check.distanceError && Boolean(check.distanceWarning));
+    }
     $('#cal-distance')?.setAttribute('aria-invalid', String(Boolean(check.distanceError)));
     $('#cal-problem').textContent = check.problem;
     copy.disabled = !check.input;
@@ -4953,7 +4966,7 @@
     bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, centerlineIssues, pathOutline, pathFillets, centerlineLength, outlineOf, anchorPoint, resolvePath, resolveAnchors, polygonArea, pointInPolygon, wallGeometry, wallLength, wallEndClip, terrainOf, siteExtent,
     renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, siteCategories, parseSiteHidden, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport,
-    parseLength, sourceScale, sourceScaleGroups, calibrationPayload, sourcesProblem, placementStale, underlaySvg, start, sourcesChecked: () => sourceChecks
+    parseLength, sourceScale, sourceScaleGroups, calibrationPayload, draftCheck, sourcesProblem, placementStale, underlaySvg, start, sourcesChecked: () => sourceChecks
   };
   if (typeof globalThis.__ARCHITECTURE_STUDIO_API__ === 'function') globalThis.__ARCHITECTURE_STUDIO_API__(studioApi);
   else start();

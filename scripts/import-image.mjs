@@ -357,6 +357,23 @@ export function scaleFor(source, points) {
   return { ...group, scale: selectScale(group.calibrations) };
 }
 
+// A precise calibration replaces the automatic estimates in its group, so a mistyped distance
+// would otherwise win silently. Returns the conflict when they differ by more than 5%.
+export function estimateConflict(calibrations, cal) {
+  if (!PRECISE_METHODS.includes(cal.method)) return null;
+  const estimate = selectScale(calibrations.filter(item => item !== cal && !PRECISE_METHODS.includes(item.method) && regionKey(item.region) === regionKey(cal.region)));
+  if (!estimate) return null;
+  const ratio = Math.max(cal.mmPerPx, estimate.mmPerPx) / Math.min(cal.mmPerPx, estimate.mmPerPx);
+  if (ratio <= DISAGREEMENT_RATIO) return null;
+  const percent = round((ratio - 1) * 100, 1);
+  const what = `${estimate.methods.join(', ')} estimate (${estimate.calibrationIds.join(', ')}, ${round(estimate.mmPerPx, 4)} mm/px)`;
+  return {
+    percent,
+    calibrationIds: estimate.calibrationIds,
+    message: `${cal.id} (${cal.method}, ${round(cal.mmPerPx, 4)} mm/px) differs from the ${what} by ${percent}%. ${cal.id} is used because ${cal.method} calibrations take priority. Check the distance that was entered and the points that were clicked; if ${cal.id} is wrong, remove it with uncalibrate, and if the estimate is wrong, remove that instead.`
+  };
+}
+
 // Relative uncertainty of a measured length: sqrt(u_scale² + (2ε / L)²).
 export const measureUncertainty = (scaleUncertainty, endpointPx, lengthPx) => Math.sqrt(scaleUncertainty ** 2 + (2 * endpointPx / lengthPx) ** 2);
 
@@ -858,6 +875,8 @@ function cmdCalibrate(args, out) {
   source.calibrations.push(cal);
   out.log(`Added ${cal.id} (${cal.method}${cal.estimated ? ', estimated' : ''}): ${mmPx(cal.mmPerPx)} ± ${pct(cal.relativeUncertainty)}${cal.region ? ` in ${regionName(cal.region)}` : ''}.`);
   if (superseded) out.warn(`Only one accepted known-object counts: ${cal.id} supersedes ${superseded.id}. Remove ${superseded.id} with uncalibrate if it is wrong.`);
+  const conflict = estimateConflict(source.calibrations, cal);
+  if (conflict) out.warn(`Warning: ${conflict.message}`);
   calibrationChanged(root, source, out, cal);
   writeManifest(root, manifest);
   return 0;
@@ -1166,6 +1185,8 @@ async function cmdApply(args, out, io) {
   if (cal) {
     source.calibrations.push(cal);
     out.log(`Added ${cal.id} (manual): ${mmPx(cal.mmPerPx)} ± ${pct(cal.relativeUncertainty)}${cal.region ? ` in ${regionName(cal.region)}` : ''}.`);
+    const conflict = estimateConflict(source.calibrations, cal);
+    if (conflict) out.warn(`Warning: ${conflict.message}`);
     calibrationChanged(root, source, out, cal);
   }
   writeManifest(root, manifest);

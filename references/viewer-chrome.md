@@ -169,7 +169,10 @@ table".
   With a tool chosen, a click marks a point, a drag with Region draws a
   rectangle, and Enter on the focused stage marks the point under a centre
   crosshair, so every step works from the keyboard. Escape steps back. The
-  draft draws in the accent, as the current selection. "Copy calibration"
+  draft draws in the accent, as the current selection. Under the distance, a
+  note gives the resulting scale; when it is more than 5% off the image's
+  automatic estimate, the note turns to the warning colour and says what the
+  estimate makes the line, without blocking the copy. "Copy calibration"
   copies the text the agent applies; if the browser refuses, the text appears
   selected in a read-only box. A file whose hash or size no longer matches
   its import turns calibration off and says to re-import it. `?view=sources`
