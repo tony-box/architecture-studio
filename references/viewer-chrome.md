@@ -150,7 +150,9 @@ table".
   active view are shown. The view's sheet dropdown (Level, Face, or Section)
   comes first. Related buttons are fused into one segmented control (zoom,
   camera mode, system toggles) so each group reads as a single tool. The
-  primary "Download drawing set" sits at the far right.
+  primary "Download drawing set" sits at the far right on the drawing views
+  (Plans, Elevations, Sections, Systems, Site) only; the 3D model, Code
+  review, Assumptions, and Sources views do not show it.
 - **Underlay**: on the Plans, Systems, and Site views, when a placed source
   image applies to the sheet, the toolbar adds an "Underlay" toggle
   (`aria-pressed`) and an Opacity slider (default 0.5). `?underlay=0` starts
@@ -158,18 +160,38 @@ table".
   (on the site plan, short of the plant schedule column), and only in the
   viewer: exported sheets never carry it. A stale file or placement is not
   drawn and adds a Source image note.
-- **Sources view**: the inspector lists each image with its kind, revision,
-  active scale with its uncertainty and method, and any flag (Stale, Missing,
-  Not verified, Placement out of date, Calibrations disagree), followed by the
-  selected image's details and the Calibrate panel. An image has one scale:
-  the details show it under "Scale" as a single value. When its calibrations
+- **Sources view**: the inspector leads with the selected image: its id as
+  the heading, its kind, path, and pixel size, and its scale as a status
+  ("Not calibrated" in the warning colour, otherwise the active scale with
+  its uncertainty and method) followed by any flag (Stale, Missing, Not
+  verified, Placement out of date, Calibrations disagree). The calibration
+  follows as three numbered steps, because the order matters: Mark a known
+  distance (with the line's ends, length, and end accuracy once marked),
+  Type that distance, and Copy it for your agent. Below a hairline, "Named
+  features" (with the count at the right) lists the draft's reference points
+  and areas; the tools themselves live only in the toolbar. With marks, a
+  note says they come from Reference point and Area in the toolbar and go to
+  the agent with the calibration; without, a hint names those tools. The
+  marks read as a schedule, like the plant schedule on L-101:
+  a ruled table with the mark's symbol, an inline label field ("Name it"
+  until named), where it is (the pixel position rounded, or the area's
+  corner count, in data type), and a quiet × to remove it. An area's size,
+  uncertainty, and perimeter sit on a muted line under its row. "Image details"
+  is a closed disclosure with the revision, placement, north, the single
+  scale, the calibrations, recorded areas, and the file check. The toolbar's
+  Image select, first in the row like Level, Face, and Section, chooses the
+  image; each option reads "id, kind" and names a warning such as stale.
+  An image has one scale. When its calibrations
   disagree, the flag and the details suggest cropping each part of a
   mixed-scale sheet into its own image and importing it separately. The stage
   shows the image at natural pixel size with the sheet's pan and zoom, a pixel
   readout in the corner, and the recorded calibration lines, labelled
   reference points, and labelled areas on top, in ink. The toolbar holds the
-  zoom group ("Fit image") and the calibration tools Scale line, Reference
-  point, and Area as pressed toggles. With a tool chosen, a click marks a
+  Image select, the zoom group ("Fit image"), and, set apart at the right
+  behind a hairline under a muted "Mark" label, the calibration tools as
+  pressed toggles, each with a drafting-symbol icon in `currentColor`: Scale
+  line (a dimension line with extension lines and ticks), Reference point (a
+  survey control target), and Area (an outline with corner dots). With a tool chosen, a click marks a
   point, and Enter on the focused stage marks the
   point under a centre crosshair, so every step works from the keyboard.
   Escape steps back. Area adds polygon corners: the outline previews in the

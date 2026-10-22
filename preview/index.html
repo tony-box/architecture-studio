@@ -198,11 +198,50 @@
   .field-note:empty { display: none; }
   .field-note--error { color: var(--error); }
   .field-note--warning { color: var(--warning); }
-  .ref-list { display: grid; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
-  .ref-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
-  .ref-list .text-field { margin: 0; }
   .calibrate-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
   .calibrate-actions .tool.primary { margin-left: 0; }
+  /* Sources inspector: the selected image, then the calibration as numbered steps, then the rest. */
+  .src-panel { display: grid; gap: 18px; }
+  .src-head h2 { margin: 0; font: 600 22px/1.15 var(--serif); }
+  .src-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+  .src-status { display: inline-block; margin-top: 8px; padding: 2px 8px; border: 1px solid var(--control-line); border-radius: 4px; color: var(--ink); font-weight: 700; font-size: 12px; }
+  .src-status--open { border-color: var(--warning); color: var(--warning); }
+  .src-head .source-flags { margin-top: 8px; }
+  .src-steps { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+  .src-steps > li { position: relative; display: grid; gap: 2px; padding-left: 34px; counter-increment: step; }
+  .src-steps > li::before { content: counter(step); position: absolute; top: 0; left: 0; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--sheet); font: 600 12px/1 var(--mono); }
+  .src-steps b { font-size: 14px; }
+  .src-steps p { margin: 0; color: var(--muted); font-size: 12px; }
+  .src-steps .key-dims { margin-top: 6px; }
+  .src-steps .text-field { margin-top: 4px; }
+  .src-steps .calibrate-actions { margin-top: 6px; }
+  .src-also { display: grid; gap: 8px; padding-top: 18px; border-top: 1px solid var(--line); }
+  .src-also .field-note { margin: 0; }
+  .marks-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .marks-head h4 { margin: 0; font-size: 14px; }
+  .marks-head span { color: var(--muted); font: 600 12px/1 var(--mono); }
+  .src-also .ico { width: 16px; height: 16px; flex: none; }
+  .marks { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .marks th { padding: 0 4px 4px 0; border-bottom: 1px solid var(--ink); color: var(--muted); font-weight: 600; text-align: left; }
+  .marks td { padding: 5px 4px 5px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .marks td:first-child { width: 22px; }
+  .marks input { width: 100%; min-width: 0; min-height: 30px; padding: 2px 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink); font: 600 14px/1.2 var(--sans); }
+  .marks input:hover, .marks input:focus { border-color: var(--control-line); background: var(--sheet); }
+  .marks input::placeholder { color: var(--muted); font-weight: 400; }
+  .marks-where { color: var(--muted); font: 12px/1.3 var(--mono); white-space: nowrap; }
+  .marks-area td { padding-bottom: 0; border-bottom: 0; }
+  .marks-size td { padding-top: 0; color: var(--muted); }
+  .marks-x { width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--muted); font-size: 14px; line-height: 1; }
+  .marks-x:hover { border-color: var(--control-line); color: var(--ink); }
+  .src-details { padding-top: 12px; border-top: 1px solid var(--line); }
+  .src-details summary { cursor: pointer; font-weight: 600; }
+  #source { min-width: 190px; }
+  /* Sources toolbar: the marking tools sit apart at the right, each with a drafting-symbol icon. */
+  .mark-zone { display: flex; align-items: center; gap: 10px; margin-left: auto; padding-left: 16px; border-left: 1px solid var(--line); }
+  .mark-zone > span { color: var(--muted); font-size: 12px; }
+  .source-tool { display: inline-flex; align-items: center; gap: 7px; }
+  .tool .ico { width: 18px; height: 18px; flex: none; }
+  .src-details .key-dims { margin-top: 10px; }
 
   @media (max-width: 900px) {
     body { overflow: auto; }
@@ -241,6 +280,7 @@
   <div class="workspace">
     <section class="stage" id="stage" role="tabpanel" aria-labelledby="tab-plan">
       <div class="toolbar">
+        <label class="field hidden-view" id="source-control"><span>Image</span><select id="source"></select></label>
         <label class="field" id="level-control"><span>Level</span><select id="level"></select></label>
         <label class="field hidden-view" id="elevation-control"><span>Face</span><select id="elevation"><option value="north">North</option><option value="east">East</option><option value="south">South</option><option value="west">West</option></select></label>
         <label class="field hidden-view" id="section-control"><span>Section</span><select id="section"></select></label>
@@ -259,10 +299,12 @@
           <button class="tool system-toggle" data-system="mechanical" aria-pressed="true"><span class="swatch" style="color:#1f7a4d"></span>Mechanical</button>
         </div>
         <div class="group hidden-view" id="site-controls" role="group" aria-label="Site plan layers shown"></div>
-        <div class="group hidden-view" id="source-tools" role="group" aria-label="Calibration tools">
-          <button class="tool source-tool" data-tool="line" aria-pressed="false">Scale line</button>
-          <button class="tool source-tool" data-tool="point" aria-pressed="false">Reference point</button>
-          <button class="tool source-tool" data-tool="area" aria-pressed="false" aria-describedby="area-tool-help">Area</button>
+        <div class="mark-zone hidden-view" id="source-tools"><span aria-hidden="true">Mark</span>
+          <div class="group" role="group" aria-label="Calibration tools">
+            <button class="tool source-tool" data-tool="line" aria-pressed="false"><svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M3 5v10M17 5v10M3 10h14M1.5 11.5l3-3M15.5 11.5l3-3"/></svg>Scale line</button>
+            <button class="tool source-tool" data-tool="point" aria-pressed="false"><svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 1.5v17M1.5 10h17"/><path d="M10 10V4a6 6 0 0 1 6 6zM10 10v6a6 6 0 0 1-6-6z" fill="currentColor" stroke="none"/></svg>Reference point</button>
+            <button class="tool source-tool" data-tool="area" aria-pressed="false" aria-describedby="area-tool-help"><svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M4 15 5.5 4.5 15 3l2 9.5-8 4.5z"/><g fill="currentColor" stroke="none"><circle cx="4" cy="15" r="1.6"/><circle cx="5.5" cy="4.5" r="1.6"/><circle cx="15" cy="3" r="1.6"/><circle cx="17" cy="12.5" r="1.6"/><circle cx="9" cy="17" r="1.6"/></g></svg>Area</button>
+          </div>
         </div>
         <span id="area-tool-help" class="visually-hidden">Outline and label an area. Its size comes from the image's scale.</span>
         <div class="field hidden-view" id="underlay-controls">
@@ -337,6 +379,7 @@
   const levelSelect = $('#level');
   const elevationSelect = $('#elevation');
   const sectionSelect = $('#section');
+  const sourceSelect = $('#source');
   const modelHelp = $('#model-help');
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const evidence = (note = 'Generated concept value.') => ({ source: 'generated', confidence: 0.5, status: 'needs-review', note });
@@ -4037,6 +4080,11 @@
   // ---------------------------------------------------------------------------
   const PRECISE_METHODS = ['manual', 'control-points'];
   const AUTOMATIC_METHODS = ['printed-dimension', 'scale-bar', 'stated-scale', 'map-metadata'];
+  // Drafting-symbol icons shared by the Sources toolbar and the marks schedule.
+  const MARK_ICONS = {
+    point: '<svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 1.5v17M1.5 10h17"/><path d="M10 10V4a6 6 0 0 1 6 6zM10 10v6a6 6 0 0 1-6-6z" fill="currentColor" stroke="none"/></svg>',
+    area: '<svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M4 15 5.5 4.5 15 3l2 9.5-8 4.5z"/><g fill="currentColor" stroke="none"><circle cx="4" cy="15" r="1.6"/><circle cx="5.5" cy="4.5" r="1.6"/><circle cx="15" cy="3" r="1.6"/><circle cx="17" cy="12.5" r="1.6"/><circle cx="9" cy="17" r="1.6"/></g></svg>'
+  };
   const SOURCE_KINDS = { satellite: 'Satellite', survey: 'Survey', 'site-plan': 'Site plan', 'floor-plan': 'Floor plan', 'framing-plan': 'Framing plan', elevation: 'Elevation', photo: 'Photo', sketch: 'Sketch', other: 'Other' };
   const METHOD_LABELS = { 'printed-dimension': 'printed dimension', 'scale-bar': 'scale bar', 'stated-scale': 'stated scale', 'map-metadata': 'map metadata', manual: 'manual', 'control-points': 'control points', 'known-object': 'known object' };
   const SOURCE_MIME = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
@@ -4409,10 +4457,10 @@
     state.tool = null;
     renderSourcesView(true);
     syncLocation();
-    inspector.querySelector(`[data-source-id="${CSS.escape(id)}"]`)?.focus();
   }
   function renderSourcesView(refit) {
     const source = selectedSource(), asset = source ? sourceAsset(source) : null;
+    fillSourceSelect();
     renderSourcesInspector();
     updateSourceTools();
     const readout = $('#source-readout');
@@ -4506,44 +4554,70 @@
         : asset.status === 'unverified' ? 'Not verified: this page cannot compute the file hash (it needs localhost or https). The pixel size matches.'
           : `${asset.message} Re-import it with add --replace.`;
     return [
-      `<h3 class="entity-subhead">${escapeHtml(source.id)}</h3>`,
-      `<p class="entity-context">${escapeHtml(`${SOURCE_KINDS[source.kind] ?? source.kind}, ${source.path}`)}${source.notes ? `. ${escapeHtml(source.notes)}` : ''}</p>`,
+      '<details class="src-details"><summary>Image details</summary>',
       `<dl class="key-dims">${dims.map(([dt, dd]) => `<div><dt>${escapeHtml(dt)}</dt><dd>${escapeHtml(dd)}</dd></div>`).join('')}</dl>`,
       `<h4 class="entity-subhead">Scale</h4>${scaleText}`,
       calibrations ? `<h4 class="entity-subhead">Calibrations</h4><ul class="open-items">${calibrations}</ul>` : '',
-      areas ? `<h4 class="entity-subhead">Areas</h4><ul class="open-items">${areas}</ul>` : '',
-      source.legacyCalibration ? `<p class="field-note">${escapeHtml(`From the brief, not yet located on the image: ${source.legacyCalibration.description}.`)}</p>` : '',
-      `<p class="evidence-line">${escapeHtml(check)}</p>`
+      areas ? `<h4 class="entity-subhead">Recorded areas</h4><ul class="open-items">${areas}</ul>` : '',
+      source.notes ? `<p class="field-note">${escapeHtml(source.notes)}</p>` : '',
+      `<p class="evidence-line">${escapeHtml(check)}</p>`,
+      '</details>'
     ].join('');
   }
+  // The selected image, its scale as a status, and any flags, so the state reads before the task.
+  function sourceHead(source) {
+    const scale = sourceScale(source), photo = source.kind === 'photo', flags = sourceFlags(source);
+    const open = !photo && (!scale || scale.disagree);
+    const status = photo ? 'Photo, not calibrated' : scaleSummary(scale);
+    return `<div class="src-head"><h2>${escapeHtml(source.id)}</h2>`
+      + `<p>${escapeHtml(`${SOURCE_KINDS[source.kind] ?? source.kind} · ${source.path} · ${source.pixels.width} x ${source.pixels.height} px`)}</p>`
+      + `<span class="src-status${open ? ' src-status--open' : ''}">${escapeHtml(status)}</span>`
+      + (flags.length ? `<span class="source-flags">${flags.map(([severity, word, rest]) => `<span class="flag--${severity}"><b>${escapeHtml(word)}</b>: ${escapeHtml(rest)}</span>`).join('')}</span>` : '')
+      + (source.legacyCalibration ? `<p>${escapeHtml(`From the brief, not yet located on the image: ${source.legacyCalibration.description}.`)}</p>` : '')
+      + '</div>';
+  }
   function calibrateSection(source) {
-    const asset = sourceAssets.get(source.id), draft = sourceDraft(), head = '<h3 class="entity-subhead">Calibrate</h3>';
+    const asset = sourceAssets.get(source.id), draft = sourceDraft();
     if (!assetUsable(asset)) {
       const why = !asset || asset.status === 'loading' ? 'Checking the file first.' : asset.status === 'stale' ? 'Stale: re-import with add --replace. Calibration is off until the file matches its import.' : 'The file cannot be read, so calibration is off. Re-import it with add --replace.';
-      return `${head}<p class="entity-context">${escapeHtml(why)}</p>`;
+      return `<p class="entity-context">${escapeHtml(why)}</p>`;
     }
     const photo = source.kind === 'photo', pt = p => `${p.x}, ${p.y}`;
-    const intro = photo ? 'Photos are not calibrated. You can still name reference points for placement and label areas.' : 'Choose Scale line, mark both ends of a known distance, and type it. With the image focused, Enter marks the point under the centre crosshair.';
     const lengthPx = draft.from && draft.to ? round1(Math.hypot(draft.to.x - draft.from.x, draft.to.y - draft.from.y)) : null;
-    const line = draft.from ? `<dl class="key-dims"><div><dt>From</dt><dd>${pt(draft.from)}</dd></div><div><dt>To</dt><dd>${draft.to ? pt(draft.to) : 'Not set'}</dd></div>${lengthPx != null ? `<div><dt>Length</dt><dd>${lengthPx} px</dd></div><div><dt>End accuracy</dt><dd>± ${round1(Math.max(draft.fromU, draft.toU))} px</dd></div>` : ''}</dl>` : '';
+    const line = draft.from ? `<dl class="key-dims"><div><dt>From</dt><dd>${pt(draft.from)}</dd></div><div><dt>To</dt><dd>${draft.to ? pt(draft.to) : 'Not set'}</dd></div>${lengthPx != null ? `<div><dt>Length</dt><dd>${lengthPx} px</dd></div><div><dt>End accuracy</dt><dd>± ${round1(Math.max(draft.fromU, draft.toU))} px</dd></div>` : ''}</dl>` : '<p>No line yet.</p>';
     const example = sourceUnits() === 'metric' ? '3810 mm' : '12\'-6"';
-    const distance = photo ? '' : `<label class="text-field" for="cal-distance">Distance between the ends<input id="cal-distance" type="text" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(`For example ${example}`)}" value="${escapeHtml(draft.distanceText)}" aria-describedby="cal-distance-note"></label><p id="cal-distance-note" class="field-note"></p>`;
-    const refs = draft.references.map((item, i) => `<li><label class="text-field" for="cal-ref-${i}">${escapeHtml(`Label for ${pt(item.pixel)}`)}<input id="cal-ref-${i}" data-ref-index="${i}" type="text" autocomplete="off" value="${escapeHtml(item.label)}"></label><button type="button" class="tool" data-ref-remove="${i}" aria-label="Remove reference point ${i + 1}">Remove</button></li>`).join('');
-    const areaItems = draft.areas.map((item, i) => `<li><div><label class="text-field" for="cal-area-${i}">${escapeHtml(`Label for area ${i + 1} (${item.points.length} points)`)}<input id="cal-area-${i}" data-area-index="${i}" type="text" autocomplete="off" value="${escapeHtml(item.label)}" aria-describedby="cal-area-${i}-size"></label><p id="cal-area-${i}-size" class="field-note"></p></div><button type="button" class="tool" data-area-remove="${i}" aria-label="Remove area ${i + 1}">Remove</button></li>`).join('');
+    const distance = `<label class="text-field" for="cal-distance">Distance between the ends<input id="cal-distance" type="text" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(`For example ${example}`)}" value="${escapeHtml(draft.distanceText)}" aria-describedby="cal-distance-note"></label><p id="cal-distance-note" class="field-note"></p>`;
+    // The marks read as a schedule, like the drawings' plant schedule: symbol, label, where, remove.
+    const where = p => `${Math.round(p.x)}, ${Math.round(p.y)}`;
+    const refRows = draft.references.map((item, i) => `<tr><td>${MARK_ICONS.point}</td><td><input id="cal-ref-${i}" data-ref-index="${i}" type="text" autocomplete="off" value="${escapeHtml(item.label)}" placeholder="Name it" aria-label="${escapeHtml(`Label for reference point at ${pt(item.pixel)}`)}"></td><td class="marks-where" title="${escapeHtml(pt(item.pixel))}">${escapeHtml(where(item.pixel))}</td><td><button type="button" class="marks-x" data-ref-remove="${i}" aria-label="Remove reference point ${i + 1}">&times;</button></td></tr>`).join('');
+    const areaRows = draft.areas.map((item, i) => `<tr class="marks-area"><td>${MARK_ICONS.area}</td><td><input id="cal-area-${i}" data-area-index="${i}" type="text" autocomplete="off" value="${escapeHtml(item.label)}" placeholder="Name it" aria-label="${escapeHtml(`Label for area ${i + 1}`)}" aria-describedby="cal-area-${i}-size"></td><td class="marks-where">${item.points.length} corners</td><td><button type="button" class="marks-x" data-area-remove="${i}" aria-label="Remove area ${i + 1}">&times;</button></td></tr><tr class="marks-size"><td></td><td colspan="3" id="cal-area-${i}-size"></td></tr>`).join('');
+    const count = draft.references.length + draft.areas.length;
     const open = draft.areaPoints.length;
     const outlining = open ? `<p class="field-note">${escapeHtml(open < 3 ? `${open} of at least 3 points. Mark the next corner.` : `${open} points. Click the first point or press Finish area to close it. Backspace removes the last point.`)}</p><div class="calibrate-actions"><button type="button" class="tool" id="cal-area-finish"${open < 3 ? ' disabled' : ''}>Finish area</button><button type="button" class="tool" id="cal-area-cancel">Cancel area</button></div>` : '';
-    const areas = `<h4 class="entity-subhead">Areas</h4>${areaItems ? `<ol class="ref-list">${areaItems}</ol>` : ''}${outlining}${areaItems || open ? '' : `<p class="field-note">${escapeHtml(photo ? 'Optional. Choose Area and click around a feature to outline and label it.' : 'Optional. Choose Area and click around a feature, such as a garden bed, to outline and label it. Its size comes from the scale line.')}</p>`}`;
+    const hint = photo ? 'Optional. Choose Reference point or Area in the toolbar to name a feature for placing the photo, or to outline and label one.' : 'Optional. Choose Reference point or Area in the toolbar to name a feature, such as a house corner, or outline one, such as a garden bed. Area sizes come from the scale line.';
+    const also = `<div class="src-also"><div class="marks-head"><h4>Named features</h4>${count ? `<span aria-label="${count} named features">${count}</span>` : ''}</div>`
+      + (count ? '<p class="field-note">From Reference point and Area in the toolbar. They go to your agent with the calibration.</p>' : '')
+      + (count ? `<table class="marks"><thead><tr><th scope="col"><span class="visually-hidden">Kind</span></th><th scope="col">Label</th><th scope="col">Where</th><th scope="col"><span class="visually-hidden">Remove</span></th></tr></thead><tbody>${refRows}${areaRows}</tbody></table>` : '')
+      + outlining + (count || open ? '' : `<p class="field-note">${escapeHtml(hint)}</p>`) + '</div>';
     const copied = draft.copied === 'ok' ? '<div id="cal-copied"><p class="field-note">Copied.</p></div>'
       : draft.copied === 'failed' ? `<div id="cal-copied"><p class="field-note">Copying is blocked here. Copy this text yourself.</p><textarea id="cal-payload" class="payload" readonly aria-label="Calibration text to copy">${escapeHtml(draft.payload)}</textarea></div>` : '';
-    return [
-      head, `<p class="entity-context">${escapeHtml(intro)}</p>`, line, distance,
-      `<h4 class="entity-subhead">Reference points</h4>${refs ? `<ol class="ref-list">${refs}</ol>` : '<p class="field-note">Optional. Choose Reference point and mark a feature, such as a house corner, to name it.</p>'}`,
-      areas,
-      '<p id="cal-problem" class="field-note field-note--error"></p>',
-      '<div class="calibrate-actions"><button type="button" class="tool primary" id="copy-calibration" aria-describedby="cal-copy-help">Copy calibration</button><button type="button" class="tool" id="cal-reset">Start over</button></div>',
-      '<p class="approval__note" id="cal-copy-help">Paste it to your agent, which records it with scripts/import-image.mjs apply, then reload this page.</p>',
-      copied
-    ].join('');
+    const copy = '<p id="cal-copy-help">Paste it to your agent, which records it with scripts/import-image.mjs apply, then reload this page.</p>'
+      + '<p id="cal-problem" class="field-note field-note--error"></p>'
+      + '<div class="calibrate-actions"><button type="button" class="tool primary" id="copy-calibration" aria-describedby="cal-copy-help">Copy calibration</button><button type="button" class="tool" id="cal-reset">Start over</button></div>' + copied;
+    if (photo) return `<p class="entity-context">Photos are not calibrated. You can still name reference points for placement and label areas.</p>${also}<ol class="src-steps" aria-label="${escapeHtml(`Copy for ${source.id}`)}"><li><b>Copy it for your agent</b>${copy}</li></ol>`;
+    return `<ol class="src-steps" aria-label="${escapeHtml(`Calibrate ${source.id}`)}">`
+      + `<li><b>Mark a known distance</b><p>Choose Scale line and click both ends of a dimension printed on the image. With the image focused, Enter marks the point under the centre crosshair.</p>${line}</li>`
+      + `<li><b>Type that distance</b>${distance}</li>`
+      + `<li><b>Copy it for your agent</b>${copy}</li></ol>${also}`;
+  }
+  // The toolbar's Image select, like Level, Face, and Section; a flag such as Stale shows in the option.
+  function fillSourceSelect() {
+    sourceSelect.innerHTML = sourceList().map(item => {
+      const flag = sourceFlags(item).find(([severity]) => severity === 'warning');
+      const text = `${item.id}, ${(SOURCE_KINDS[item.kind] ?? item.kind).toLowerCase()}${flag ? ` (${flag[1].toLowerCase()})` : ''}`;
+      return `<option value="${escapeHtml(item.id)}"${item.id === state.sourceId ? ' selected' : ''}>${escapeHtml(text)}</option>`;
+    }).join('');
+    sourceSelect.disabled = sourceList().length < 2;
   }
   function renderSourcesInspector() {
     const active = document.activeElement, keep = active && inspector.contains?.(active) ? { id: active.id, start: active.selectionStart, end: active.selectionEnd } : null;
@@ -4552,19 +4626,13 @@
       return;
     }
     const source = selectedSource();
-    const items = sourceList().map(item => {
-      const flags = sourceFlags(item), body = `Revision ${item.revision} · ${item.kind === 'photo' ? 'not calibrated' : scaleSummary(sourceScale(item))}`;
-      return `<li><button type="button" class="queue-item source-item" data-source-id="${escapeHtml(item.id)}" aria-current="${item.id === state.sourceId}"><span class="queue-item__kind">${escapeHtml(SOURCE_KINDS[item.kind] ?? item.kind)}</span><span class="queue-item__title">${escapeHtml(item.id)}</span><span class="queue-item__body">${escapeHtml(body)}</span>${flags.length ? `<span class="source-flags">${flags.map(([severity, word, rest]) => `<span class="flag--${severity}"><b>${escapeHtml(word)}</b>: ${escapeHtml(rest)}</span>`).join('')}</span>` : ''}</button></li>`;
-    }).join('');
-    inspector.innerHTML = [
-      '<h2>Source images</h2>',
-      '<p class="lede">Calibrate an image here, then paste the result to your agent.</p>',
-      state.blocked ? '<p class="field-note">The building model is unavailable or has errors, so placed images are not drawn on the plans. Calibration still works.</p>' : '',
-      `<ol class="queue" aria-label="Source images">${items}</ol>`,
-      source ? sourceDetails(source) + calibrateSection(source) : ''
-    ].join('');
+    const blocked = state.blocked ? '<p class="field-note">The building model is unavailable or has errors, so placed images are not drawn on the plans. Calibration still works.</p>' : '';
+    inspector.innerHTML = `<div class="src-panel">${source
+      ? sourceHead(source) + blocked + calibrateSection(source) + sourceDetails(source)
+      : `<div class="src-head"><h2>Source images</h2><p>Choose an image in the toolbar to calibrate it, then paste the result to your agent.</p></div>${blocked}`}</div>`;
     inspector.querySelectorAll('[data-source-id]').forEach(button => button.addEventListener('click', () => selectSource(button.dataset.sourceId)));
-    const draft = source ? sourceDraft() : null, edited = () => { if (draft.copied) { draft.copied = null; $('#cal-copied')?.remove(); } updateCalibrationStatus(); };
+    if (!source) return;
+    const draft = sourceDraft(), edited = () => { if (draft.copied) { draft.copied = null; $('#cal-copied')?.remove(); } updateCalibrationStatus(); };
     $('#cal-distance')?.addEventListener('input', event => { draft.distanceText = event.target.value; edited(); });
     inspector.querySelectorAll('[data-ref-index]').forEach(input => {
       input.addEventListener('input', () => { draft.references[Number(input.dataset.refIndex)].label = input.value; edited(); drawSourceOverlay(); });
@@ -4705,6 +4773,7 @@
   }
   function wireSourceControls() {
     document.querySelectorAll('.source-tool').forEach(button => button.addEventListener('click', () => setTool(button.dataset.tool)));
+    sourceSelect.addEventListener('change', () => selectSource(sourceSelect.value));
     viewport.addEventListener('pointermove', event => {
       if (state.view !== 'sources' || !stageSource) return;
       const p = imagePoint(event.clientX, event.clientY), asset = sourceAssets.get(state.sourceId);
@@ -4742,12 +4811,14 @@
     $('#camera-controls').classList.toggle('hidden-view', !isModel);
     $('#system-controls').classList.toggle('hidden-view', !live || !['systems', 'model'].includes(state.view));
     $('#site-controls').classList.toggle('hidden-view', !live || state.view !== 'site');
+    $('#source-control').classList.toggle('hidden-view', !isSources);
     $('#source-tools').classList.toggle('hidden-view', !isSources);
     $('#underlay-controls').classList.toggle('hidden-view', !isSheet || !underlaySources().length);
     $('#underlay-toggle').setAttribute('aria-pressed', String(state.underlay));
     $('#underlay-opacity').disabled = !state.underlay;
     $('#source-readout').classList.toggle('hidden-view', !isSources);
-    $('#download-set').classList.toggle('hidden-view', !live);
+    // Downloads belong with the drawings; the model, review, and source pages are not sheets.
+    $('#download-set').classList.toggle('hidden-view', !isSheet);
     viewport.setAttribute('aria-label', isSources ? 'Source image. Arrow keys pan, plus and minus zoom, 0 fits the image. With a tool chosen, Enter marks the point under the centre crosshair.' : 'Drawing sheet. Arrow keys pan, plus and minus zoom, 0 fits the sheet.');
     document.querySelectorAll('.tab').forEach(tab => {
       const active = tab.dataset.view === state.view;
