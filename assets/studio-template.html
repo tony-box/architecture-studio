@@ -242,6 +242,25 @@
   .source-tool { display: inline-flex; align-items: center; gap: 7px; }
   .tool .ico { width: 18px; height: 18px; flex: none; }
   .src-details .key-dims { margin-top: 10px; }
+  /* Adding an image (only when scripts/serve.mjs can write): a drop zone that is also the file picker. */
+  .add-image { display: inline-flex; align-items: center; gap: 7px; }
+  .upload-form { display: grid; gap: 12px; }
+  .upload-form .text-field, .upload-form .field-note { margin: 0; }
+  .text-field select { width: 100%; }
+  .drop-zone {
+    display: grid; place-content: center; gap: 2px; width: 100%; min-height: 104px; padding: 16px;
+    border: 1px dashed var(--control-line); border-radius: 4px; background: var(--sheet); color: var(--muted); font-size: 12px; text-align: center;
+    transition: border-color 160ms var(--ease);
+  }
+  .drop-zone b { color: var(--ink); font-size: 14px; }
+  .drop-zone:hover, .drop-zone.is-over { border-color: var(--ink); }
+  .drop-zone.is-over { border-style: solid; }
+  .upload-file { margin: 0; color: var(--ink); font: 600 12px/1.3 var(--mono); }
+  .upload-form .calibrate-actions { margin-top: 0; }
+  .src-flash { display: grid; gap: 4px; }
+  .src-flash .field-note { margin: 0; }
+  aside.is-drop-target { box-shadow: inset 0 0 0 2px var(--ink); }
+  .canvas-wrap.is-drop-target::after { content: ""; position: absolute; inset: 10px; border: 2px dashed var(--ink); border-radius: 4px; pointer-events: none; }
 
   @media (max-width: 900px) {
     body { overflow: auto; }
@@ -281,6 +300,7 @@
     <section class="stage" id="stage" role="tabpanel" aria-labelledby="tab-plan">
       <div class="toolbar">
         <label class="field hidden-view" id="source-control"><span>Image</span><select id="source"></select></label>
+        <button type="button" class="tool add-image hidden-view" id="add-image" aria-controls="inspector" aria-expanded="false"><svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 3.5H3.5v13h13V9"/><path d="m3.5 13.5 4-4 3 3 1.5-1.5 4.5 4.5"/><path d="M15.5 1.5v6M12.5 4.5h6"/></svg>Add image</button>
         <label class="field" id="level-control"><span>Level</span><select id="level"></select></label>
         <label class="field hidden-view" id="elevation-control"><span>Face</span><select id="elevation"><option value="north">North</option><option value="east">East</option><option value="south">South</option><option value="west">West</option></select></label>
         <label class="field hidden-view" id="section-control"><span>Section</span><select id="section"></select></label>
@@ -358,13 +378,20 @@
     draft: null,
     underlay: true,
     underlayOpacity: 0.5,
-    blocked: null
+    blocked: null,
+    // Served by scripts/serve.mjs with its write token: the Sources tab imports images (`upload`, the
+    // open Add an image form) and saves calibrations. `flash` is the status a write left for after its reload.
+    writable: false,
+    upload: null,
+    flash: null,
+    reloading: false
   };
   const SHEET_VIEWS = ['plan', 'elevation', 'section', 'systems', 'site'];
   const DOCUMENT_VIEWS = ['code', 'assumptions'];
   const ALL_VIEWS = ['plan', 'elevation', 'section', 'systems', 'site', 'model', 'code', 'assumptions', 'sources'];
-  // The Sources tab shows when sources/sources.json lists images, or is unreadable (to say so).
-  const hasSources = () => state.sources.status === 'invalid' || (state.sources.status === 'loaded' && state.sources.data.sources.length > 0);
+  // The Sources tab shows when sources/sources.json lists images, or is unreadable (to say so), and always
+  // when the page can write, so the first image can be added there.
+  const hasSources = () => state.writable || state.sources.status === 'invalid' || (state.sources.status === 'loaded' && state.sources.data.sources.length > 0);
   // Views a model offers, in tab order. The site plan exists only for models with site content.
   const availableViews = model => ALL_VIEWS.filter(view => view === 'sources' ? hasSources() : view !== 'site' || hasSiteContent(model));
   const resolveView = (requested, model) => availableViews(model).includes(requested) ? requested : 'plan';
@@ -4143,9 +4170,10 @@
   const placementStale = (source, model = state.model) => Boolean(source?.placement) && (source.placement.sourceRevision !== source.revision || source.placement.calibrationRevision !== source.calibrationRevision
     || (Number.isFinite(source.placement.trueNorthDeg) && Boolean(model) && Math.abs((((model.project?.coordinates?.trueNorthDeg ?? 0) - source.placement.trueNorthDeg) % 360 + 540) % 360 - 180) > 1e-9));
 
-  // The text the viewer copies for the agent; scripts/import-image.mjs apply reads the JSON between the
-  // first { and the last }. Pixels are canonical (natural image pixels), rounded to 0.1 px.
-  function calibrationPayload(source, input = {}) {
+  // The calibration the viewer hands to the agent, as an object: scripts/serve.mjs saves it as posted, and
+  // calibrationPayload wraps it as the text scripts/import-image.mjs apply reads. Pixels are canonical
+  // (natural image pixels), rounded to 0.1 px.
+  function calibrationPayloadObject(source, input = {}) {
     const px = p => ({ x: round1(p.x), y: round1(p.y) });
     const body = {
       type: 'architecture-studio/source-calibration', version: 1, sourceId: source.id, contentHash: source.contentHash,
@@ -4165,6 +4193,12 @@
     });
     if (areas.length) body.areas = areas;
     if (!body.calibration && !body.references && !body.areas) throw new Error('A calibration needs a scale line, a labelled reference point, or a labelled area.');
+    return body;
+  }
+  // The text the viewer copies for the agent; scripts/import-image.mjs apply reads the JSON between the
+  // first { and the last }.
+  function calibrationPayload(source, input = {}) {
+    const body = calibrationPayloadObject(source, input);
     return `Architecture Studio calibration for ${source.id}. Paste this to your agent; it applies it with scripts/import-image.mjs apply.\n${JSON.stringify(body)}`;
   }
 
@@ -4299,9 +4333,65 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Sources view and underlays. The server is read-only, so a calibration made here is copied as text
-  // for the agent, which records it with scripts/import-image.mjs apply.
+  // Sources view and underlays. Served by scripts/serve.mjs, the page carries a write token and can import
+  // images and save calibrations through the server, which records them like scripts/import-image.mjs add
+  // and apply. Anywhere else (a bundle, the preview, a plain static server) the server is read-only, so a
+  // calibration made here is copied as text for the agent, which records it with import-image.mjs apply.
   // ---------------------------------------------------------------------------
+  const WRITE_META = 'meta[name="architecture-studio-write"]';
+  const UPLOAD_ENDPOINT = '/__architecture-studio/sources';
+  const CALIBRATION_ENDPOINT = '/__architecture-studio/calibration';
+  const FLASH_KEY = 'architecture-studio:sources-flash';
+  const UPLOAD_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
+  const EXPORT_FIRST = 'Export a PDF, HEIC, or TIFF as PNG or JPEG first, then add that file.';
+  const writeToken = (doc = globalThis.document) => doc?.querySelector?.(WRITE_META)?.content || '';
+  // True only on a page scripts/serve.mjs served with its write token over http.
+  function sourcesWritable(doc = globalThis.document, loc = globalThis.location) {
+    return Boolean(writeToken(doc)) && String(loc?.protocol ?? '').startsWith('http');
+  }
+  // Why a chosen file cannot be imported, or '' when it looks like a PNG, JPEG, or WebP image. The server
+  // checks the bytes themselves.
+  function uploadFileProblem(file) {
+    if (!file) return 'Choose an image.';
+    const name = String(file.name ?? ''), ext = (name.match(/\.[^.]+$/)?.[0] ?? '').toLowerCase();
+    if (['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || UPLOAD_EXTENSIONS.includes(ext)) return '';
+    return `${name || 'That file'} is not a PNG, JPEG, or WebP image. ${EXPORT_FIRST}`;
+  }
+  const formatBytes = n => n < 1024 ? `${n} bytes` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
+  const newUpload = () => ({ file: null, kind: '', id: '', status: 'idle', error: '', existsId: null });
+  // Posts to scripts/serve.mjs with the page's token. Resolves { ok, status, body, error }; never throws.
+  async function postWrite(url, type, body) {
+    try {
+      const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': type, 'X-Architecture-Studio-Token': writeToken() }, body });
+      let json = null;
+      try { json = await response.json(); } catch {}
+      if (response.ok && json?.ok) return { ok: true, status: response.status, body: json, error: '' };
+      return { ok: false, status: response.status, body: json, error: json?.error ?? `The studio server answered with status ${response.status}.` };
+    } catch {
+      return { ok: false, status: 0, body: null, error: 'The studio server did not answer. Check that scripts/serve.mjs is still running, then try again.' };
+    }
+  }
+  // A status line kept across the reload that follows a write. It stays a few seconds, so a live reload
+  // right after the page's own reload still shows it.
+  function storeFlash(flash) {
+    try { globalThis.sessionStorage?.setItem(FLASH_KEY, JSON.stringify({ ...flash, at: Date.now() })); } catch {}
+  }
+  function takeFlash() {
+    try {
+      const store = globalThis.sessionStorage, raw = store?.getItem(FLASH_KEY);
+      if (!raw) return null;
+      globalThis.setTimeout?.(() => { try { if (store.getItem(FLASH_KEY) === raw) store.removeItem(FLASH_KEY); } catch {} }, 3000);
+      const flash = JSON.parse(raw);
+      return Date.now() - flash.at < 30000 && typeof flash.text === 'string' ? flash : null;
+    } catch { return null; }
+  }
+  // After a write, reload to read the new manifest at `url`. Live reload (serve.mjs watches sources/)
+  // normally reloads first; the timer covers a server started with --no-watch.
+  function reloadAfterWrite(url) {
+    state.reloading = true;
+    if (url && typeof history !== 'undefined' && history.replaceState) history.replaceState(null, '', url);
+    globalThis.setTimeout?.(() => location.reload(), 1500);
+  }
   async function loadSources() {
     try {
       const response = await fetch('./sources/sources.json', { cache: 'no-store' });
@@ -4408,7 +4498,7 @@
       .map(([source, asset]) => ({ href: asset.href, width: source.pixels.width, height: source.pixels.height, transform: source.placement.transform, opacity: state.underlayOpacity }));
   }
 
-  const newDraft = sourceId => ({ sourceId, from: null, to: null, fromU: 0.5, toU: 0.5, distanceText: '', references: [], areas: [], areaPoints: [], payload: '', copied: null });
+  const newDraft = sourceId => ({ sourceId, from: null, to: null, fromU: 0.5, toU: 0.5, distanceText: '', references: [], areas: [], areaPoints: [], payload: '', copied: null, saving: null, saveError: null });
   function sourceDraft() {
     if (state.draft?.sourceId !== state.sourceId) state.draft = newDraft(state.sourceId);
     return state.draft;
@@ -4455,7 +4545,10 @@
     if (!sourceList().some(item => item.id === id) || id === state.sourceId) return;
     state.sourceId = id;
     state.tool = null;
+    state.upload = null;
+    state.flash = null;
     renderSourcesView(true);
+    syncAddImage();
     syncLocation();
   }
   function renderSourcesView(refit) {
@@ -4469,7 +4562,7 @@
       sheetStage.innerHTML = '';
       readout.classList.add('hidden-view');
       if (state.sources.status === 'invalid') showStageStatus('Source images unreadable', state.sources.message);
-      else if (!source) showStageStatus('No source images', 'Import images with scripts/import-image.mjs add.');
+      else if (!source) showStageStatus('No source images', state.writable ? 'Drop an image here, or choose Add image in the toolbar.' : 'Import images with scripts/import-image.mjs add.');
       else if (asset.status === 'loading') showStageStatus('Loading the image', `Reading ${source.path}.`);
       else showStageStatus('Image unavailable', `${asset.message} Re-import it with scripts/import-image.mjs add --replace.`);
       return;
@@ -4604,11 +4697,20 @@
     const copy = '<p id="cal-copy-help">Paste it to your agent, which records it with scripts/import-image.mjs apply, then reload this page.</p>'
       + '<p id="cal-problem" class="field-note field-note--error"></p>'
       + '<div class="calibrate-actions"><button type="button" class="tool primary" id="copy-calibration" aria-describedby="cal-copy-help">Copy calibration</button><button type="button" class="tool" id="cal-reset">Start over</button></div>' + copied;
-    if (photo) return `<p class="entity-context">Photos are not calibrated. You can still name reference points for placement and label areas.</p>${also}<ol class="src-steps" aria-label="${escapeHtml(`Copy for ${source.id}`)}"><li><b>Copy it for your agent</b>${copy}</li></ol>`;
+    // Served by scripts/serve.mjs, the calibration is saved to sources/sources.json instead of copied.
+    const saveError = !draft.saveError ? ''
+      : draft.saveError.stale ? `<div id="cal-save-error"><p class="field-note field-note--error">${escapeHtml(draft.saveError.message)}</p><div class="calibrate-actions"><button type="button" class="tool" id="cal-reload">Reload</button></div></div>`
+        : `<p id="cal-save-error" class="field-note field-note--error">${escapeHtml(draft.saveError.message)}</p>`;
+    const saving = draft.saving === 'pending' ? '<p id="cal-saving" class="field-note">Saving...</p>' : draft.saving === 'saved' ? '<p id="cal-saving" class="field-note">Saved. Reloading...</p>' : '';
+    const save = '<p id="cal-copy-help">Saves to sources/sources.json. Your agent reads it from there.</p>'
+      + '<p id="cal-problem" class="field-note field-note--error"></p>'
+      + '<div class="calibrate-actions"><button type="button" class="tool primary" id="save-calibration" aria-describedby="cal-copy-help">Save calibration</button><button type="button" class="tool" id="cal-reset">Start over</button></div>' + saving + saveError;
+    const handoff = state.writable ? save : copy, handoffTitle = state.writable ? 'Save it for your agent' : 'Copy it for your agent';
+    if (photo) return `<p class="entity-context">Photos are not calibrated. You can still name reference points for placement and label areas.</p>${also}<ol class="src-steps" aria-label="${escapeHtml(`${state.writable ? 'Save' : 'Copy'} for ${source.id}`)}"><li><b>${handoffTitle}</b>${handoff}</li></ol>`;
     return `<ol class="src-steps" aria-label="${escapeHtml(`Calibrate ${source.id}`)}">`
       + `<li><b>Mark a known distance</b><p>Choose Scale line and click both ends of a dimension printed on the image. With the image focused, Enter marks the point under the centre crosshair.</p>${line}</li>`
       + `<li><b>Type that distance</b>${distance}</li>`
-      + `<li><b>Copy it for your agent</b>${copy}</li></ol>${also}`;
+      + `<li><b>${handoffTitle}</b>${handoff}</li></ol>${also}`;
   }
   // The toolbar's Image select, like Level, Face, and Section; a flag such as Stale shows in the option.
   function fillSourceSelect() {
@@ -4621,25 +4723,39 @@
   }
   function renderSourcesInspector() {
     const active = document.activeElement, keep = active && inspector.contains?.(active) ? { id: active.id, start: active.selectionStart, end: active.selectionEnd } : null;
+    const restoreFocus = () => { if (keep?.id) { const again = document.getElementById(keep.id); again?.focus(); if (again && keep.start != null) try { again.setSelectionRange(keep.start, keep.end); } catch {} } };
     if (state.sources.status === 'invalid') {
       inspector.innerHTML = `<h2>Source images</h2><p class="lede">${escapeHtml(state.sources.message)}</p><p class="fineprint">Run scripts/import-image.mjs check to see every problem.</p>`;
       return;
     }
-    const source = selectedSource();
+    const source = selectedSource(), empty = !sourceList().length;
     const blocked = state.blocked ? '<p class="field-note">The building model is unavailable or has errors, so placed images are not drawn on the plans. Calibration still works.</p>' : '';
+    if (state.writable && empty) state.upload ??= newUpload();
+    if (state.writable && state.upload) {
+      inspector.innerHTML = `<div class="src-panel">${uploadForm(empty)}${blocked}</div>`;
+      wireUploadForm();
+      restoreFocus();
+      return;
+    }
+    const flash = source && state.flash?.sourceId === source.id
+      ? `<div class="src-flash" id="src-flash"><p class="field-note">${escapeHtml(state.flash.text)}</p>${(state.flash.warnings ?? []).map(line => `<p class="field-note field-note--warning">${escapeHtml(line)}</p>`).join('')}</div>` : '';
     inspector.innerHTML = `<div class="src-panel">${source
-      ? sourceHead(source) + blocked + calibrateSection(source) + sourceDetails(source)
-      : `<div class="src-head"><h2>Source images</h2><p>Choose an image in the toolbar to calibrate it, then paste the result to your agent.</p></div>${blocked}`}</div>`;
+      ? sourceHead(source) + flash + blocked + calibrateSection(source) + sourceDetails(source)
+      : `<div class="src-head"><h2>Source images</h2><p>Choose an image in the toolbar to calibrate it, then ${state.writable ? 'save it for' : 'paste the result to'} your agent.</p></div>${blocked}`}</div>`;
     inspector.querySelectorAll('[data-source-id]').forEach(button => button.addEventListener('click', () => selectSource(button.dataset.sourceId)));
     if (!source) return;
-    const draft = sourceDraft(), edited = () => { if (draft.copied) { draft.copied = null; $('#cal-copied')?.remove(); } updateCalibrationStatus(); };
+    const draft = sourceDraft(), edited = () => {
+      if (draft.copied) { draft.copied = null; $('#cal-copied')?.remove(); }
+      if (draft.saveError) { draft.saveError = null; $('#cal-save-error')?.remove(); }
+      updateCalibrationStatus();
+    };
     $('#cal-distance')?.addEventListener('input', event => { draft.distanceText = event.target.value; edited(); });
     inspector.querySelectorAll('[data-ref-index]').forEach(input => {
       input.addEventListener('input', () => { draft.references[Number(input.dataset.refIndex)].label = input.value; edited(); drawSourceOverlay(); });
       input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); viewport.focus(); } });
     });
     inspector.querySelectorAll('[data-ref-remove]').forEach(button => button.addEventListener('click', () => {
-      draft.references.splice(Number(button.dataset.refRemove), 1); draft.copied = null;
+      draft.references.splice(Number(button.dataset.refRemove), 1); draft.copied = null; draft.saveError = null;
       renderSourcesInspector(); drawSourceOverlay(); announce('Reference point removed.');
     }));
     inspector.querySelectorAll('[data-area-index]').forEach(input => {
@@ -4647,18 +4763,21 @@
       input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); viewport.focus(); } });
     });
     inspector.querySelectorAll('[data-area-remove]').forEach(button => button.addEventListener('click', () => {
-      draft.areas.splice(Number(button.dataset.areaRemove), 1); draft.copied = null;
+      draft.areas.splice(Number(button.dataset.areaRemove), 1); draft.copied = null; draft.saveError = null;
       renderSourcesInspector(); drawSourceOverlay(); announce('Area removed.');
     }));
     $('#cal-area-finish')?.addEventListener('click', closeArea);
     $('#cal-area-cancel')?.addEventListener('click', () => { cancelArea(); viewport.focus(); });
-    $('#copy-calibration')?.addEventListener('click', copyCalibration);
+    if (state.writable) {
+      $('#save-calibration')?.addEventListener('click', saveCalibration);
+      $('#cal-reload')?.addEventListener('click', () => location.reload());
+    } else $('#copy-calibration')?.addEventListener('click', copyCalibration);
     $('#cal-reset')?.addEventListener('click', () => { state.draft = newDraft(state.sourceId); renderSourcesInspector(); drawSourceOverlay(); announce('Calibration cleared.'); });
     updateCalibrationStatus();
-    if (keep?.id) { const again = document.getElementById(keep.id); again?.focus(); if (again && keep.start != null) try { again.setSelectionRange(keep.start, keep.end); } catch {} }
+    restoreFocus();
   }
   function updateCalibrationStatus() {
-    const source = selectedSource(), asset = source && sourceAssets.get(source.id), copy = $('#copy-calibration');
+    const source = selectedSource(), asset = source && sourceAssets.get(source.id), copy = $(state.writable ? '#save-calibration' : '#copy-calibration');
     if (!source || !assetUsable(asset) || !copy) return null;
     const check = draftCheck(source, sourceDraft(), asset), note = $('#cal-distance-note');
     if (note) {
@@ -4669,7 +4788,7 @@
     $('#cal-distance')?.setAttribute('aria-invalid', String(Boolean(check.distanceError)));
     $('#cal-problem').textContent = check.problem;
     sourceDraft().areas.forEach((item, i) => { const size = $(`#cal-area-${i}-size`); if (size) size.textContent = areaSummary(source, areaMeasure(source, item.points, check.calibration)); });
-    copy.disabled = !check.input;
+    copy.disabled = !check.input || Boolean(sourceDraft().saving);
     return check;
   }
   async function copyCalibration() {
@@ -4682,6 +4801,183 @@
     renderSourcesInspector();
     if (draft.copied === 'failed') { const area = $('#cal-payload'); area?.focus(); area?.select(); announce('Copying is blocked here. The calibration text is selected below.'); }
     else { $('#copy-calibration')?.focus(); announce('Calibration copied. Paste it to your agent.'); }
+  }
+  // Saves the draft through scripts/serve.mjs, then reloads so the manifest shows it.
+  async function saveCalibration() {
+    const source = selectedSource(), asset = source && sourceAssets.get(source.id);
+    if (!source || !assetUsable(asset) || !state.writable) return;
+    const draft = sourceDraft();
+    if (draft.saving) return;
+    const check = draftCheck(source, draft, asset);
+    if (!check.input) return;
+    let payload;
+    try { payload = calibrationPayloadObject(source, check.input); } catch (error) { $('#cal-problem').textContent = error.message; return; }
+    Object.assign(draft, { saving: 'pending', saveError: null });
+    renderSourcesInspector();
+    announce('Saving...');
+    const result = await postWrite(CALIBRATION_ENDPOINT, 'application/json', JSON.stringify(payload));
+    if (result.ok) {
+      storeFlash({ text: 'Saved.', sourceId: source.id, warnings: result.body.warnings ?? [] });
+      if (state.sourceId === source.id) {
+        state.draft = { ...newDraft(source.id), saving: 'saved' };
+        if (state.view === 'sources') { renderSourcesInspector(); drawSourceOverlay(); }
+      }
+      announce('Saved. Reloading to show it.');
+      reloadAfterWrite();
+      return;
+    }
+    draft.saving = null;
+    draft.saveError = result.status === 409 && result.body?.code === 'stale'
+      ? { stale: true, message: 'This image changed since the page loaded. Reload and mark it again.' }
+      : { stale: false, message: result.error };
+    if (state.draft === draft && state.view === 'sources') renderSourcesInspector();
+    announce(draft.saveError.message);
+    if (draft.saveError.stale) $('#cal-reload')?.focus();
+  }
+
+  // The Add an image form. `empty` is the first image of a project: the form is the whole panel, with no Cancel.
+  function uploadForm(empty) {
+    const up = state.upload, busy = up.status === 'uploading' || up.status === 'done';
+    const kinds = Object.entries(SOURCE_KINDS).map(([value, label]) => `<option value="${value}"${up.kind === value ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
+    const head = empty
+      ? '<div class="src-head"><h2 id="upload-title">Source images</h2><p>Add a survey, plan, aerial view, or photo. Your agent reads it from the project\'s sources folder.</p></div>'
+      : '<div class="src-head"><h2 id="upload-title">Add an image</h2><p>It is copied into the project\'s sources folder for your agent.</p></div>';
+    const chosen = up.file ? `<p class="upload-file" id="upload-chosen">${escapeHtml(`${up.file.name}, ${formatBytes(up.file.size ?? 0)}`)}</p>` : '<p class="field-note" id="upload-chosen">No image chosen.</p>';
+    const exists = up.status === 'exists'
+      ? `<div id="upload-exists"><p class="field-note field-note--error">${escapeHtml(`An image named ${up.existsId} already exists.`)}</p><div class="calibrate-actions"><button type="button" class="tool" id="upload-replace">Replace it</button></div></div>` : '';
+    const status = up.status === 'uploading' ? 'Importing...' : up.status === 'done' ? 'Imported. Opening it...' : '';
+    return `<form class="upload-form" id="upload-form" aria-labelledby="upload-title" novalidate>${head}`
+      + '<button type="button" class="drop-zone" id="upload-drop" aria-describedby="upload-chosen upload-formats"><b>Drop an image here</b><span>or choose a file</span></button>'
+      + '<input type="file" id="upload-file" accept="image/png,image/jpeg,image/webp" hidden>'
+      + `${chosen}<p class="field-note" id="upload-formats">PNG, JPEG, or WebP. ${escapeHtml(EXPORT_FIRST)}</p>`
+      + `<label class="text-field" for="upload-kind">Type<select id="upload-kind" required aria-required="true"><option value="">Choose a type</option>${kinds}</select></label>`
+      + `<label class="text-field" for="upload-id">Name, optional<input id="upload-id" type="text" autocomplete="off" spellcheck="false" value="${escapeHtml(up.id)}" placeholder="From the file name" aria-describedby="upload-id-note"></label>`
+      + '<p class="field-note" id="upload-id-note">Becomes the image id, in lowercase letters, digits, and hyphens.</p>'
+      + `<p id="upload-problem" class="field-note field-note--error">${escapeHtml(up.error)}</p>${exists}`
+      + `<div class="calibrate-actions"><button type="submit" class="tool primary" id="upload-submit" aria-describedby="upload-hint"${busy ? ' disabled' : ''}>Import image</button>${empty ? '' : '<button type="button" class="tool" id="upload-cancel">Cancel</button>'}</div>`
+      + `<p class="field-note" id="upload-hint"></p><p class="field-note" id="upload-status">${escapeHtml(status)}</p></form>`;
+  }
+  // Import image waits for a file and its type; the hint says which is missing.
+  function syncUploadReady() {
+    const up = state.upload, submit = $('#upload-submit'), hint = $('#upload-hint');
+    if (!up || !submit) return;
+    const missing = !up.file ? 'Choose an image.' : !up.kind ? 'Choose its type.' : '';
+    submit.disabled = Boolean(missing) || up.status === 'uploading' || up.status === 'done';
+    if (hint) hint.textContent = up.status === 'idle' || up.status === 'error' ? missing : '';
+  }
+  function wireUploadForm() {
+    const input = $('#upload-file'), drop = $('#upload-drop');
+    const files = event => [...(event.dataTransfer?.types ?? [])].includes('Files');
+    drop?.addEventListener('click', () => input?.click());
+    input?.addEventListener('change', () => { const file = input.files?.[0]; if (file) chooseUploadFile(file); });
+    for (const type of ['dragenter', 'dragover']) drop?.addEventListener(type, event => {
+      if (!files(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+      drop.classList.add('is-over');
+    });
+    drop?.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+    drop?.addEventListener('drop', event => {
+      event.preventDefault();
+      drop.classList.remove('is-over');
+      const file = event.dataTransfer?.files?.[0];
+      if (file) chooseUploadFile(file);
+    });
+    $('#upload-kind')?.addEventListener('change', event => { if (state.upload) { state.upload.kind = event.target.value; syncUploadReady(); } });
+    $('#upload-id')?.addEventListener('input', event => { if (state.upload) state.upload.id = event.target.value; });
+    $('#upload-form')?.addEventListener('submit', event => { event.preventDefault(); submitUpload(false); });
+    $('#upload-form')?.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || !sourceList().length || state.upload?.status === 'uploading') return;
+      event.preventDefault();
+      closeUpload();
+    });
+    $('#upload-replace')?.addEventListener('click', () => submitUpload(true));
+    $('#upload-cancel')?.addEventListener('click', closeUpload);
+    syncUploadReady();
+  }
+  function chooseUploadFile(file) {
+    const up = state.upload ??= newUpload();
+    const problem = uploadFileProblem(file);
+    Object.assign(up, { file: problem ? null : file, error: problem, status: 'idle', existsId: null });
+    renderSourcesInspector();
+    if (problem) { announce(problem); return; }
+    announce(`${file.name} chosen. ${up.kind ? 'Press Import image.' : 'Choose its type.'}`);
+    $(up.kind ? '#upload-submit' : '#upload-kind')?.focus();
+  }
+  function syncAddImage() {
+    $('#add-image')?.setAttribute('aria-expanded', String(Boolean(state.writable && state.upload)));
+  }
+  // Opens the Add an image form in the inspector, with `file` when one was dropped on the stage.
+  function openUpload(file = null) {
+    if (!state.writable) return;
+    state.upload ??= newUpload();
+    state.flash = null;
+    if (state.tool) { state.tool = null; updateSourceTools(); drawSourceOverlay(); }
+    if (state.view !== 'sources') setView('sources');
+    renderSourcesInspector();
+    syncAddImage();
+    if (file) chooseUploadFile(file);
+    else { $('#upload-drop')?.focus(); announce('Add an image: drop it here or choose a file, then choose its type.'); }
+  }
+  function closeUpload() {
+    state.upload = null;
+    renderSourcesInspector();
+    syncAddImage();
+    $('#add-image')?.focus();
+  }
+  async function submitUpload(replace) {
+    const up = state.upload;
+    if (!up || up.status === 'uploading' || up.status === 'done') return;
+    const missing = !up.file ? 'Choose an image.' : !up.kind ? 'Choose its type.' : '';
+    if (missing) { up.error = missing; renderSourcesInspector(); announce(missing); return; }
+    Object.assign(up, { status: 'uploading', error: '', existsId: null });
+    renderSourcesInspector();
+    announce('Importing...');
+    const query = new URLSearchParams({ kind: up.kind, name: up.file.name });
+    if (up.id.trim()) query.set('id', up.id.trim());
+    if (replace) query.set('replace', '1');
+    const type = String(up.file.type ?? '').startsWith('image/') ? up.file.type : 'application/octet-stream';
+    const result = await postWrite(`${UPLOAD_ENDPOINT}?${query}`, type, up.file);
+    if (result.ok) {
+      const id = result.body.source.id;
+      up.status = 'done';
+      storeFlash({ text: `Imported ${id}.`, sourceId: id, warnings: result.body.warnings ?? [] });
+      const params = new URLSearchParams(location.search);
+      params.set('view', 'sources');
+      params.set('source', id);
+      if (state.upload === up) renderSourcesInspector();
+      announce(`Imported ${id}.`);
+      reloadAfterWrite(`${location.pathname}?${params}${location.hash}`);
+      return;
+    }
+    if (result.status === 409 && result.body?.code === 'exists') Object.assign(up, { status: 'exists', existsId: result.body.id ?? (up.id.trim() || up.file.name) });
+    else Object.assign(up, { status: 'error', error: result.error });
+    if (state.upload !== up) return;
+    renderSourcesInspector();
+    if (up.status === 'exists') { announce(`An image named ${up.existsId} already exists.`); $('#upload-replace')?.focus(); }
+    else announce(up.error);
+  }
+  // Dropping an image anywhere on the stage of the Sources view, or on the inspector beside it, opens the
+  // form with it, rather than letting the browser open the file in place of the studio.
+  function wireSourceDrop() {
+    const accepts = event => state.view === 'sources' && state.writable && [...(event.dataTransfer?.types ?? [])].includes('Files');
+    for (const area of [$('.canvas-wrap'), $('aside')].filter(Boolean)) {
+      for (const type of ['dragenter', 'dragover']) area.addEventListener(type, event => {
+        if (!accepts(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        area.classList.add('is-drop-target');
+      });
+      area.addEventListener('dragleave', event => { if (!area.contains(event.relatedTarget)) area.classList.remove('is-drop-target'); });
+      area.addEventListener('drop', event => {
+        area.classList.remove('is-drop-target');
+        // The form's own drop zone has already taken the file.
+        if (event.defaultPrevented || !accepts(event)) return;
+        event.preventDefault();
+        const file = event.dataTransfer?.files?.[0];
+        if (file) openUpload(file);
+      });
+    }
   }
 
   function updateSourceTools() {
@@ -4719,6 +5015,8 @@
     const draft = sourceDraft(), point = { x: round1(p.x), y: round1(p.y) }, u = round1(Math.max(0.5, 1 / sheetView.zoom));
     let focus = null;
     draft.copied = null;
+    draft.saveError = null;
+    state.flash = null;
     if (state.tool === 'line') {
       if (!draft.from || draft.to) { Object.assign(draft, { from: point, fromU: u, to: null }); announce(`Scale line starts at ${point.x}, ${point.y}. Mark the other end.`); }
       else { Object.assign(draft, { to: point, toU: u }); announce(`Scale line ends at ${point.x}, ${point.y}. Type the distance.`);       if (!draft.distanceText.trim()) focus = '#cal-distance'; }
@@ -4774,6 +5072,8 @@
   function wireSourceControls() {
     document.querySelectorAll('.source-tool').forEach(button => button.addEventListener('click', () => setTool(button.dataset.tool)));
     sourceSelect.addEventListener('change', () => selectSource(sourceSelect.value));
+    $('#add-image').addEventListener('click', () => openUpload());
+    wireSourceDrop();
     viewport.addEventListener('pointermove', event => {
       if (state.view !== 'sources' || !stageSource) return;
       const p = imagePoint(event.clientX, event.clientY), asset = sourceAssets.get(state.sourceId);
@@ -4811,7 +5111,9 @@
     $('#camera-controls').classList.toggle('hidden-view', !isModel);
     $('#system-controls').classList.toggle('hidden-view', !live || !['systems', 'model'].includes(state.view));
     $('#site-controls').classList.toggle('hidden-view', !live || state.view !== 'site');
-    $('#source-control').classList.toggle('hidden-view', !isSources);
+    $('#source-control').classList.toggle('hidden-view', !isSources || (state.writable && !sourceList().length));
+    $('#add-image').classList.toggle('hidden-view', !isSources || !state.writable);
+    syncAddImage();
     $('#source-tools').classList.toggle('hidden-view', !isSources);
     $('#underlay-controls').classList.toggle('hidden-view', !isSheet || !underlaySources().length);
     $('#underlay-toggle').setAttribute('aria-pressed', String(state.underlay));
@@ -4860,7 +5162,7 @@
 
   // Mirrors the current view into the URL so a reload (including live reload) keeps the user's place.
   function syncLocation() {
-    if (typeof history === 'undefined' || typeof location === 'undefined' || !history.replaceState) return;
+    if (state.reloading || typeof history === 'undefined' || typeof location === 'undefined' || !history.replaceState) return;
     const params = new URLSearchParams(location.search);
     params.set('view', state.view);
     if (state.levelId) params.set('level', state.levelId);
@@ -5045,6 +5347,8 @@
       state.blocked = modelUnavailable(error);
     }
     state.sources = await loadSources();
+    state.writable = sourcesWritable();
+    state.flash = state.writable ? takeFlash() : null;
     updateSourceFindings();
     const sourcesTab = $('#tab-sources'); if (sourcesTab) sourcesTab.hidden = !hasSources();
     const requestedSource = params.get('source');
@@ -5061,6 +5365,7 @@
       wireViewport();
       wireSourceControls();
       render({ refit: true });
+      if (state.flash) announce(state.flash.text);
       sourceChecks = loadSourceAssets();
       return;
     }
@@ -5070,6 +5375,7 @@
       elevationSelect.value = state.elevation;
       wireControls();
       render({ refit: true });
+      if (state.flash) announce(state.flash.text);
       loadManifest();
       sourceChecks = loadSourceAssets();
     } catch (error) {
@@ -5084,7 +5390,7 @@
     bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, centerlineIssues, pathOutline, pathFillets, centerlineLength, outlineOf, anchorPoint, resolvePath, resolveAnchors, polygonArea, pointInPolygon, wallGeometry, wallLength, wallEndClip, terrainOf, siteExtent,
     renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, siteCategories, parseSiteHidden, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport,
-    parseLength, sourceScale, calibrationPayload, draftCheck, areaMeasure, areaSummary, sourcesProblem, placementStale, underlaySvg, start, sourcesChecked: () => sourceChecks
+    parseLength, sourceScale, calibrationPayload, calibrationPayloadObject, sourcesWritable, uploadFileProblem, formatBytes, draftCheck, areaMeasure, areaSummary, sourcesProblem, placementStale, underlaySvg, start, sourcesChecked: () => sourceChecks
   };
   if (typeof globalThis.__ARCHITECTURE_STUDIO_API__ === 'function') globalThis.__ARCHITECTURE_STUDIO_API__(studioApi);
   else start();

@@ -935,15 +935,16 @@ test('sources manifests are checked before use', () => {
 });
 
 // A browser stand-in just large enough to run start(): elements are inert records, fetch serves a
-// fixed set of project files, and the clipboard is captured.
-function startHarness({ files, search = '' }) {
+// fixed set of project files, and the clipboard is captured. `token` plays scripts/serve.mjs's write
+// token; `post` answers its POST requests; timers, reloads, and history URLs are captured, not run.
+function startHarness({ files, search = '', token = '', protocol = 'http:', post = null }) {
   const elements = new Map(), listeners = [];
   class Element {
     constructor(attrs = {}) { Object.assign(this, { innerHTML: '', textContent: '', value: '', hidden: false, disabled: false, style: {}, dataset: {}, options: [], attributes: {}, listeners: {} }, attrs); const set = new Set(); this.classList = { add: c => set.add(c), remove: c => set.delete(c), contains: c => set.has(c), toggle: (c, on = !set.has(c)) => (on ? set.add(c) : set.delete(c), on) }; }
     setAttribute(name, value) { this.attributes[name] = String(value); }
     getAttribute(name) { return this.attributes[name] ?? null; }
     addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); listeners.push(type); }
-    dispatch(type, event = {}) { for (const fn of this.listeners[type] ?? []) fn({ preventDefault() {}, target: this, ...event }); }
+    dispatch(type, event = {}) { for (const fn of [...(this.listeners[type] ?? [])]) fn({ preventDefault() {}, stopPropagation() {}, target: this, ...event }); }
     querySelector(selector) { return element(`${selector}@child`); }
     querySelectorAll() { return []; }
     contains() { return false; }
@@ -957,7 +958,8 @@ function startHarness({ files, search = '' }) {
     const tab = element(`#${id}`); Object.assign(tab, { id, dataset: { view }, hidden: Boolean(hidden) }); return tab;
   });
   const tools = [...html.matchAll(/data-tool="([a-z]+)"/g)].map(([, tool]) => Object.assign(element(`tool-${tool}`), { dataset: { tool } }));
-  const clipboard = [];
+  const clipboard = [], posts = [], timers = [], reloads = [], urls = [], session = new Map();
+  if (token) element('meta[name="architecture-studio-write"]').content = token;
   const response = (body, status = 200) => ({ ok: status === 200, status, json: async () => JSON.parse(body), arrayBuffer: async () => new Uint8Array(body).buffer });
   let api;
   const context = vm.createContext({
@@ -966,16 +968,25 @@ function startHarness({ files, search = '' }) {
     Image: class { set src(value) { this.url = value; } async decode() { this.naturalWidth = 400; this.naturalHeight = 300; } },
     CSS: { escape: value => value },
     navigator: { clipboard: { writeText: async text => { clipboard.push(text); } } },
-    location: { search, pathname: '/', hash: '' },
-    history: { replaceState() {} },
+    location: { search, pathname: '/', hash: '', protocol, reload: () => reloads.push(true) },
+    history: { replaceState: (_state, _title, url) => urls.push(url) },
     window: { addEventListener() {} },
-    fetch: async url => files[url] === undefined ? response('', 404) : response(files[url]),
+    setTimeout: (fn, ms) => timers.push({ fn, ms }),
+    sessionStorage: { getItem: key => session.get(key) ?? null, setItem: (key, value) => session.set(key, String(value)), removeItem: key => session.delete(key) },
+    fetch: async (url, init = {}) => {
+      if (init.method === 'POST') {
+        posts.push({ url, ...init });
+        const [status, body] = await post(url, init);
+        return { ok: status === 200, status, json: async () => body };
+      }
+      return files[url] === undefined ? response('', 404) : response(files[url]);
+    },
     document: { querySelector: element, getElementById: id => element(`#${id}`), activeElement: null, querySelectorAll: selector => selector === '.tab' ? tabs : selector === '.source-tool' ? tools : [] },
     __ARCHITECTURE_STUDIO_API__(value) { api = value; }
   });
   vm.runInContext(extractStudioScript(html), context);
   const settle = () => api.sourcesChecked();
-  return { api, element, tabs, tools, clipboard, settle };
+  return { api, element, tabs, tools, clipboard, settle, posts, timers, reloads, urls, session };
 }
 const imageBytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);
 const sourcesJson = (overrides = {}) => JSON.stringify({ schemaVersion: '1.0.0', sources: [testSource([], { pixels: { width: 400, height: 300 }, contentHash: `sha256:${crypto.createHash('sha256').update(imageBytes).digest('hex')}`, ...overrides })] });
@@ -1121,4 +1132,247 @@ test('the viewer draws current placements under the plan and honours ?underlay=0
   assert.doesNotMatch(stale.element('#sheet-stage').innerHTML, /data-layer="underlay"/);
   assert.equal(stale.element('#underlay-controls').classList.contains('hidden-view'), true);
   assert.match(stale.element('#inspector').innerHTML, /Source image[\s\S]*placement predates/);
+});
+
+// ---------------------------------------------------------------- writing through scripts/serve.mjs
+
+const tick = () => new Promise(resolve => setImmediate(resolve));
+const FLASH_KEY = 'architecture-studio:sources-flash';
+const sourceFiles = (extra = {}) => ({ './models/building.json': JSON.stringify(fixture), './sources/sources.json': sourcesJson(), './sources/survey-plat.png': imageBytes, ...extra });
+// Marks a 380 px scale line on the 400 x 300 test image and types its length.
+function markLine({ element, tools }) {
+  const click = (x, y) => {
+    const at = { clientX: 16 + x * 1.92, clientY: 12 + y * 1.92, pointerId: 1 };
+    element('#sheet-viewport').dispatch('pointerdown', at);
+    element('#sheet-viewport').dispatch('pointerup', at);
+  };
+  tools[0].dispatch('click');
+  click(10, 20);
+  click(390, 20);
+  Object.assign(element('#cal-distance'), { value: `12'-6"` }).dispatch('input');
+}
+
+test('the page writes only when serve.mjs served it with a token over http', () => {
+  const { api } = loadStudio();
+  const doc = content => ({ querySelector: selector => (selector === 'meta[name="architecture-studio-write"]' && content !== null ? { content } : null) });
+  assert.equal(api.sourcesWritable(doc('t0k3n'), { protocol: 'http:' }), true);
+  assert.equal(api.sourcesWritable(doc('t0k3n'), { protocol: 'https:' }), true);
+  assert.equal(api.sourcesWritable(doc('t0k3n'), { protocol: 'file:' }), false, 'a saved copy opened from disk');
+  assert.equal(api.sourcesWritable(doc(''), { protocol: 'http:' }), false);
+  assert.equal(api.sourcesWritable(doc(null), { protocol: 'http:' }), false, 'a bundle, the preview, or a plain static server');
+  assert.doesNotMatch(html, /<meta name="architecture-studio-write"/, 'the template never carries a token');
+  assert.doesNotMatch(expectedPreview(), /<meta name="architecture-studio-write"/);
+
+  assert.equal(api.uploadFileProblem({ name: 'plat.png', type: 'image/png' }), '');
+  assert.equal(api.uploadFileProblem({ name: 'IMG_1001.JPG', type: '' }), '', 'a missing type falls back to the extension');
+  assert.equal(api.uploadFileProblem({ name: 'plat.pdf', type: 'application/pdf' }), 'plat.pdf is not a PNG, JPEG, or WebP image. Export a PDF, HEIC, or TIFF as PNG or JPEG first, then add that file.');
+  assert.match(api.uploadFileProblem({ name: 'IMG_1002.HEIC', type: 'image/heic' }), /is not a PNG, JPEG, or WebP image/);
+  assert.equal(api.formatBytes(2_400_000), '2.3 MB');
+  assert.equal(api.formatBytes(51_200), '50 KB');
+});
+
+test('the saved payload is the object inside the copied text', () => {
+  const { api } = loadStudio();
+  const source = testSource();
+  const input = {
+    calibration: { from: { x: 100.04, y: 200.06 }, to: { x: 3100.16, y: 200 }, distanceMm: 3810, entered: ` 12'-6" `, uncertaintyPx: 0.3 },
+    references: [{ label: 'NE house corner', pixel: { x: 12.34, y: 6.78 } }],
+    areas: [{ label: 'Bed', points: [{ x: 1, y: 1 }, { x: 50, y: 1 }, { x: 50, y: 40 }] }]
+  };
+  const text = api.calibrationPayload(source, input);
+  assert.deepEqual(plain(api.calibrationPayloadObject(source, input)), JSON.parse(text.slice(text.indexOf('{'))));
+  assert.throws(() => api.calibrationPayloadObject(source, {}), /a scale line, a labelled reference point, or a labelled area/);
+});
+
+test('with a write token the Sources tab shows before any image, as the uploader', async () => {
+  const model = JSON.stringify(fixture);
+  const plainPage = startHarness({ files: { './models/building.json': model }, search: '?view=sources' });
+  await plainPage.api.start();
+  assert.equal(plainPage.element('#tab-sources').hidden, true);
+  assert.equal(plainPage.api.state.view, 'plan');
+  assert.equal(plainPage.element('#add-image').classList.contains('hidden-view'), true);
+
+  const served = startHarness({ files: { './models/building.json': model }, token: 'abc', search: '?view=sources' });
+  await served.api.start();
+  assert.equal(served.api.state.writable, true);
+  assert.equal(served.element('#tab-sources').hidden, false);
+  assert.equal(served.api.state.view, 'sources');
+  const inspector = served.element('#inspector').innerHTML;
+  assert.match(inspector, /<h2 id="upload-title">Source images<\/h2><p>Add a survey, plan, aerial view, or photo\./);
+  assert.match(inspector, /<button type="button" class="drop-zone" id="upload-drop"[^>]*><b>Drop an image here<\/b>/);
+  assert.match(inspector, /<input type="file" id="upload-file" accept="image\/png,image\/jpeg,image\/webp" hidden>/);
+  assert.match(inspector, /<select id="upload-kind" required aria-required="true"><option value="">Choose a type<\/option><option value="satellite">Satellite<\/option>[\s\S]*<option value="other">Other<\/option><\/select>/);
+  assert.doesNotMatch(inspector, /id="upload-cancel"/, 'the first image has nothing to cancel back to');
+  assert.match(served.element('#stage-status').innerHTML, /No source images<\/strong><span>Drop an image here, or choose Add image in the toolbar\./);
+  assert.equal(served.element('#add-image').classList.contains('hidden-view'), false);
+  assert.equal(served.element('#source-control').classList.contains('hidden-view'), true, 'no empty Image select');
+
+  const noModel = startHarness({ files: {}, token: 'abc' });
+  await noModel.api.start();
+  assert.equal(noModel.element('#tab-sources').hidden, false, 'images can be added before the model exists');
+  assert.ok(noModel.tabs[0].listeners.click, 'the tabs are wired');
+
+  const fromDisk = startHarness({ files: {}, token: 'abc', protocol: 'file:' });
+  await fromDisk.api.start();
+  assert.equal(fromDisk.element('#tab-sources').hidden, true);
+});
+
+test('Add image shows only on the Sources view of a writable page', async () => {
+  const served = startHarness({ files: sourceFiles(), token: 'abc', search: '?view=plan' });
+  await served.api.start();
+  await served.settle();
+  assert.equal(served.element('#add-image').classList.contains('hidden-view'), true);
+  served.tabs.find(tab => tab.dataset.view === 'sources').dispatch('click');
+  assert.equal(served.element('#add-image').classList.contains('hidden-view'), false);
+  assert.equal(served.element('#add-image').attributes['aria-expanded'], 'false');
+  assert.match(html, /<button type="button" class="tool add-image hidden-view" id="add-image" aria-controls="inspector" aria-expanded="false"><svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"/);
+  assert.ok(html.indexOf('id="add-image"') > html.indexOf('id="source-control"') && html.indexOf('id="add-image"') < html.indexOf('id="level-control"'), 'right after the Image select');
+
+  const plainPage = startHarness({ files: sourceFiles(), search: '?view=sources' });
+  await plainPage.api.start();
+  await plainPage.settle();
+  assert.equal(plainPage.api.state.view, 'sources');
+  assert.equal(plainPage.element('#add-image').classList.contains('hidden-view'), true);
+  const transfer = { types: ['Files'], files: [{ name: 'plan.png', type: 'image/png', size: 10 }] };
+  plainPage.element('.canvas-wrap').dispatch('drop', { dataTransfer: transfer });
+  assert.equal(plainPage.api.state.upload, null, 'a page that cannot write ignores dropped files');
+});
+
+test('served by serve.mjs, step 3 saves the calibration instead of copying it', async () => {
+  const notes = ['Note: cal-1 (manual, 10 mm/px) overrides the scale-bar estimate (cal-0, 9 mm/px), a 11% difference.'];
+  let reply = [200, { ok: true, source: { id: 'survey-plat', kind: 'survey', path: 'sources/survey-plat.png', pixels: { width: 400, height: 300 }, revision: 2, calibrationRevision: 4 }, messages: ['Added cal-4 (manual).'], warnings: notes }];
+  const h = startHarness({ files: sourceFiles(), token: 'abc', search: '?view=sources', post: async () => reply });
+  await h.api.start();
+  await h.settle();
+  const before = h.element('#inspector').innerHTML;
+  assert.match(before, /<li><b>Save it for your agent<\/b><p id="cal-copy-help">Saves to sources\/sources\.json\. Your agent reads it from there\.<\/p>/);
+  assert.match(before, /<button type="button" class="tool primary" id="save-calibration" aria-describedby="cal-copy-help">Save calibration<\/button><button type="button" class="tool" id="cal-reset">Start over<\/button>/);
+  assert.doesNotMatch(before, /Copy calibration|copy-calibration|Copy it for your agent|Paste it to your agent/);
+
+  assert.equal(h.element('#save-calibration').disabled, true);
+  markLine(h);
+  assert.equal(h.element('#save-calibration').disabled, false);
+  h.element('#save-calibration').dispatch('click');
+  assert.match(h.element('#inspector').innerHTML, /<p id="cal-saving" class="field-note">Saving\.\.\.<\/p>/);
+  assert.equal(h.element('#save-calibration').disabled, true, 'one save at a time');
+  assert.equal(h.element('#source-live').textContent, 'Saving...');
+  await tick();
+  assert.equal(h.posts.length, 1);
+  const [sent] = h.posts;
+  assert.equal(sent.url, '/__architecture-studio/calibration');
+  assert.deepEqual(plain(sent.headers), { 'Content-Type': 'application/json', 'X-Architecture-Studio-Token': 'abc' });
+  const body = JSON.parse(sent.body);
+  assert.equal(body.type, 'architecture-studio/source-calibration');
+  assert.deepEqual(body.calibration, { from: { x: 10, y: 20 }, to: { x: 390, y: 20 }, distanceMm: 3810, entered: `12'-6"`, uncertaintyPx: 0.5 });
+  assert.equal(h.clipboard.length, 0, 'nothing is copied');
+
+  assert.match(h.element('#inspector').innerHTML, /Saved\. Reloading\.\.\./);
+  assert.equal(h.api.state.draft.from, null, 'the draft is cleared');
+  assert.deepEqual(JSON.parse(h.session.get(FLASH_KEY)), { ...JSON.parse(h.session.get(FLASH_KEY)), text: 'Saved.', sourceId: 'survey-plat', warnings: notes });
+  assert.equal(h.reloads.length, 0, 'live reload gets the first chance');
+  const fallback = h.timers.find(timer => timer.ms === 1500);
+  fallback.fn();
+  assert.equal(h.reloads.length, 1);
+
+  // After the reload the head says Saved., with the server's notes.
+  const after = startHarness({ files: sourceFiles(), token: 'abc', search: '?view=sources&source=survey-plat' });
+  after.session.set(FLASH_KEY, h.session.get(FLASH_KEY));
+  await after.api.start();
+  await after.settle();
+  assert.match(after.element('#inspector').innerHTML, /<\/div><div class="src-flash" id="src-flash"><p class="field-note">Saved\.<\/p><p class="field-note field-note--warning">Note: cal-1 \(manual, 10 mm\/px\) overrides/);
+  assert.equal(after.element('#source-live').textContent, 'Saved.');
+  markLine(after);
+  assert.doesNotMatch(after.element('#inspector').innerHTML, /src-flash/, 'marking again clears it');
+
+  // A stale save asks for a reload; another refusal shows the server's message.
+  reply = [409, { ok: false, error: 'The pasted calibration is stale.', code: 'stale', id: 'survey-plat' }];
+  const stale = startHarness({ files: sourceFiles(), token: 'abc', search: '?view=sources', post: async () => reply });
+  await stale.api.start();
+  await stale.settle();
+  markLine(stale);
+  stale.element('#save-calibration').dispatch('click');
+  await tick();
+  assert.match(stale.element('#inspector').innerHTML, /<div id="cal-save-error"><p class="field-note field-note--error">This image changed since the page loaded\. Reload and mark it again\.<\/p><div class="calibrate-actions"><button type="button" class="tool" id="cal-reload">Reload<\/button>/);
+  assert.equal(stale.api.state.draft.to.x, 390, 'the marks stay until the reload');
+  stale.element('#cal-reload').dispatch('click');
+  assert.ok(stale.reloads.length >= 1);
+  reply = [400, { ok: false, error: 'Area "Bed" has no area: its points lie on one line.', code: 'invalid' }];
+  stale.element('#save-calibration').dispatch('click');
+  await tick();
+  assert.match(stale.element('#inspector').innerHTML, /<p id="cal-save-error" class="field-note field-note--error">Area &quot;Bed&quot; has no area: its points lie on one line\.<\/p>/);
+  assert.equal(stale.element('#save-calibration').disabled, false);
+
+  // Without a token the copy flow is unchanged.
+  const plainPage = startHarness({ files: sourceFiles(), search: '?view=sources' });
+  await plainPage.api.start();
+  await plainPage.settle();
+  assert.match(plainPage.element('#inspector').innerHTML, /<li><b>Copy it for your agent<\/b>[\s\S]*id="copy-calibration"/);
+  assert.doesNotMatch(plainPage.element('#inspector').innerHTML, /save-calibration|Save it for your agent/);
+});
+
+test('Add image imports a dropped or chosen file, offers to replace an existing id, and opens the new image', async () => {
+  const replies = [];
+  const h = startHarness({ files: sourceFiles(), token: 'abc', search: '?view=sources&level=level-ground', post: async () => replies.shift() });
+  await h.api.start();
+  await h.settle();
+
+  h.element('#add-image').dispatch('click');
+  assert.equal(h.element('#add-image').attributes['aria-expanded'], 'true');
+  assert.match(h.element('#inspector').innerHTML, /<h2 id="upload-title">Add an image<\/h2>[\s\S]*No image chosen\.[\s\S]*id="upload-cancel">Cancel<\/button>/);
+  Object.assign(h.element('#upload-file'), { files: [{ name: 'plat.pdf', type: 'application/pdf', size: 1000 }] }).dispatch('change');
+  assert.match(h.element('#inspector').innerHTML, /<p id="upload-problem" class="field-note field-note--error">plat\.pdf is not a PNG, JPEG, or WebP image\. Export a PDF, HEIC, or TIFF as PNG or JPEG first, then add that file\.<\/p>/);
+  assert.equal(h.api.state.upload.file, null);
+  h.element('#upload-cancel').dispatch('click');
+  assert.equal(h.api.state.upload, null);
+  assert.equal(h.element('#add-image').attributes['aria-expanded'], 'false');
+  assert.match(h.element('#inspector').innerHTML, /<h2>survey-plat<\/h2>/);
+
+  // Dropping an image on the stage opens the form with it.
+  const file = { name: 'Site Plan.png', type: 'image/png', size: 2_400_000 };
+  const transfer = { types: ['Files'], files: [file], dropEffect: 'none' };
+  const wrap = h.element('.canvas-wrap');
+  wrap.dispatch('dragover', { dataTransfer: transfer });
+  assert.ok(wrap.classList.contains('is-drop-target'));
+  assert.equal(transfer.dropEffect, 'copy');
+  wrap.dispatch('drop', { dataTransfer: transfer });
+  assert.equal(wrap.classList.contains('is-drop-target'), false);
+  assert.equal(h.api.state.upload.file, file);
+  assert.match(h.element('#inspector').innerHTML, /<p class="upload-file" id="upload-chosen">Site Plan\.png, 2\.3 MB<\/p>/);
+  assert.equal(h.element('#upload-submit').disabled, true);
+  assert.equal(h.element('#upload-hint').textContent, 'Choose its type.');
+  Object.assign(h.element('#upload-kind'), { value: 'site-plan' }).dispatch('change');
+  assert.equal(h.element('#upload-submit').disabled, false);
+  Object.assign(h.element('#upload-id'), { value: ' Lot plan ' }).dispatch('input');
+
+  replies.push([409, { ok: false, error: 'A source with id "lot-plan" already exists.', code: 'exists', id: 'lot-plan' }]);
+  h.element('#upload-form').dispatch('submit');
+  assert.match(h.element('#inspector').innerHTML, /<p class="field-note" id="upload-status">Importing\.\.\.<\/p>/);
+  assert.equal(h.element('#upload-submit').disabled, true);
+  await tick();
+  assert.equal(h.posts.length, 1);
+  assert.equal(h.posts[0].url, '/__architecture-studio/sources?kind=site-plan&name=Site+Plan.png&id=Lot+plan');
+  assert.equal(h.posts[0].body, file);
+  assert.deepEqual(plain(h.posts[0].headers), { 'Content-Type': 'image/png', 'X-Architecture-Studio-Token': 'abc' });
+  assert.match(h.element('#inspector').innerHTML, /An image named lot-plan already exists\.<\/p><div class="calibrate-actions"><button type="button" class="tool" id="upload-replace">Replace it<\/button>/);
+
+  replies.push([200, { ok: true, source: { id: 'lot-plan', kind: 'site-plan', path: 'sources/lot-plan.png', pixels: { width: 400, height: 300 }, revision: 2, calibrationRevision: 3 }, messages: ['Replaced lot-plan.'], warnings: [] }]);
+  h.element('#upload-replace').dispatch('click');
+  await tick();
+  assert.equal(h.posts.length, 2);
+  assert.equal(h.posts[1].url, '/__architecture-studio/sources?kind=site-plan&name=Site+Plan.png&id=Lot+plan&replace=1');
+  assert.equal(h.element('#source-live').textContent, 'Imported lot-plan.');
+  assert.equal(h.urls.at(-1), '/?view=sources&level=level-ground&source=lot-plan', 'the reload lands on the new image, keeping the other parameters');
+  assert.equal(JSON.parse(h.session.get(FLASH_KEY)).text, 'Imported lot-plan.');
+  assert.ok(h.timers.some(timer => timer.ms === 1500));
+
+  // A server error shows its message.
+  const failing = startHarness({ files: sourceFiles(), token: 'abc', search: '?view=sources', post: async () => [400, { ok: false, error: 'PDF files are not supported: only PNG, JPEG, and WebP images can be imported.', code: 'invalid' }] });
+  await failing.api.start();
+  await failing.settle();
+  failing.element('.canvas-wrap').dispatch('drop', { dataTransfer: { types: ['Files'], files: [{ name: 'scan.png', type: 'image/png', size: 10 }] } });
+  Object.assign(failing.element('#upload-kind'), { value: 'survey' }).dispatch('change');
+  failing.element('#upload-form').dispatch('submit');
+  await tick();
+  assert.match(failing.element('#inspector').innerHTML, /<p id="upload-problem" class="field-note field-note--error">PDF files are not supported/);
+  assert.equal(failing.element('#upload-submit').disabled, false, 'it can be tried again');
 });

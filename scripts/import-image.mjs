@@ -30,8 +30,28 @@ const EXPORT_ADVICE = 'Export it to PNG or JPEG (a screenshot or "Save as" works
 const MIXED_SCALES_ADVICE = 'If the sheet mixes scales (an enlarged detail, a location map inset), crop each part into its own image and import each as a separate source.';
 const REGIONS_REMOVED = 'Scale regions were removed; crop each part of the sheet into its own image and import it separately.';
 
-export class CliError extends Error {}
-const fail = message => { throw new CliError(message); };
+// `code` sorts a refusal for callers other than the CLI (scripts/serve.mjs): "invalid" input, an
+// id or file that already "exists", or a "stale" calibration made on an older manifest entry.
+export class CliError extends Error {
+  constructor(message, { code = 'invalid', id } = {}) {
+    super(message);
+    this.code = code;
+    if (id !== undefined) this.id = id;
+  }
+}
+const fail = (message, details) => { throw new CliError(message, details); };
+
+// Collects the lines a command prints, and passes them on to `forward` (the CLI's output) if given.
+function collector(forward = null) {
+  const messages = [];
+  const warnings = [];
+  return {
+    messages,
+    warnings,
+    log: line => { messages.push(line); forward?.log(line); },
+    warn: line => { warnings.push(line); forward?.warn(line); }
+  };
+}
 
 const round = (value, digits) => {
   const factor = 10 ** digits;
@@ -732,33 +752,44 @@ function cmdAdd(args, out) {
   if (!input) fail('Give the image file: add <project> <file> --kind <kind>.');
   const file = path.resolve(String(input));
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) fail(`The image ${file} does not exist.`);
-  const bytes = fs.readFileSync(file);
+  addImage(root, { bytes: fs.readFileSync(file), name: path.basename(file), file, kind: text(args, 'kind'), id: text(args, 'id'), replace: Boolean(single(args, 'replace')), notes: text(args, 'notes') }, out);
+  return 0;
+}
+
+// Imports an image's bytes as a source: `add` from the CLI, and uploads through scripts/serve.mjs.
+// `name` is the original file name (its extension and, without `id`, the id come from it); `file` is
+// the original path when there is one. Returns { source, messages, warnings }; refusals throw CliError.
+export function addImage(projectDir, { bytes, name, file = null, kind: kindArg, id: idArg, replace = false, notes } = {}, forward = null) {
+  const out = collector(forward);
+  const root = projectRoot(projectDir);
+  if (!Buffer.isBuffer(bytes)) fail('Give the image bytes.');
+  const baseName = String(name ?? '').split(/[\\/]/).pop();
+  const extName = path.extname(baseName);
   const info = readImageInfo(bytes);
   const manifest = readManifest(root);
-  const id = text(args, 'id') ?? slugify(path.basename(file, path.extname(file)));
+  const id = idArg ?? slugify(path.basename(baseName, extName));
   if (!ID_PATTERN.test(id)) fail(`The id "${id}" must start with a letter and use only lowercase letters, digits, and hyphens.`);
-  const replace = Boolean(single(args, 'replace'));
   const existing = manifest.sources.find(item => item.id === id);
-  if (existing && !replace) fail(`A source with id "${id}" already exists. Pass --replace to import a new version of it, or choose another --id.`);
-  const kind = text(args, 'kind') ?? existing?.kind;
+  if (existing && !replace) fail(`A source with id "${id}" already exists. Pass --replace to import a new version of it, or choose another --id.`, { code: 'exists', id });
+  const kind = kindArg ?? existing?.kind;
   if (!kind) fail(`Give --kind, one of: ${KINDS.join(', ')}.`);
   if (!KINDS.includes(kind)) fail(`--kind must be one of ${KINDS.join(', ')}; got "${kind}".`);
-  const ext = EXTENSIONS[info.format].includes(path.extname(file).toLowerCase()) ? path.extname(file).toLowerCase() : EXTENSIONS[info.format][0];
+  const ext = EXTENSIONS[info.format].includes(extName.toLowerCase()) ? extName.toLowerCase() : EXTENSIONS[info.format][0];
   const relPath = `sources/${id}${ext}`;
   const dest = path.join(root, 'sources', `${id}${ext}`);
-  const samePath = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+  const samePath = (a, b) => Boolean(a && b) && (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
   const inPlace = samePath(file, dest);
   const taken = manifest.sources.find(item => item.id !== id && item.path === relPath);
   if (taken) fail(`${relPath} already belongs to source "${taken.id}". Choose another --id.`);
-  if (!inPlace && fs.existsSync(dest) && !replace && !existing) fail(`${relPath} already exists in the project. Choose another --id, or pass --replace to overwrite it.`);
+  if (!inPlace && fs.existsSync(dest) && !replace && !existing) fail(`${relPath} already exists in the project. Choose another --id, or pass --replace to overwrite it.`, { code: 'exists', id });
   const contentHash = hashBytes(bytes);
-  const notes = text(args, 'notes');
+  const write = () => fs.writeFileSync(dest, bytes);
 
   if (existing && existing.contentHash === contentHash && existing.path === relPath) {
     const restored = sourceStatus(root, existing).stale;
     if (restored) {
       fs.mkdirSync(path.dirname(dest), { recursive: true });
-      if (!inPlace) fs.copyFileSync(file, dest);
+      if (!inPlace) write();
     }
     existing.kind = kind;
     if (notes !== undefined) existing.notes = notes;
@@ -766,13 +797,13 @@ function cmdAdd(args, out) {
     const brief = registerInBrief(root, { originalPath: file, path: relPath, kind, sourceId: id });
     if (brief.warning) out.warn(`Warning: ${brief.warning}`);
     out.log(restored
-      ? `Restored ${relPath} from ${file}: it matches revision ${existing.revision}, so its calibrations and placement still apply.`
+      ? `Restored ${relPath} from ${file ?? baseName}: it matches revision ${existing.revision}, so its calibrations and placement still apply.`
       : `${id} is unchanged (same file); revision ${existing.revision} kept.`);
-    return 0;
+    return { source: existing, messages: out.messages, warnings: out.warnings };
   }
 
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  if (!inPlace) fs.copyFileSync(file, dest);
+  if (!inPlace) write();
   if (existing && existing.path !== relPath) {
     const old = sourceFile(root, existing);
     if (!samePath(old, file) && fs.existsSync(old)) fs.rmSync(old);
@@ -807,7 +838,7 @@ function cmdAdd(args, out) {
   if (brief.changed) out.log('Registered it in brief.json sources.');
   if (source.legacyCalibration) out.log(`brief.json had a calibration for it ("${source.legacyCalibration.description}", ${source.legacyCalibration.valueMm} mm) with no pixel points. Locate it on the image and record it with calibrate.`);
   if (kind === 'photo') out.log('Photos are context only: they are never calibrated or placed.');
-  return 0;
+  return { source, messages: out.messages, warnings: out.warnings };
 }
 
 function cmdCalibrate(args, out) {
@@ -1114,6 +1145,11 @@ export function parseCalibrationPayload(input) {
   } catch (error) {
     fail(`The pasted calibration is not valid JSON (${error.message}). Copy it again from the viewer and paste all of it unchanged.`);
   }
+  return checkCalibrationPayload(payload);
+}
+
+// Shape-checks a calibration payload object, as pasted (parseCalibrationPayload) or posted by the viewer.
+export function checkCalibrationPayload(payload) {
   if (payload?.type !== PAYLOAD_TYPE) fail(`The pasted text is not an Architecture Studio source calibration (type ${JSON.stringify(payload?.type)}).`);
   if (payload.version !== 1) fail(`Unsupported calibration version ${JSON.stringify(payload.version)}; update the skill or the project's viewer (init.mjs --update).`);
   const isPoint = p => p && Number.isFinite(p.x) && Number.isFinite(p.y);
@@ -1137,16 +1173,28 @@ async function cmdApply(args, out, io) {
     if (args._.length < 3 && !io.readStdinExplicit && process.stdin.isTTY) fail('Give the pasted text, --file <path>, or - to read it from stdin.');
     input = await io.readStdin();
   } else input = args._.slice(2).join(' ');
-  const payload = parseCalibrationPayload(input);
+  applyCalibration(root, parseCalibrationPayload(input), out);
+  return 0;
+}
+
+// Records a viewer calibration payload (scale line, reference points, labelled areas): `apply` from the
+// CLI, and Save calibration through scripts/serve.mjs. Returns { source, messages, warnings }; refusals
+// throw CliError, with code "stale" when the payload was made on another version of the manifest entry.
+export function applyCalibration(projectDir, payloadInput, forward = null) {
+  const out = collector(forward);
+  const root = projectRoot(projectDir);
+  const payload = checkCalibrationPayload(payloadInput);
   const manifest = readManifest(root);
-  const source = findSource(manifest, payload.sourceId);
   const redo = 'Reload the viewer, redo the calibration, and copy it again.';
-  if (payload.contentHash !== source.contentHash) fail(`The calibration was made on a different version of ${source.id} (its content hash differs from ${MANIFEST_PATH}). ${redo}`);
+  const stale = message => fail(message, { code: 'stale', id: payload.sourceId });
+  const source = manifest.sources.find(item => item.id === payload.sourceId);
+  if (!source) stale(`No source "${payload.sourceId}" in ${MANIFEST_PATH}. Known: ${manifest.sources.map(item => item.id).join(', ') || 'none'}. ${redo}`);
+  if (payload.contentHash !== source.contentHash) stale(`The calibration was made on a different version of ${source.id} (its content hash differs from ${MANIFEST_PATH}). ${redo}`);
   const status = sourceStatus(root, source);
-  if (status.stale) fail(`Source ${source.id} is stale: ${status.reason}. Re-import it with add --replace, then ${redo.toLowerCase()}`);
-  if (payload.pixels.width !== source.pixels.width || payload.pixels.height !== source.pixels.height) fail(`The calibration was made on a ${payload.pixels.width}x${payload.pixels.height} image, but ${source.id} is ${source.pixels.width}x${source.pixels.height}. ${redo}`);
-  if (payload.sourceRevision !== source.revision) fail(`The calibration was made on revision ${payload.sourceRevision} of ${source.id}; it is now revision ${source.revision}. ${redo}`);
-  if (payload.calibrationRevision !== source.calibrationRevision) fail(`The pasted calibration is stale: ${source.id}'s calibrations changed since the viewer loaded them (calibrationRevision ${payload.calibrationRevision}, now ${source.calibrationRevision}). ${redo}`);
+  if (status.stale) stale(`Source ${source.id} is stale: ${status.reason}. Re-import it with add --replace, then ${redo.toLowerCase()}`);
+  if (payload.pixels.width !== source.pixels.width || payload.pixels.height !== source.pixels.height) stale(`The calibration was made on a ${payload.pixels.width}x${payload.pixels.height} image, but ${source.id} is ${source.pixels.width}x${source.pixels.height}. ${redo}`);
+  if (payload.sourceRevision !== source.revision) stale(`The calibration was made on revision ${payload.sourceRevision} of ${source.id}; it is now revision ${source.revision}. ${redo}`);
+  if (payload.calibrationRevision !== source.calibrationRevision) stale(`The pasted calibration is stale: ${source.id}'s calibrations changed since the viewer loaded them (calibrationRevision ${payload.calibrationRevision}, now ${source.calibrationRevision}). ${redo}`);
   const references = (payload.references ?? []).map(ref => {
     const pixel = { x: round(ref.pixel.x, 2), y: round(ref.pixel.y, 2) };
     checkInImage(pixel, source.pixels, `Reference "${ref.label}"`);
@@ -1203,7 +1251,7 @@ async function cmdApply(args, out, io) {
     }).join(', ')}.`);
   }
   writeManifest(root, manifest);
-  return 0;
+  return { source, messages: out.messages, warnings: out.warnings };
 }
 
 const REFERENCE_PATTERN = /^source:([a-z][a-z0-9-]*)@(\d+)\.(\d+)$/;

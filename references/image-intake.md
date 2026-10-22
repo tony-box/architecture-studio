@@ -69,6 +69,12 @@ the scale bar or dimensions that belong to it.
    from it. A calibration recorded in an older `brief.json` arrives as
    `legacyCalibration`, without pixel points: find it on the image and record
    it as a real calibration (step 3).
+
+   The user can also add images themselves: in the studio served by
+   `scripts/serve.mjs`, the Sources tab's Add image (or dropping a file on
+   it) runs the same import. Such images are already in the manifest and in
+   `brief.json`; find them with `import-image.mjs list <project> --json`
+   instead of adding them again.
 2. **Read the image.** Look at the whole image. List what it carries: the
    title block and any stated scale, scale bars, the north arrow, dimension
    strings, bearings and distances, notes (basis of bearing, pitch, imagery
@@ -129,9 +135,18 @@ the scale bar or dimensions that belong to it.
    3. Optionally mark labelled points, such as house corners, for placing the
       image, and outline labelled areas, such as a garden bed or an existing
       shed, with the Area tool.
-   4. Press **Copy calibration** and paste the text back to me.
+   4. Press **Save calibration** and tell me when it is saved.
 
-   Pass the whole pasted text to `apply`, through stdin or a scratch file
+   Save calibration writes straight to `sources/sources.json` through the
+   server, with the same checks as `apply`. Read the result with
+   `import-image.mjs list <project> --json`; never assume the user copied
+   or pasted anything. When the user asks, or the session starts, check
+   `list` for a new manual calibration, labelled points, or areas.
+
+   Where the page cannot write (the single-file bundle, a plain static
+   server, a file opened from disk), the viewer offers **Copy calibration**
+   instead, and the user pastes the text back to you. Pass the whole pasted
+   text to `apply`, through stdin or a scratch file
    (outside `sources/`; delete it afterwards) rather than as an argument,
    because the JSON's quotes break shell quoting:
 
@@ -140,15 +155,17 @@ the scale bar or dimensions that belong to it.
    import-image.mjs apply <project> -
    ```
 
-   If `apply` rejects the paste as stale or mismatched, ask the user to reload
-   the viewer and calibrate again. A manual calibration replaces the estimated
+   If `apply`, or Save calibration in the viewer, rejects it as stale or
+   mismatched, ask the user to reload the viewer and calibrate again. A
+   manual calibration replaces the estimated
    ones, and measurements are no longer estimated. Never record
    `--method manual` yourself. A manual calibration is the user's deliberate
-   override of whatever the image shows: apply it and use it. When `apply`
-   notes that it differs from the estimate by more than 5%, tell the user in
-   one line (the two scales, and what the estimate makes their line) so a typo
-   can be caught, then carry on with the manual scale. Remove it with
-   `uncalibrate` only when the user says it was a mistake.
+   override of whatever the image shows: use it. When it differs from the
+   estimate by more than 5%, the viewer shows the user a note after Save
+   calibration; when `apply` prints that note, tell the user in one line (the
+   two scales, and what the estimate makes their line) so a typo can be
+   caught. Either way, carry on with the manual scale.
+   Remove it with `uncalibrate` only when the user says it was a mistake.
 5. **Set north** on every plan-type image (not elevations or photos):
 
    ```text
@@ -161,8 +178,8 @@ the scale bar or dimensions that belong to it.
 6. **Place it for the underlay** once a model exists. Satellite images,
    surveys, and site plans go on `--view site`; floor and framing plans on
    `--view <levelId>`. Mark points that exist in both the image and the model
-   (the user's labelled points from the viewer arrive through `apply`), then
-   pair them with model millimetres:
+   (the user's labelled points from the viewer arrive through Save calibration
+   or `apply`), then pair them with model millimetres:
 
    ```text
    import-image.mjs reference <project> <id> --label <text> --at x,y --seen WxH
@@ -199,7 +216,7 @@ the scale bar or dimensions that belong to it.
      `HANDOFF.md`.
 
    **Labelled areas.** Areas the user outlined in the viewer arrive through
-   `apply` and are context: they say what the user means by "the garden bed"
+   Save calibration or `apply` and are context: they say what the user means by "the garden bed"
    or "the existing shed". `list --json` gives each one's `areaMm2`,
    `perimeterMm`, and `relativeUncertainty`, computed from the current scale
    every time (`null` when no scale applies). To turn one into a boundary
@@ -392,5 +409,4 @@ the north-up assumption in `brief.json`, then tell the user:
 > (estimated from the 100 ft scale bar). That is the roof edge, so the walls
 > are shorter by the overhang. I assumed the image is north-up; when was it
 > taken? For a tighter figure, open the Sources tab in the viewer, click the
-> two ends of a distance you know, type it, press Copy calibration, and paste
-> the text to me.
+> two ends of a distance you know, type it, and press Save calibration.

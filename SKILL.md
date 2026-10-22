@@ -45,7 +45,12 @@ survey accurate, or professionally engineered.
    `references/image-intake.md`: estimate its scale from what is printed on
    it, report each estimate with its ± and method, and offer the viewer's
    manual calibration. The viewer (step 8) can start during intake for this;
-   its Sources tab works before a model exists.
+   its Sources tab works before a model exists. Served by `serve.mjs`, that
+   tab also lets the user add images and save calibrations (scale line,
+   labelled points, areas) straight to `sources/sources.json`; read them with
+   `node <skill>/scripts/import-image.mjs list <project> --json` rather than
+   asking the user to paste anything. `apply` remains for calibration text
+   pasted from a page that cannot write (a bundle, or a file opened offline).
 3. **Read the contracts.** Read `references/coordinate-contract.md`,
    `references/building.schema.json`, `references/model-validation.md`, and
    `references/drafting-standard.md` before authoring geometry, and
@@ -94,7 +99,9 @@ survey accurate, or professionally engineered.
    user, since the browser cannot open from remote or sandboxed sessions. The
    page reloads itself whenever the model, brief, sources, reviews, or
    exports change, so leave it running while you iterate. Start it once per
-   session.
+   session. Its Sources tab is the one place the page writes: the user can
+   add images and save calibrations there, which land in `sources/` (check
+   them with `import-image.mjs list <project> --json`).
 9. **Export the drawings.** Run
    `node <skill>/scripts/export-drawings.mjs --project <project>`. It renders
    every sheet with the same code as `index.html` and writes

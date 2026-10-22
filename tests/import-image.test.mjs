@@ -6,9 +6,10 @@ import path from 'node:path';
 import test from 'node:test';
 import { initProject } from '../scripts/init.mjs';
 import {
-  applyTransform, checkEvidenceReference, findDisagreement, fitPlacement, formatLength, measureUncertainty, parseCalibrationPayload,
+  addImage, applyCalibration, applyTransform, checkEvidenceReference, CliError, findDisagreement, fitPlacement, formatLength, measureUncertainty, parseCalibrationPayload,
   parseLength, parsePixel, parseSeen, readImageInfo, readManifest, registerInBrief, run, selectScale, sourceFile, USAGE
 } from '../scripts/import-image.mjs';
+import { png } from './helpers/images.mjs';
 
 const skillRoot = path.resolve(import.meta.dirname, '..');
 const fixture = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', 'lakeside-barn-residence', 'building.json'), 'utf8'));
@@ -65,31 +66,6 @@ function check(schema, node, value, at = '$', errors = []) {
 
 // ---------------------------------------------------------------- synthetic images
 
-const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
-  let c = n;
-  for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  return c >>> 0;
-});
-function crc32(buf) {
-  let c = 0xffffffff;
-  for (const byte of buf) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-function pngChunk(type, data) {
-  const length = Buffer.alloc(4);
-  length.writeUInt32BE(data.length);
-  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(body));
-  return Buffer.concat([length, body, crc]);
-}
-function png(width, height, salt = 'a') {
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr.set([8, 2, 0, 0, 0], 8);
-  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), pngChunk('IHDR', ihdr), pngChunk('tEXt', Buffer.from(`Comment\0${salt}`, 'latin1')), pngChunk('IEND', Buffer.alloc(0))]);
-}
 function jpeg(width, height, { orientation = null, littleEndian = true } = {}) {
   const parts = [Buffer.from([0xff, 0xd8])];
   if (orientation !== null) {
@@ -693,6 +669,41 @@ test('apply takes the viewer payload and refuses stale or mismatched ones', asyn
 
   assert.throws(() => parseCalibrationPayload('no json here'), /No calibration found/);
   assert.throws(() => parseCalibrationPayload('{"type":"architecture-studio/source-calibration","version":2}'), /version/);
+});
+
+test('addImage and applyCalibration do what add and apply do, from bytes and a payload object', async t => {
+  const cliProject = setup(t);
+  const pureProject = setup(t);
+  const bytes = png(1000, 800);
+  const viaCli = await ok('add', cliProject.dir, cliProject.image('Plan.PNG', bytes), '--kind', 'floor-plan');
+  const added = addImage(pureProject.dir, { bytes, name: 'C:\\Users\\someone\\Plan.PNG', kind: 'floor-plan' });
+  assert.deepEqual(added.messages, viaCli.out.split('\n'));
+  assert.deepEqual(added.warnings, []);
+  const strip = source => ({ ...source, importedAt: null });
+  assert.deepEqual(strip(added.source), strip(sourceOf(cliProject.dir, 'plan')));
+  assert.deepEqual(strip(sourceOf(pureProject.dir, 'plan')), strip(sourceOf(cliProject.dir, 'plan')));
+  assert.deepEqual(fs.readFileSync(path.join(pureProject.dir, 'sources', 'plan.png')), bytes, 'the name gives only the id and the extension');
+
+  const exists = (() => { try { addImage(pureProject.dir, { bytes, name: 'plan.png', kind: 'floor-plan' }); } catch (error) { return error; } })();
+  assert.ok(exists instanceof CliError);
+  assert.equal(exists.code, 'exists');
+  assert.equal(exists.id, 'plan');
+  assert.throws(() => addImage(pureProject.dir, { bytes: Buffer.from('%PDF-1.4'), name: 'plat.pdf', kind: 'survey' }), error => error.code === 'invalid' && /PDF files are not supported.*Export it to PNG or JPEG/.test(error.message));
+  assert.equal(addImage(pureProject.dir, { bytes: png(1000, 800, 'b'), name: 'plan.png', replace: true }).source.revision, 2);
+
+  const payload = JSON.parse(payloadFor(sourceOf(cliProject.dir, 'plan')).split('\n')[1]);
+  const appliedCli = await ok('apply', cliProject.dir, JSON.stringify(payload));
+  const fresh = setup(t);
+  addImage(fresh.dir, { bytes, name: 'plan.png', kind: 'floor-plan' });
+  const applied = applyCalibration(fresh.dir, payload);
+  assert.deepEqual(applied.messages, appliedCli.out.split('\n'));
+  assert.equal(applied.source.calibrations[0].method, 'manual');
+  assert.deepEqual(sourceOf(fresh.dir, 'plan').calibrations.map(cal => ({ ...cal, createdAt: null })), sourceOf(cliProject.dir, 'plan').calibrations.map(cal => ({ ...cal, createdAt: null })));
+  const stale = (() => { try { applyCalibration(fresh.dir, payload); } catch (error) { return error; } })();
+  assert.equal(stale.code, 'stale', 'the calibration revision moved on');
+  assert.match(stale.message, /stale/);
+  assert.throws(() => applyCalibration(fresh.dir, { ...payload, sourceId: 'gone' }), error => error.code === 'stale' && /No source "gone"/.test(error.message));
+  assert.throws(() => applyCalibration(fresh.dir, { ...payload, type: 'other' }), error => error.code === 'invalid');
 });
 
 test('apply records labelled areas; list measures them live and to-model converts them', async t => {

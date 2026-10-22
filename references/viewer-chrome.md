@@ -145,14 +145,17 @@ table".
   like the system toggles; the hidden set is kept in `?hide=`.
   3D model, Code review, and Assumptions sit together at the right edge behind a
   divider, because they are not drawing sheets. A Sources tab joins them, last,
-  when `sources/sources.json` lists images or cannot be read.
+  when `sources/sources.json` lists images or cannot be read, and always when
+  the page can write (below), so the first image can be added there.
 - **Toolbar**: one shared toolbar for every view; only the controls for the
   active view are shown. The view's sheet dropdown (Level, Face, or Section)
   comes first. Related buttons are fused into one segmented control (zoom,
   camera mode, system toggles) so each group reads as a single tool. The
   primary "Download drawing set" sits at the far right on the drawing views
   (Plans, Elevations, Sections, Systems, Site) only; the 3D model, Code
-  review, Assumptions, and Sources views do not show it.
+  review, Assumptions, and Sources views do not show it. On the Sources view
+  of a page that can write, "Add image" (a sheet-with-plus icon in the
+  drafting-symbol style) follows the Image select.
 - **Underlay**: on the Plans, Systems, and Site views, when a placed source
   image applies to the sheet, the toolbar adds an "Underlay" toggle
   (`aria-pressed`) and an Opacity slider (default 0.5). `?underlay=0` starts
@@ -167,7 +170,8 @@ table".
   verified, Placement out of date, Calibrations disagree). The calibration
   follows as three numbered steps, because the order matters: Mark a known
   distance (with the line's ends, length, and end accuracy once marked),
-  Type that distance, and Copy it for your agent. Below a hairline, "Named
+  Type that distance, and Save it for your agent (Copy it for your agent on a
+  page that cannot write). Below a hairline, "Named
   features" (with the count at the right) lists the draft's reference points
   and areas; the tools themselves live only in the toolbar. With marks, a
   note says they come from Reference point and Area in the toolbar and go to
@@ -201,18 +205,44 @@ table".
   (sq ft to 0.1 with a feet-inches perimeter, or m² to 0.01 with a metric
   one), with ±, from the draft's scale line when it has one and otherwise the
   image's active scale; without a scale it reads "Not measured: add a scale
-  line" and can still be copied. Photos take labelled areas but never a size.
+  line" and can still be saved or copied. Photos take labelled areas but never a size.
   The inspector lists the recorded areas with their current sizes. The
   draft draws in the accent, as the current selection. Under the distance, a
   note gives the resulting scale; when it is more than 5% off the image's
   automatic estimate, the note turns to the warning colour and says that the
   distance overrides the estimate and what the estimate makes the line. It
-  never blocks the copy: a manual calibration is a deliberate override.
-  "Copy calibration"
+  never blocks the save or copy: a manual calibration is a deliberate override.
+  On a page that can write, step 3 has "Save calibration" (primary) and
+  "Start over", under the line "Saves to sources/sources.json. Your agent
+  reads it from there." Saving shows "Saving...", clears the draft, and
+  reloads (live reload normally does it; otherwise the page reloads itself
+  after 1.5 s); after the reload a "Saved." line, with any note the server
+  returned (such as the manual override of an estimate), sits under the
+  image's heading until the next mark. A save refused as stale says "This
+  image changed since the page loaded. Reload and mark it again." with a
+  Reload button; any other refusal shows the server's message in the error
+  colour. Everywhere else, "Copy calibration"
   copies the text the agent applies; if the browser refuses, the text appears
   selected in a read-only box. A file whose hash or size no longer matches
   its import turns calibration off and says to re-import it. `?view=sources`
   and `?source=<id>` restore the place.
+- **Writing from the page**: `scripts/serve.mjs` puts a per-start write token
+  in the page it serves (`<meta name="architecture-studio-write">`). With it,
+  over http, the Sources view can add images and save calibrations; the
+  single-file bundle, the preview, a plain static server, and `file://` have
+  no token, so they hide Add image and keep "Copy calibration". "Add image",
+  or dropping an image file on the stage, opens "Add an image" in place of
+  the inspector panel: a dashed drop zone that is also the file picker
+  (PNG, JPEG, or WebP; a PDF, HEIC, or TIFF is refused before upload with the
+  advice to export it as PNG or JPEG), the chosen file's name and size, a
+  required Type select (Satellite, Survey, Site plan, Floor plan, Framing
+  plan, Elevation, Photo, Sketch, Other), an optional Name that becomes the
+  id, then "Import image" (primary, enabled once a file and a type are
+  chosen) and "Cancel" (or Escape). Importing shows "Importing..."; an id
+  that exists offers "Replace it"; on success the page reloads on the new
+  image and says "Imported <id>.". With no images yet, the Sources panel is
+  this form under the heading "Source images", without Cancel, and the
+  stage says to drop an image there.
 - **Source-only mode**: when the model is missing or invalid but source images
   exist, the tabs stay live. Every drawing and review view still shows its
   "Model unavailable" or "Resolve model errors" message, and the Sources view

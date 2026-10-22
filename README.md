@@ -90,17 +90,21 @@ Images help the agent get sizes and positions right. Useful ones:
 - photos of the site or an existing building.
 
 The agent imports each image into the project's `sources/` folder
-(`scripts/import-image.mjs`) and reads it. Numbers printed on a drawing are
-used exactly as written. For anything not dimensioned, the agent estimates the
-image's scale from what is printed on it (a scale bar, a dimension string, a
-stated scale on a scan whose resolution you confirm) and tells you the result
-with its uncertainty, for example "about 48 ft ± 2 ft, estimated from the
-scale bar".
+(`scripts/import-image.mjs`) and reads it. You can also add images yourself
+in the studio's **Sources** tab: drag an image onto it, or click **Add
+image**, choose what kind of image it is, and import it. Numbers printed on a
+drawing are used exactly as written. For anything not dimensioned, the agent
+estimates the image's scale from what is printed on it (a scale bar, a
+dimension string, a stated scale on a scan whose resolution you confirm) and
+tells you the result with its uncertainty, for example "about 48 ft ± 2 ft,
+estimated from the scale bar".
 
 To make it precise, calibrate the image yourself in the studio's **Sources**
 tab, which works before there is a model: click the two ends of a distance you
-know, type the distance, press **Copy calibration**, and paste the text to the
-agent. You can also mark labelled points, such as house corners, to help it
+know, type the distance, and press **Save calibration**. It is saved to the
+project, where the agent reads it. (A shared single-file bundle cannot save:
+there the button is **Copy calibration**, and you paste the text to the
+agent.) You can also mark labelled points, such as house corners, to help it
 place the image, and outline labelled areas, such as a garden bed, with the
 Area tool: the viewer shows each area's size from the image's scale. Each
 image has one scale. If a sheet mixes scales, such as a plan with an enlarged
@@ -152,7 +156,7 @@ All scripts live in `scripts/` and run with plain `node`.
 | Command | What it does |
 | --- | --- |
 | `node scripts/init.mjs <project>` | Create a project folder. `--update` replaces only the viewer with this skill's version. |
-| `node scripts/serve.mjs <project>` | Serve the project on `127.0.0.1` and open the default browser. Live reload is on by default. Options: `--port`, `--no-open`, `--no-watch`, `--json`. |
+| `node scripts/serve.mjs <project>` | Serve the project on `127.0.0.1` and open the default browser. Live reload is on by default. The Sources tab imports images and saves calibrations through it; nothing else is written. Options: `--port`, `--no-open`, `--no-watch`, `--json`. |
 | `node scripts/export-drawings.mjs --project <project>` | Validate the model and write `exports/**/*.svg` plus `exports/manifest.json`. Writes nothing while the model has errors. |
 | `node scripts/inspect.mjs --project <project> --id <id>` | Report one element as numbers (size, area, path width and radii, clearance to the building and the lot, its findings), so the agent can check a curve edit without looking at a drawing. For a door or window it lists the jamb and centre points anchors can use. Without `--id` it lists the elements. |
 | `node scripts/bundle.mjs <project>` | Write one self-contained HTML file to `exports/` for sharing. It opens with a double-click and needs no server. |
