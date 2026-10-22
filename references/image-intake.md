@@ -25,6 +25,12 @@ below abbreviate `node <skill>/scripts/import-image.mjs` to `import-image.mjs`.
   underlay.
 - **Known objects are not a scale** (cars, doors, parking stalls) unless the
   user accepts one as an assumption.
+- **The manifest, not the picture, holds the calibration.** Viewing an image
+  shows only its pixels; the user's calibration, north, placement, and
+  labelled points live in `sources/sources.json`. Whenever the user points to
+  an image ("use the survey"), and at the start of every resumed session, run
+  `import-image.mjs list <project> --json` first and work from what it
+  reports.
 - **Author clean geometry.** Measure the few distances and points you need and
   write straight, square, real-unit geometry from them; never copy a pixel
   outline.

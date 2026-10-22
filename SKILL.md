@@ -31,7 +31,12 @@ survey accurate, or professionally engineered.
    folder named after the project inside the current working directory. Run
    `node <skill>/scripts/init.mjs <project>`. Use one folder per building.
    If the folder is already a project, continue in it: read `brief.json` and
-   `models/building.json` before asking anything.
+   `models/building.json` before asking anything, and when
+   `sources/sources.json` exists run
+   `node <skill>/scripts/import-image.mjs list <project> --json` so you know
+   each image's scale, north, placement, and labelled points, including any
+   calibration the user applied since the last session. Never read scale or
+   positions from an image without its manifest entry.
 2. **Gather the brief.** Follow `references/intake.md`: ask in short rounds,
    write answers to `brief.json` (see `references/brief.schema.json`), and get
    the user's confirmation of the summary and every assumption. Do not model

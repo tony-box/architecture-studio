@@ -1267,9 +1267,12 @@ function cmdList(args, out) {
       id: source.id, path: source.path, kind: source.kind, format: source.format, pixels: source.pixels,
       revision: source.revision, calibrationRevision: source.calibrationRevision, reference: evidenceReference(source),
       stale: status.stale, reason: status.reason, north: source.north ?? null,
-      scales: groups.map(group => ({ region: group.region, mmPerPx: group.scale ? round(group.scale.mmPerPx, 6) : null, relativeUncertainty: group.scale ? round(group.scale.relativeUncertainty, 6) : null, calibrationIds: group.scale?.calibrationIds ?? [], disagreement: group.scale?.disagreement?.message ?? null })),
-      placement: source.placement ? { view: source.placement.view, pairs: source.placement.pairs.length, residualsMm: source.placement.residualsMm, stale: isPlacementStale(source, model) } : null,
-      references: source.references.map(ref => ref.label)
+      scales: groups.map(group => ({ region: group.region, mmPerPx: group.scale ? round(group.scale.mmPerPx, 6) : null, relativeUncertainty: group.scale ? round(group.scale.relativeUncertainty, 6) : null, calibrationIds: group.scale?.calibrationIds ?? [], methods: group.scale?.methods ?? [], estimated: group.scale?.estimated ?? null, disagreement: group.scale?.disagreement?.message ?? null })),
+      calibrations: source.calibrations.map(cal => ({ id: cal.id, method: cal.method, estimated: cal.estimated, provenance: cal.provenance, region: cal.region ?? null, ...(cal.acceptedByUser !== undefined ? { acceptedByUser: cal.acceptedByUser } : {}) })),
+      placement: source.placement ? { view: source.placement.view, pairs: source.placement.pairs, residualsMm: source.placement.residualsMm, stale: isPlacementStale(source, model) } : null,
+      references: source.references,
+      notes: source.notes ?? null,
+      legacyCalibration: source.legacyCalibration ?? null
     })), null, 2));
     return 0;
   }

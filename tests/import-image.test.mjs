@@ -364,6 +364,16 @@ test('placement: two pairs at a fixed scale, with north and trueNorthDeg set', a
   const result = await ok('to-model', dir, 'plan', '300,400', '1000,0', '--json');
   assert.deepEqual(JSON.parse(result.out).points.map(point => point.model), [{ x: 3000, y: 2000 }, { x: -1000, y: 9000 }]);
   assertValid(dir);
+
+  // list --json is how a later session learns everything the manifest knows about an image.
+  await ok('reference', dir, 'plan', '--label', 'Gate', '--at', '250,640');
+  const [listed] = JSON.parse((await ok('list', dir, '--json')).out);
+  assert.deepEqual(listed.scales[0].methods, ['printed-dimension']);
+  assert.equal(listed.scales[0].estimated, true);
+  assert.deepEqual(listed.calibrations.map(cal => [cal.id, cal.method, cal.provenance]), [['cal-1', 'printed-dimension', 'south wall']]);
+  assert.deepEqual(listed.north, { deg: 108, source: 'north-arrow' });
+  assert.equal(listed.placement.pairs[1].label, 'NE corner');
+  assert.deepEqual(listed.references, [{ label: 'Gate', pixel: { x: 250, y: 640 } }]);
 });
 
 test('placement: one pair and north', async t => {
