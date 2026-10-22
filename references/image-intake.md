@@ -47,6 +47,8 @@ PNG, JPEG, and WebP. Ask the user to export anything else first:
 - TIFF (scans): export to PNG.
 
 Never accept a crop that cuts off the scale bar or the dimensions you need.
+When a sheet is cropped into parts drawn at different scales, each part keeps
+the scale bar or dimensions that belong to it.
 
 ## Workflow
 
@@ -73,7 +75,10 @@ Never accept a crop that cuts off the scale bar or the dimensions you need.
    date), and any detail views, enlarged plans, or insets drawn at another
    scale. Write printed values down exactly as written. Note the pixel size of
    the copy you are looking at; it is the `--seen` size for every coordinate
-   you read from it.
+   you read from it. One image has one scale. If a sheet shows parts at
+   different scales (an enlarged detail, a location map), ask the user to crop
+   each part into its own PNG and import each separately; never calibrate
+   across them.
 3. **Estimate the scale.** Do it without asking, with the first method that
    applies. Record a second, independent calibration whenever the image has
    one.
@@ -86,7 +91,7 @@ Never accept a crop that cuts off the scale bar or the dimensions you need.
    | `map-metadata` | The user supplies the web map's zoom, latitude, tile size, and device pixel ratio (a map URL often has the first two), and the capture is unresized | `mm/px = 40075016686 × cos(latitude) / (tileSize × 2^zoom × devicePixelRatio)`. Otherwise use the map's scale bar. |
 
    ```text
-   import-image.mjs calibrate <project> <id> --method printed-dimension|scale-bar --from x,y --to x,y --distance <len> --seen WxH [--uncertainty-px n] [--region x0,y0,x1,y1[,label]] --provenance <text>
+   import-image.mjs calibrate <project> <id> --method printed-dimension|scale-bar --from x,y --to x,y --distance <len> --seen WxH [--uncertainty-px n] --provenance <text>
    import-image.mjs calibrate <project> <id> --method stated-scale|map-metadata --mm-per-px n --provenance <text> [--relative-uncertainty u]
    ```
 
@@ -97,12 +102,10 @@ Never accept a crop that cuts off the scale bar or the dimensions you need.
    - The two points must be at least 10 % of the image diagonal apart.
    - `--relative-uncertainty` defaults to 0.02; raise it when the user is
      unsure of the DPI or zoom.
-   - On a sheet that mixes scales, give each calibration the `--region` it
-     applies to (see Floor plan).
-   - Two calibrations in the same region (or both without one) that disagree
-     by more than 5 % disable measuring there. Tell the user which references
-     disagree, ask which is right (or whether the image was stretched), and
-     remove the wrong one with
+   - Two calibrations that disagree by more than 5 % disable measuring from
+     the image. Tell the user which references disagree, ask which is right
+     (or whether the image was stretched, or mixes scales and needs cropping
+     into one image per scale), and remove the wrong one with
      `import-image.mjs uncalibrate <project> <id> <calibration-id>`. Use
      `measure --force` only when the user chooses to go on regardless, and say
      so in the evidence note.
@@ -139,7 +142,7 @@ Never accept a crop that cuts off the scale bar or the dimensions you need.
 
    If `apply` rejects the paste as stale or mismatched, ask the user to reload
    the viewer and calibrate again. A manual calibration replaces the estimated
-   ones in its region, and measurements are no longer estimated. Never record
+   ones, and measurements are no longer estimated. Never record
    `--method manual` yourself. A manual calibration is the user's deliberate
    override of whatever the image shows: apply it and use it. When `apply`
    notes that it differs from the estimate by more than 5%, tell the user in
@@ -281,6 +284,10 @@ baseline `L`. Make `L` long and `ε` honest.
   draws but does not dimension are measured from it (lower confidence).
 - **Underlay.** Pair lot corners on the image with the corners computed from
   the courses. Large residuals mean a misread course or the wrong corner.
+- **Vicinity maps and details.** A plat's vicinity map and enlarged details
+  are drawn at other scales. If a sheet shows parts at different scales (an
+  enlarged detail, a location map), ask the user to crop each part into its
+  own PNG and import each separately; never calibrate across them.
 
 ### Site plan
 
@@ -305,9 +312,10 @@ baseline `L`. Make `L` long and `ε` honest.
 - **Openings.** Take sizes from the schedule or callouts (`3068` is 3'-0" by
   6'-8"), positions from printed dimensions, and only then from `measure`
   (to the opening's centre). Head heights not shown are assumptions.
-- **Regions.** Enlarged plans, details, and key-plan insets are drawn at other
-  scales. Calibrate each with its own `--region x0,y0,x1,y1,label`, and
-  measure only within one region.
+- **Mixed scales.** Enlarged plans, details, and key-plan insets are drawn at
+  other scales. If a sheet shows parts at different scales (an enlarged
+  detail, a location map), ask the user to crop each part into its own PNG and
+  import each separately; never calibrate across them.
 
 ### Framing, rafter, and truss plans
 

@@ -161,15 +161,16 @@ table".
 - **Sources view**: the inspector lists each image with its kind, revision,
   active scale with its uncertainty and method, and any flag (Stale, Missing,
   Not verified, Placement out of date, Calibrations disagree), followed by the
-  selected image's details and the Calibrate panel. The stage shows the image
-  at natural pixel size with the sheet's pan and zoom, a pixel readout in the
-  corner, and the recorded calibration lines, scale regions, labelled reference
-  points, and labelled areas on top, in ink. The toolbar holds the zoom group
-  ("Fit image") and the calibration tools Scale line, Scale region, Reference
-  point, and Area as pressed toggles. Scale region is described as "Only for
-  part of a sheet drawn at its own scale, such as a detail or inset. It needs
-  its own scale line." With a tool chosen, a click marks a point, a drag with
-  Scale region draws a rectangle, and Enter on the focused stage marks the
+  selected image's details and the Calibrate panel. An image has one scale:
+  the details show it under "Scale" as a single value. When its calibrations
+  disagree, the flag and the details suggest cropping each part of a
+  mixed-scale sheet into its own image and importing it separately. The stage
+  shows the image at natural pixel size with the sheet's pan and zoom, a pixel
+  readout in the corner, and the recorded calibration lines, labelled
+  reference points, and labelled areas on top, in ink. The toolbar holds the
+  zoom group ("Fit image") and the calibration tools Scale line, Reference
+  point, and Area as pressed toggles. With a tool chosen, a click marks a
+  point, and Enter on the focused stage marks the
   point under a centre crosshair, so every step works from the keyboard.
   Escape steps back. Area adds polygon corners: the outline previews in the
   accent, Backspace removes the last corner, Escape cancels it, and clicking

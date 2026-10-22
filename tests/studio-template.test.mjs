@@ -767,13 +767,10 @@ test('source scale follows the contract selection rules', () => {
   const knownIgnored = api.sourceScale(testSource([cal('cal-1', 'known-object', 20, 0.1, { acceptedByUser: true }), cal('cal-2', 'stated-scale', 10, 0.02)]));
   assert.deepEqual([knownIgnored.mmPerPx, knownIgnored.disagree], [10, false], 'known-object is the last resort and never compared');
 
-  const outer = { x0: 0, y0: 0, x1: 2000, y1: 2000, label: 'Plan' }, inner = { x0: 100, y0: 100, x1: 900, y1: 900, label: 'Detail' };
-  const regional = testSource([cal('cal-1', 'printed-dimension', 10, 0.01), cal('cal-2', 'manual', 2, 0.01, { region: outer }), cal('cal-3', 'scale-bar', 1, 0.01, { region: inner })]);
-  assert.equal(api.sourceScale(regional).mmPerPx, 10, 'whole-image calibrations by default');
-  assert.equal(api.sourceScale(regional, [{ x: 200, y: 200 }, { x: 800, y: 800 }]).mmPerPx, 1, 'the smallest region containing both points');
-  assert.equal(api.sourceScale(regional, [{ x: 200, y: 200 }, { x: 1500, y: 800 }]).region.label, 'Plan');
-  assert.equal(api.sourceScale(regional, [{ x: 200, y: 200 }, { x: 3500, y: 800 }]).mmPerPx, 10, 'points outside every region use the whole image');
-  assert.deepEqual(plain(api.sourceScaleGroups(regional).map(group => group.scale.mmPerPx)), [10, 2, 1]);
+  const withRegion = testSource([cal('cal-1', 'printed-dimension', 10, 0.01), cal('cal-2', 'scale-bar', 2, 0.01, { region: { x0: 100, y0: 100, x1: 900, y1: 900 } })]);
+  assert.equal(api.sourceScale(withRegion).disagree, true, 'one image has one scale: a stray region field isolates nothing');
+  assert.equal(api.sourceScale(withRegion).region, undefined);
+  assert.equal(api.sourceScaleGroups, undefined, 'scale groups were removed');
   assert.equal(api.sourceScale(testSource([cal('cal-1', 'manual', 10, 0.01)], { kind: 'photo' })), null, 'photos are never calibrated');
 });
 
@@ -786,7 +783,7 @@ test('the calibration payload is the exact text the apply command reads', () => 
   });
   assert.equal(text, 'Architecture Studio calibration for survey-plat. Paste this to your agent; it applies it with scripts/import-image.mjs apply.\n'
     + `{"type":"architecture-studio/source-calibration","version":1,"sourceId":"survey-plat","contentHash":"${HASH}","pixels":{"width":4000,"height":3000},"sourceRevision":2,"calibrationRevision":3,`
-    + `"calibration":{"from":{"x":100,"y":200.1},"to":{"x":3100.2,"y":200},"distanceMm":3810,"entered":"12'-6\\"","uncertaintyPx":0.5,"region":{"x0":10,"y0":20,"x1":3200,"y1":2900,"label":"Main plan"}},`
+    + `"calibration":{"from":{"x":100,"y":200.1},"to":{"x":3100.2,"y":200},"distanceMm":3810,"entered":"12'-6\\"","uncertaintyPx":0.5},`
     + '"references":[{"label":"NE house corner","pixel":{"x":12.3,"y":6.8}}]}');
   const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
   assert.equal(json.calibration.entered, `12'-6"`);
@@ -815,7 +812,7 @@ test('areas are measured from the scale and copied with labels', () => {
   assert.equal(api.areaSummary(scaled, measure, 'metric'), '6.00 m² ± 0.12 m², perimeter 10.00 m, estimated');
 
   // The draft's own scale line, 3000 px = 15 m (5 mm/px), takes precedence over the scale bar: 1.5 m².
-  const draft = (areas, extra = {}) => ({ from: { x: 0, y: 0 }, to: { x: 3000, y: 0 }, fromU: 0.5, toU: 0.5, distanceText: '15 m', region: null, regionLabel: '', references: [], areas, areaPoints: [], ...extra });
+  const draft = (areas, extra = {}) => ({ from: { x: 0, y: 0 }, to: { x: 3000, y: 0 }, fromU: 0.5, toU: 0.5, distanceText: '15 m', references: [], areas, areaPoints: [], ...extra });
   const size = { width: 4000, height: 3000 };
   const check = api.draftCheck(scaled, draft([{ label: 'Garden bed', points: rect }]), size);
   const fromLine = api.areaMeasure(scaled, rect, check.calibration);
@@ -823,9 +820,7 @@ test('areas are measured from the scale and copied with labels', () => {
   near(fromLine.relativeUncertainty, 2 * (2 * 0.5 / 3000), 1e-12, 'uncertainty of the draft line');
   assert.equal(fromLine.fromDraft, true);
   assert.equal(api.areaSummary(scaled, fromLine), `16.1 sq ft ± 0.0 sq ft, perimeter 16'-4 7/8"`);
-  // A draft line in a scale region does not measure an area outside it.
-  const detail = { x0: 0, y0: 0, x1: 3500, y1: 50 };
-  near(api.areaMeasure(scaled, rect, { ...check.calibration, region: detail }).areaMm2, 6e6, 1e-6, 'outside the draft region');
+  assert.deepEqual(Object.keys(check.calibration).sort(), ['distanceMm', 'entered', 'from', 'to', 'uncertaintyPx'], 'the draft line applies to the whole image');
 
   // Without a scale the area is not measured but can still be labelled and copied.
   const bare = testSource();
@@ -857,7 +852,7 @@ test('areas are measured from the scale and copied with labels', () => {
 test('a manual distance that disagrees with the estimate warns before copying', () => {
   const { api } = loadStudio();
   const source = testSource([cal('cal-1', 'scale-bar', 10, 0.01)]);
-  const draft = text => ({ from: { x: 0, y: 0 }, to: { x: 3000, y: 0 }, fromU: 0.5, toU: 0.5, distanceText: text, region: null, regionLabel: '', references: [] });
+  const draft = text => ({ from: { x: 0, y: 0 }, to: { x: 3000, y: 0 }, fromU: 0.5, toU: 0.5, distanceText: text, references: [] });
   const size = { width: 4000, height: 3000 };
   assert.equal(api.draftCheck(source, draft('30 m'), size).distanceWarning, '', 'agreeing with the scale bar');
   const wrong = api.draftCheck(source, draft('20 m'), size);
@@ -961,7 +956,7 @@ function startHarness({ files, search = '' }) {
   const tabs = [...html.matchAll(/<button class="tab" role="tab" id="(tab-[a-z]+)" data-view="([a-z]+)"[^>]*?( hidden)?>/g)].map(([, id, view, hidden]) => {
     const tab = element(`#${id}`); Object.assign(tab, { id, dataset: { view }, hidden: Boolean(hidden) }); return tab;
   });
-  const tools = ['line', 'region', 'point', 'area'].map(tool => Object.assign(element(`tool-${tool}`), { dataset: { tool } }));
+  const tools = [...html.matchAll(/data-tool="([a-z]+)"/g)].map(([, tool]) => Object.assign(element(`tool-${tool}`), { dataset: { tool } }));
   const clipboard = [];
   const response = (body, status = 200) => ({ ok: status === 200, status, json: async () => JSON.parse(body), arrayBuffer: async () => new Uint8Array(body).buffer });
   let api;
@@ -1064,6 +1059,20 @@ test('the Area tool outlines, closes, and copies a labelled area', async () => {
   const payload = JSON.parse(clipboard.at(-1).slice(clipboard.at(-1).indexOf('{')));
   assert.equal(payload.calibration, undefined);
   assert.deepEqual(payload.areas, [{ label: 'Garden bed', points: [{ x: 50, y: 50 }, { x: 350, y: 50 }, { x: 350, y: 250 }, { x: 50, y: 250 }] }]);
+});
+
+test('an image has one scale: no scale region tool, and a disagreement suggests cropping', async () => {
+  assert.deepEqual([...html.matchAll(/data-tool="([a-z]+)"/g)].map(([, tool]) => tool), ['line', 'point', 'area']);
+  assert.doesNotMatch(html, /Scale region|Whole image/);
+  const files = { './sources/sources.json': sourcesJson({ calibrations: [cal('cal-1', 'printed-dimension', 10, 0.01), cal('cal-2', 'scale-bar', 2, 0.01)] }), './sources/survey-plat.png': imageBytes };
+  const { api, element, settle } = startHarness({ files, search: '?view=sources' });
+  await api.start();
+  await settle();
+  const inspector = element('#inspector').innerHTML;
+  assert.match(inspector, /<h4 class="entity-subhead">Scale<\/h4><p class="entity-context">10 mm\/px ± 1%, printed dimension, estimated <b>\(disagree\)<\/b><\/p>/);
+  assert.match(inspector, /Calibrations disagree<\/b>: resolve them, or crop each part of a mixed-scale sheet into its own image/);
+  assert.match(inspector, /If the sheet mixes scales, such as an enlarged detail or a location map, crop each part into its own image and import it separately\./);
+  assert.match(api.state.sourceFindings.map(item => item.message).join('\n'), /crop each part into its own image and import it separately/);
 });
 
 test('start keeps the old blocked page when there are no sources, and flags stale files', async () => {

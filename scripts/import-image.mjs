@@ -27,6 +27,8 @@ export const PAYLOAD_TYPE = 'architecture-studio/source-calibration';
 const ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 const EXTENSIONS = { png: ['.png'], jpeg: ['.jpg', '.jpeg'], webp: ['.webp'] };
 const EXPORT_ADVICE = 'Export it to PNG or JPEG (a screenshot or "Save as" works) and import that file.';
+const MIXED_SCALES_ADVICE = 'If the sheet mixes scales (an enlarged detail, a location map inset), crop each part into its own image and import each as a separate source.';
+const REGIONS_REMOVED = 'Scale regions were removed; crop each part of the sheet into its own image and import it separately.';
 
 export class CliError extends Error {}
 const fail = message => { throw new CliError(message); };
@@ -220,20 +222,6 @@ export function parsePixel(text, source, seen = null, label = 'The point') {
   return { x: round(point.x, 2), y: round(point.y, 2) };
 }
 
-export function parseRegion(text, pixels, seen = null) {
-  const parts = String(text).split(',');
-  const numbers = parts.slice(0, 4).map(item => Number(item.trim()));
-  if (parts.length < 4 || parts.slice(0, 4).some(item => item.trim() === '') || numbers.some(item => !Number.isFinite(item))) fail(`--region needs x0,y0,x1,y1[,label], got ${JSON.stringify(text)}.`);
-  const a = scalePoint({ x: numbers[0], y: numbers[1] }, seen, pixels);
-  const b = scalePoint({ x: numbers[2], y: numbers[3] }, seen, pixels);
-  checkInImage(a, pixels, 'The region corner');
-  checkInImage(b, pixels, 'The region corner');
-  const region = { x0: round(Math.min(a.x, b.x), 2), y0: round(Math.min(a.y, b.y), 2), x1: round(Math.max(a.x, b.x), 2), y1: round(Math.max(a.y, b.y), 2) };
-  if (region.x1 - region.x0 <= 0 || region.y1 - region.y0 <= 0) fail('--region must have a width and a height.');
-  const label = parts.slice(4).join(',').trim();
-  return label ? { label, ...region } : region;
-}
-
 function parseBool(value, name, fallback) {
   if (value === undefined) return fallback;
   if (value === true || value === 'true' || value === 'yes') return true;
@@ -267,30 +255,6 @@ export function checkSeparation(a, b, pixels, what = 'The two points') {
   if (span < min) fail(`${what} are ${round(span, 1)} px apart; they must be at least ${round(min, 1)} px apart (10% of the image diagonal). Use points farther apart, such as the two ends of a long dimension.`);
 }
 
-const regionKey = region => (region ? `${region.x0},${region.y0},${region.x1},${region.y1}` : '');
-const regionContains = (region, point) => point.x >= region.x0 && point.x <= region.x1 && point.y >= region.y0 && point.y <= region.y1;
-const regionName = region => (region ? `region ${region.label ? `"${region.label}" ` : ''}(${region.x0},${region.y0})-(${region.x1},${region.y1})` : 'whole image');
-
-// The calibrations that apply to a set of points: the smallest region containing all of them,
-// otherwise the calibrations without a region.
-export function calibrationGroup(source, points) {
-  const regions = new Map();
-  for (const cal of source.calibrations) if (cal.region) regions.set(regionKey(cal.region), cal.region);
-  const containing = [...regions.values()]
-    .filter(region => points.every(point => regionContains(region, point)))
-    .sort((a, b) => (a.x1 - a.x0) * (a.y1 - a.y0) - (b.x1 - b.x0) * (b.y1 - b.y0));
-  const region = containing[0] ?? null;
-  const key = regionKey(region);
-  return { region, calibrations: source.calibrations.filter(cal => regionKey(cal.region) === key) };
-}
-
-export function allGroups(source) {
-  const keys = new Map([['', null]]);
-  for (const cal of source.calibrations) if (cal.region) keys.set(regionKey(cal.region), cal.region);
-  return [...keys.entries()].map(([key, region]) => ({ region, calibrations: source.calibrations.filter(cal => regionKey(cal.region) === key) }))
-    .filter(group => group.region === null || group.calibrations.length);
-}
-
 function lineAngle(cal) {
   return Math.atan2(cal.to.y - cal.from.y, cal.to.x - cal.from.x);
 }
@@ -315,12 +279,12 @@ export function findDisagreement(calibrations) {
     }
   }
   const percent = round((ratio - 1) * 100, 1);
-  let message = `${max.id} (${round(max.mmPerPx, 4)} mm/px) and ${min.id} (${round(min.mmPerPx, 4)} mm/px) disagree by ${percent}%, more than 5%. Measuring with this scale is disabled until one is corrected or removed (uncalibrate).`;
-  if (perpendicular) message += ` ${perpendicular[0]} and ${perpendicular[1]} run nearly perpendicular, which points to uneven horizontal and vertical scaling (a stretched scan or photo): re-scan or re-export the image flat, or calibrate each direction in its own region.`;
+  let message = `${max.id} (${round(max.mmPerPx, 4)} mm/px) and ${min.id} (${round(min.mmPerPx, 4)} mm/px) disagree by ${percent}%, more than 5%. Measuring with this scale is disabled until one is corrected or removed (uncalibrate). ${MIXED_SCALES_ADVICE}`;
+  if (perpendicular) message += ` ${perpendicular[0]} and ${perpendicular[1]} run nearly perpendicular, which points to uneven horizontal and vertical scaling (a stretched scan or photo): re-scan or re-export the image flat.`;
   return { minId: min.id, maxId: max.id, ratio: round(ratio, 4), perpendicular, message };
 }
 
-// The active scale of a calibration group, per the contract's selection order.
+// The active scale of a list of calibrations, per the contract's selection order.
 export function selectScale(calibrations) {
   const precise = calibrations.filter(cal => PRECISE_METHODS.includes(cal.method));
   let chosen;
@@ -352,16 +316,14 @@ export function selectScale(calibrations) {
   };
 }
 
-export function scaleFor(source, points) {
-  const group = calibrationGroup(source, points);
-  return { ...group, scale: selectScale(group.calibrations) };
-}
+// One image has one scale.
+export const scaleOf = source => selectScale(source.calibrations);
 
-// A precise calibration overrides the automatic estimates in its group on purpose. Reporting the
-// difference keeps a mistyped distance visible. Returns it when they differ by more than 5%.
+// A precise calibration overrides the automatic estimates on purpose. Reporting the difference
+// keeps a mistyped distance visible. Returns it when they differ by more than 5%.
 export function estimateConflict(calibrations, cal) {
   if (!PRECISE_METHODS.includes(cal.method)) return null;
-  const estimate = selectScale(calibrations.filter(item => item !== cal && !PRECISE_METHODS.includes(item.method) && regionKey(item.region) === regionKey(cal.region)));
+  const estimate = selectScale(calibrations.filter(item => item !== cal && !PRECISE_METHODS.includes(item.method)));
   if (!estimate) return null;
   const ratio = Math.max(cal.mmPerPx, estimate.mmPerPx) / Math.min(cal.mmPerPx, estimate.mmPerPx);
   if (ratio <= DISAGREEMENT_RATIO) return null;
@@ -386,12 +348,11 @@ export function formatArea(mm2, units) {
   return units === 'metric' ? `${(mm2 / 1e6).toFixed(2)} m²` : `${(mm2 / 304.8 ** 2).toFixed(1)} sq ft`;
 }
 
-// An area's size from the active scale of the group containing all its points: pixel area × mmPerPx²,
-// with twice the scale's relative uncertainty. null fields when no scale applies or the group disagrees.
+// An area's size from the source's active scale: pixel area × mmPerPx², with twice the scale's
+// relative uncertainty. null fields when no scale applies or its calibrations disagree.
 export function measureArea(source, area, units = 'feet-inches') {
-  const group = source.kind === 'photo' ? { region: null, scale: null } : scaleFor(source, area.points);
-  const out = { label: area.label, points: area.points, region: group.region ?? null };
-  const { scale } = group;
+  const scale = source.kind === 'photo' ? null : scaleOf(source);
+  const out = { label: area.label, points: area.points };
   const note = source.kind === 'photo' ? 'photos have no scale' : !scale ? 'no scale applies' : scale.disagreement ? 'its calibrations disagree' : null;
   if (note) return { ...out, areaMm2: null, areaDisplay: null, areaUncertaintyDisplay: null, perimeterMm: null, perimeterDisplay: null, relativeUncertainty: null, calibrationIds: scale?.calibrationIds ?? [], methods: scale?.methods ?? [], estimated: scale?.estimated ?? null, notMeasured: note };
   const areaMm2 = polygonPixelArea(area.points) * scale.mmPerPx ** 2;
@@ -666,15 +627,9 @@ export function slugify(name) {
 const pct = value => `${round(value * 100, 2)}%`;
 const mmPx = value => `${round(value, 4)} mm/px`;
 
-function describeScale(group) {
-  const where = regionName(group.region);
-  const { scale } = group;
-  if (!scale) return `${where}: no active scale${group.calibrations.length ? ` (${group.calibrations.map(cal => `${cal.id} ${cal.method}${cal.method === 'known-object' && !cal.acceptedByUser ? ' not accepted' : ''}`).join(', ')})` : ''}`;
-  return `${where}: ${mmPx(scale.mmPerPx)} ± ${pct(scale.relativeUncertainty)} from ${scale.calibrationIds.join(', ')} (${scale.methods.join(', ')}${scale.estimated ? ', estimated' : ''})`;
-}
-
-function groupsWithScale(source) {
-  return allGroups(source).map(group => ({ ...group, scale: selectScale(group.calibrations) }));
+function describeScale(source, scale) {
+  if (!scale) return `no active scale${source.calibrations.length ? ` (${source.calibrations.map(cal => `${cal.id} ${cal.method}${cal.method === 'known-object' && !cal.acceptedByUser ? ' not accepted' : ''}`).join(', ')})` : ''}`;
+  return `${mmPx(scale.mmPerPx)} ± ${pct(scale.relativeUncertainty)} from ${scale.calibrationIds.join(', ')} (${scale.methods.join(', ')}${scale.estimated ? ', estimated' : ''})`;
 }
 
 // Recomputes the placement from its stored pairs after a calibration or north change. bumped says
@@ -682,12 +637,12 @@ function groupsWithScale(source) {
 function recomputePlacement(root, source, out, { bumped = true } = {}) {
   const placement = source.placement;
   if (!placement) return;
-  const { scale } = scaleFor(source, placement.pairs.map(pair => pair.pixel));
+  const scale = scaleOf(source);
   const drop = reason => {
     delete source.placement;
     out.warn(`The placement on ${placement.view} was removed: ${reason}. Run place again.`);
   };
-  if (!scale) return drop('no calibration covers its pairs any more');
+  if (!scale) return drop('no calibration is left to scale it');
   let trueNorthDeg = 0;
   if (placement.pairs.length === 1 || source.north) {
     const model = (() => { try { return readModel(root); } catch { return null; } })();
@@ -729,17 +684,12 @@ function commitPlacement(source, placement, { previous = source.placement, bumpe
   source.placement = placement;
 }
 
-// focus: the calibration just added, whose group is reported; null reports every group.
-function calibrationChanged(root, source, out, focusCalibration) {
+function calibrationChanged(root, source, out) {
   source.calibrationRevision += 1;
   recomputePlacement(root, source, out);
-  const groups = groupsWithScale(source);
-  const focus = focusCalibration ? regionKey(focusCalibration.region) : null;
-  for (const group of groups) {
-    if (focus !== null && regionKey(group.region) !== focus) continue;
-    out.log(`Active scale, ${describeScale(group)}`);
-    if (group.scale?.disagreement) out.warn(`Warning: ${group.scale.disagreement.message}`);
-  }
+  const scale = scaleOf(source);
+  out.log(`Active scale: ${describeScale(source, scale)}`);
+  if (scale?.disagreement) out.warn(`Warning: ${scale.disagreement.message}`);
   out.log(`Evidence reference: ${evidenceReference(source)}`);
 }
 
@@ -752,9 +702,8 @@ function refuseCalibratingPhoto(source) {
   if (source.kind === 'photo') fail(`${source.id} is a photo. Photos are never calibrated: perspective is not a uniform scale. Use it for context, or import a measured drawing or survey instead.`);
 }
 
-function twoPointCalibration(source, { method, from, to, distanceMm, uncertaintyPx, estimated, provenance, region, accepted }) {
+function twoPointCalibration(source, { method, from, to, distanceMm, uncertaintyPx, estimated, provenance, accepted }) {
   checkSeparation(from, to, source.pixels, 'The calibration points');
-  if (region && !(regionContains(region, from) && regionContains(region, to))) fail(`Both calibration points must lie inside ${regionName(region)}.`);
   const baselinePx = distance(from, to);
   const cal = {
     id: nextCalibrationId(source),
@@ -769,7 +718,6 @@ function twoPointCalibration(source, { method, from, to, distanceMm, uncertainty
     relativeUncertainty: round(2 * uncertaintyPx / baselinePx, 6),
     provenance
   };
-  if (region) cal.region = region;
   if (method === 'known-object') cal.acceptedByUser = Boolean(accepted);
   cal.sourceRevision = source.revision;
   cal.createdAt = now();
@@ -864,6 +812,7 @@ function cmdAdd(args, out) {
 
 function cmdCalibrate(args, out) {
   const root = projectRoot(args._[1]);
+  if (args.region !== undefined) fail(`--region is not an option. ${REGIONS_REMOVED}`);
   const manifest = readManifest(root);
   const source = findSource(manifest, args._[2]);
   requireFresh(root, source);
@@ -872,7 +821,6 @@ function cmdCalibrate(args, out) {
   const provenance = text(args, 'provenance', { required: true }).trim();
   if (!provenance) fail('--provenance must say where the distance came from.');
   const seen = parseSeen(single(args, 'seen'), source.pixels);
-  const region = args.region !== undefined ? parseRegion(single(args, 'region'), source.pixels, seen) : null;
   let cal;
   if (SCALE_ONLY_METHODS.includes(method)) {
     if (args.from !== undefined || args.to !== undefined) fail(`${method} takes --mm-per-px, not --from and --to.`);
@@ -884,7 +832,6 @@ function cmdCalibrate(args, out) {
       relativeUncertainty: args['relative-uncertainty'] !== undefined ? parseNumber(single(args, 'relative-uncertainty'), 'relative-uncertainty', { min: 0 }) : 0.02,
       provenance
     };
-    if (region) cal.region = region;
     cal.sourceRevision = source.revision;
     cal.createdAt = now();
   } else if (TWO_POINT_METHODS.includes(method)) {
@@ -900,7 +847,6 @@ function cmdCalibrate(args, out) {
       uncertaintyPx: args['uncertainty-px'] !== undefined ? parseNumber(single(args, 'uncertainty-px'), 'uncertainty-px', { min: 0 }) : (estimated ? 3 : 1),
       estimated,
       provenance,
-      region,
       accepted
     });
   } else if (method === 'control-points') {
@@ -908,13 +854,13 @@ function cmdCalibrate(args, out) {
   } else {
     fail(`--method must be one of ${[...TWO_POINT_METHODS, ...SCALE_ONLY_METHODS].join(', ')}; got "${method}".`);
   }
-  const superseded = cal.method === 'known-object' && source.calibrations.find(item => item.method === 'known-object' && item.acceptedByUser && regionKey(item.region) === regionKey(cal.region));
+  const superseded = cal.method === 'known-object' && source.calibrations.find(item => item.method === 'known-object' && item.acceptedByUser);
   source.calibrations.push(cal);
-  out.log(`Added ${cal.id} (${cal.method}${cal.estimated ? ', estimated' : ''}): ${mmPx(cal.mmPerPx)} ± ${pct(cal.relativeUncertainty)}${cal.region ? ` in ${regionName(cal.region)}` : ''}.`);
+  out.log(`Added ${cal.id} (${cal.method}${cal.estimated ? ', estimated' : ''}): ${mmPx(cal.mmPerPx)} ± ${pct(cal.relativeUncertainty)}.`);
   if (superseded) out.warn(`Only one accepted known-object counts: ${cal.id} supersedes ${superseded.id}. Remove ${superseded.id} with uncalibrate if it is wrong.`);
   const conflict = estimateConflict(source.calibrations, cal);
   if (conflict) out.warn(`Note: ${conflict.message}`);
-  calibrationChanged(root, source, out, cal);
+  calibrationChanged(root, source, out);
   writeManifest(root, manifest);
   return 0;
 }
@@ -929,7 +875,7 @@ function cmdUncalibrate(args, out) {
   if (index === -1) fail(`${source.id} has no calibration "${calId}". It has: ${source.calibrations.map(cal => cal.id).join(', ') || 'none'}.`);
   const [removed] = source.calibrations.splice(index, 1);
   out.log(`Removed ${removed.id} (${removed.method}).`);
-  calibrationChanged(root, source, out, null);
+  calibrationChanged(root, source, out);
   writeManifest(root, manifest);
   return 0;
 }
@@ -1010,16 +956,16 @@ function cmdPlace(args, out) {
     }
   }
   const trueNorthDeg = model.project?.coordinates?.trueNorthDeg ?? 0;
-  const group = scaleFor(source, pairs.map(pair => pair.pixel));
+  const scale = scaleOf(source);
   const force = Boolean(single(args, 'force'));
   let fit;
   let bumped = false;
-  if (group.scale) {
-    if (group.scale.disagreement && !force) fail(`${group.scale.disagreement.message} Pass --force to place with the mean scale anyway.`);
-    fit = fitPlacement({ pairs, mmPerPx: group.scale.mmPerPx, northDeg: source.north?.deg ?? null, trueNorthDeg });
-    out.log(`Placed ${source.id} on ${view} at the calibrated scale, ${describeScale(group)}.`);
+  if (scale) {
+    if (scale.disagreement && !force) fail(`${scale.disagreement.message} Pass --force to place with the mean scale anyway.`);
+    fit = fitPlacement({ pairs, mmPerPx: scale.mmPerPx, northDeg: source.north?.deg ?? null, trueNorthDeg });
+    out.log(`Placed ${source.id} on ${view} at the calibrated scale: ${describeScale(source, scale)}.`);
   } else {
-    if (pairs.length < 2) fail(`${source.id} has no calibration for these points (${regionName(group.region)}). Calibrate it, or give two or more --pair points to fit the scale.`);
+    if (pairs.length < 2) fail(`${source.id} has no calibration. Calibrate it, or give two or more --pair points to fit the scale.`);
     fit = fitPlacement({ pairs, northDeg: source.north?.deg ?? null, trueNorthDeg });
     let from = 0;
     let to = 1;
@@ -1040,13 +986,12 @@ function cmdPlace(args, out) {
       relativeUncertainty: round(2 * uncertaintyPx / baselinePx, 6),
       provenance: `fitted to ${pairs.length} image-to-model pairs${pairs.some(pair => pair.label) ? ` (${pairs.map((pair, i) => pair.label ?? `#${i + 1}`).join(', ')})` : ''} on ${view}`
     };
-    if (group.region) cal.region = group.region;
     cal.sourceRevision = source.revision;
     cal.createdAt = now();
     source.calibrations.push(cal);
     source.calibrationRevision += 1;
     bumped = true;
-    out.log(`${source.id} had no calibration for these points, so the pairs fixed the scale: added ${cal.id} (control-points) ${mmPx(cal.mmPerPx)} ± ${pct(cal.relativeUncertainty)}.`);
+    out.log(`${source.id} had no calibration, so the pairs fixed the scale: added ${cal.id} (control-points) ${mmPx(cal.mmPerPx)} ± ${pct(cal.relativeUncertainty)}.`);
     fit = fitPlacement({ pairs, mmPerPx: cal.mmPerPx, northDeg: source.north?.deg ?? null, trueNorthDeg });
   }
   const previous = source.placement;
@@ -1084,14 +1029,14 @@ function cmdMeasure(args, out) {
   const to = parsePixel(text(args, 'to', { required: true }), source, seen, '--to');
   const lengthPx = distance(from, to);
   if (lengthPx === 0) fail('--from and --to are the same point.');
-  const group = scaleFor(source, [from, to]);
-  if (!group.scale) fail(`${source.id} has no active scale for these points (${regionName(group.region)}). Calibrate it first${source.legacyCalibration ? `; brief.json noted "${source.legacyCalibration.description}"` : ''}.`);
-  if (group.scale.disagreement && !single(args, 'force')) fail(`${group.scale.disagreement.message} Pass --force to measure with the mean scale anyway.`);
+  const scale = scaleOf(source);
+  if (!scale) fail(`${source.id} has no active scale. Calibrate it first${source.legacyCalibration ? `; brief.json noted "${source.legacyCalibration.description}"` : ''}.`);
+  if (scale.disagreement && !single(args, 'force')) fail(`${scale.disagreement.message} Pass --force to measure with the mean scale anyway.`);
   const endpointPx = args['uncertainty-px'] !== undefined ? parseNumber(single(args, 'uncertainty-px'), 'uncertainty-px', { min: 0 }) : 3;
-  const mm = lengthPx * group.scale.mmPerPx;
-  const relativeUncertainty = measureUncertainty(group.scale.relativeUncertainty, endpointPx, lengthPx);
+  const mm = lengthPx * scale.mmPerPx;
+  const relativeUncertainty = measureUncertainty(scale.relativeUncertainty, endpointPx, lengthPx);
   const units = displayUnits(root);
-  const evidence = evidenceConfidence(group.scale, relativeUncertainty);
+  const evidence = evidenceConfidence(scale, relativeUncertainty);
   const result = {
     sourceId: source.id,
     from,
@@ -1102,13 +1047,12 @@ function cmdMeasure(args, out) {
     relativeUncertainty: round(relativeUncertainty, 4),
     display: formatLength(mm, units),
     displayUncertainty: formatLength(mm * relativeUncertainty, units),
-    mmPerPx: round(group.scale.mmPerPx, 6),
-    scaleRelativeUncertainty: round(group.scale.relativeUncertainty, 6),
-    region: group.region ?? null,
-    calibrationIds: group.scale.calibrationIds,
-    methods: group.scale.methods,
-    estimated: group.scale.estimated,
-    forced: Boolean(group.scale.disagreement),
+    mmPerPx: round(scale.mmPerPx, 6),
+    scaleRelativeUncertainty: round(scale.relativeUncertainty, 6),
+    calibrationIds: scale.calibrationIds,
+    methods: scale.methods,
+    estimated: scale.estimated,
+    forced: Boolean(scale.disagreement),
     reference: evidenceReference(source),
     evidenceSource: evidence.source,
     confidence: evidence.confidence
@@ -1116,10 +1060,10 @@ function cmdMeasure(args, out) {
   if (single(args, 'json')) out.log(JSON.stringify(result, null, 2));
   else {
     out.log(`${result.display} (${result.distanceMm} mm) ± ${result.displayUncertainty} (± ${result.uncertaintyMm} mm, ${pct(relativeUncertainty)})`);
-    out.log(`Scale: ${describeScale(group)}; endpoints ± ${endpointPx} px over ${result.lengthPx} px.`);
+    out.log(`Scale: ${describeScale(source, scale)}; endpoints ± ${endpointPx} px over ${result.lengthPx} px.`);
     out.log(`Evidence: source ${evidence.source}, confidence ${evidence.confidence}, status needs-review, reference ${result.reference}.`);
   }
-  if (group.scale.disagreement) out.warn(`Warning: measured despite disagreement (--force). ${group.scale.disagreement.message}`);
+  if (scale.disagreement) out.warn(`Warning: measured despite disagreement (--force). ${scale.disagreement.message}`);
   return 0;
 }
 
@@ -1178,6 +1122,7 @@ export function parseCalibrationPayload(input) {
   if (!payload.calibration && !(payload.references?.length) && !(payload.areas?.length)) fail('The pasted text has no calibration, reference points, or areas.');
   const cal = payload.calibration;
   if (cal && (!isPoint(cal.from) || !isPoint(cal.to) || !(cal.distanceMm > 0) || !(cal.uncertaintyPx >= 0))) fail('The pasted calibration needs from, to, a positive distanceMm, and uncertaintyPx.');
+  if (cal && cal.region !== undefined) fail(REGIONS_REMOVED);
   if (payload.references !== undefined && (!Array.isArray(payload.references) || payload.references.some(ref => typeof ref?.label !== 'string' || !ref.label.trim() || !isPoint(ref.pixel)))) fail('The pasted reference points need a label and a pixel.');
   if (payload.areas !== undefined && (!Array.isArray(payload.areas) || payload.areas.some(area => typeof area?.label !== 'string' || !area.label.trim() || !Array.isArray(area.points) || !area.points.every(isPoint)))) fail('The pasted areas need a label and a list of points.');
   return payload;
@@ -1228,14 +1173,8 @@ async function cmdApply(args, out, io) {
     const to = { x: round(c.to.x, 2), y: round(c.to.y, 2) };
     checkInImage(from, source.pixels, 'The calibration start');
     checkInImage(to, source.pixels, 'The calibration end');
-    let region = null;
-    if (c.region) {
-      const r = c.region;
-      if (![r.x0, r.y0, r.x1, r.y1].every(Number.isFinite)) fail('The pasted region needs x0, y0, x1, y1.');
-      region = parseRegion(`${r.x0},${r.y0},${r.x1},${r.y1}${r.label ? `,${r.label}` : ''}`, source.pixels);
-    }
     const entered = typeof c.entered === 'string' && c.entered.trim() ? c.entered.trim() : `${round(c.distanceMm, 1)} mm`;
-    cal = twoPointCalibration(source, { method: 'manual', from, to, distanceMm: round(c.distanceMm, 3), uncertaintyPx: round(c.uncertaintyPx, 2), estimated: false, provenance: `manual calibration in the viewer: ${entered}`, region });
+    cal = twoPointCalibration(source, { method: 'manual', from, to, distanceMm: round(c.distanceMm, 3), uncertaintyPx: round(c.uncertaintyPx, 2), estimated: false, provenance: `manual calibration in the viewer: ${entered}` });
   }
   for (const ref of references) {
     const existing = source.references.find(item => item.label === ref.label);
@@ -1245,10 +1184,10 @@ async function cmdApply(args, out, io) {
   if (references.length) out.log(`Recorded ${references.length} reference point(s) on ${source.id}: ${references.map(ref => ref.label).join(', ')}.`);
   if (cal) {
     source.calibrations.push(cal);
-    out.log(`Added ${cal.id} (manual): ${mmPx(cal.mmPerPx)} ± ${pct(cal.relativeUncertainty)}${cal.region ? ` in ${regionName(cal.region)}` : ''}.`);
+    out.log(`Added ${cal.id} (manual): ${mmPx(cal.mmPerPx)} ± ${pct(cal.relativeUncertainty)}.`);
     const conflict = estimateConflict(source.calibrations, cal);
     if (conflict) out.warn(`Note: ${conflict.message}`);
-    calibrationChanged(root, source, out, cal);
+    calibrationChanged(root, source, out);
   }
   if (areas.length) {
     source.areas ??= [];
@@ -1303,11 +1242,10 @@ export function checkProject(root) {
     const entry = { id: source.id, path: source.path, revision: source.revision, calibrationRevision: source.calibrationRevision, stale: status.stale, reason: status.reason, placementStale: isPlacementStale(source, model), disagreements: [] };
     if (status.stale) report.problems.push(`Source ${source.id} is stale: ${status.reason}. Re-import it with add --replace.`);
     if (entry.placementStale) report.problems.push(`The placement of ${source.id} is stale: ${placementStaleReason(source, model)}. Re-run place.`);
-    for (const group of groupsWithScale(source)) {
-      if (group.scale?.disagreement) {
-        entry.disagreements.push(group.scale.disagreement.message);
-        report.warnings.push(`${source.id}, ${regionName(group.region)}: ${group.scale.disagreement.message}`);
-      }
+    const disagreement = scaleOf(source)?.disagreement;
+    if (disagreement) {
+      entry.disagreements.push(disagreement.message);
+      report.warnings.push(`${source.id}: ${disagreement.message}`);
     }
     if (source.legacyCalibration) report.warnings.push(`${source.id} has a calibration from brief.json with no pixel points ("${source.legacyCalibration.description}"). Locate it on the image and record it with calibrate.`);
     report.sources.push(entry);
@@ -1356,15 +1294,15 @@ function cmdList(args, out) {
   const units = displayUnits(root);
   const rows = manifest.sources.map(source => {
     const status = sourceStatus(root, source);
-    return { source, status, groups: groupsWithScale(source), areas: (source.areas ?? []).map(area => measureArea(source, area, units)) };
+    return { source, status, scale: scaleOf(source), areas: (source.areas ?? []).map(area => measureArea(source, area, units)) };
   });
   if (single(args, 'json')) {
-    out.log(JSON.stringify(rows.map(({ source, status, groups, areas }) => ({
+    out.log(JSON.stringify(rows.map(({ source, status, scale, areas }) => ({
       id: source.id, path: source.path, kind: source.kind, format: source.format, pixels: source.pixels,
       revision: source.revision, calibrationRevision: source.calibrationRevision, reference: evidenceReference(source),
       stale: status.stale, reason: status.reason, north: source.north ?? null,
-      scales: groups.map(group => ({ region: group.region, mmPerPx: group.scale ? round(group.scale.mmPerPx, 6) : null, relativeUncertainty: group.scale ? round(group.scale.relativeUncertainty, 6) : null, calibrationIds: group.scale?.calibrationIds ?? [], methods: group.scale?.methods ?? [], estimated: group.scale?.estimated ?? null, disagreement: group.scale?.disagreement?.message ?? null })),
-      calibrations: source.calibrations.map(cal => ({ id: cal.id, method: cal.method, estimated: cal.estimated, provenance: cal.provenance, region: cal.region ?? null, ...(cal.acceptedByUser !== undefined ? { acceptedByUser: cal.acceptedByUser } : {}) })),
+      scale: scale ? { mmPerPx: round(scale.mmPerPx, 6), relativeUncertainty: round(scale.relativeUncertainty, 6), calibrationIds: scale.calibrationIds, methods: scale.methods, estimated: scale.estimated, disagreement: scale.disagreement?.message ?? null } : null,
+      calibrations: source.calibrations.map(cal => ({ id: cal.id, method: cal.method, estimated: cal.estimated, provenance: cal.provenance, ...(cal.acceptedByUser !== undefined ? { acceptedByUser: cal.acceptedByUser } : {}) })),
       placement: source.placement ? { view: source.placement.view, pairs: source.placement.pairs, residualsMm: source.placement.residualsMm, stale: isPlacementStale(source, model) } : null,
       references: source.references,
       areas,
@@ -1374,9 +1312,9 @@ function cmdList(args, out) {
     return 0;
   }
   if (!rows.length) { out.log(`No source images yet. Import one with: import-image.mjs add <project> <file> --kind <kind>`); return 0; }
-  for (const { source, status, groups, areas } of rows) {
+  for (const { source, status, scale, areas } of rows) {
     out.log(`${source.id}  ${source.kind}  ${source.path}  ${source.pixels.width}x${source.pixels.height} ${source.format}  ${evidenceReference(source)}  ${status.stale ? `STALE (${status.reason})` : 'current'}`);
-    for (const group of groups) out.log(`  scale, ${describeScale(group)}${group.scale?.disagreement ? ' [calibrations disagree]' : ''}`);
+    out.log(`  scale: ${describeScale(source, scale)}${scale?.disagreement ? ' [calibrations disagree]' : ''}`);
     if (source.north) out.log(`  north: ${source.north.deg}° (${source.north.source})`);
     if (source.references.length) out.log(`  references: ${source.references.map(ref => ref.label).join(', ')}`);
     for (const area of areas) out.log(`  area "${area.label}", ${area.points.length} points: ${areaSummary(area)}`);
@@ -1391,10 +1329,10 @@ export const USAGE = `Usage: node <skill>/scripts/import-image.mjs <command> <pr
   add         <project> <file> --kind <kind> [--id <id>] [--replace] [--notes <text>]
   calibrate   <project> <id> --method printed-dimension|scale-bar|manual|known-object
                 --from x,y --to x,y --distance <length> --provenance <text>
-                [--seen WxH] [--uncertainty-px n] [--region x0,y0,x1,y1[,label]]
+                [--seen WxH] [--uncertainty-px n]
                 [--estimated true|false] [--accepted]
   calibrate   <project> <id> --method stated-scale|map-metadata --mm-per-px n --provenance <text>
-                [--relative-uncertainty u] [--region x0,y0,x1,y1[,label]]
+                [--relative-uncertainty u]
   uncalibrate <project> <id> <calibration-id>
   north       <project> <id> --deg n --source north-arrow|survey-basis|user|assumed [--note <text>]
   reference   <project> <id> --label <text> --at x,y [--seen WxH]
@@ -1412,6 +1350,9 @@ A pixel point may be ref:<label> for a stored reference point. --seen WxH rescal
 coordinates read from a resized copy; --uncertainty-px is always in full-size image
 pixels and is not rescaled by --seen. Lengths need units: 3810mm, 3.81m, 381cm,
 12.5ft, 12', 12'-6", 150in. Model points are millimetres.
+One image has one scale. A sheet drawn at more than one scale (an enlarged detail, a
+location map inset) is cropped into one image per scale and each part added as its
+own source.
 apply records the viewer's scale line, reference points, and labelled areas. list
 gives each area's size from the current scale; to-model --area <label> converts an
 area's outline to model millimetres.`;

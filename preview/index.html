@@ -261,11 +261,9 @@
         <div class="group hidden-view" id="site-controls" role="group" aria-label="Site plan layers shown"></div>
         <div class="group hidden-view" id="source-tools" role="group" aria-label="Calibration tools">
           <button class="tool source-tool" data-tool="line" aria-pressed="false">Scale line</button>
-          <button class="tool source-tool" data-tool="region" aria-pressed="false" aria-describedby="region-tool-help">Scale region</button>
           <button class="tool source-tool" data-tool="point" aria-pressed="false">Reference point</button>
           <button class="tool source-tool" data-tool="area" aria-pressed="false" aria-describedby="area-tool-help">Area</button>
         </div>
-        <span id="region-tool-help" class="visually-hidden">Only for part of a sheet drawn at its own scale, such as a detail or inset. It needs its own scale line.</span>
         <span id="area-tool-help" class="visually-hidden">Outline and label an area. Its size comes from the image's scale.</span>
         <div class="field hidden-view" id="underlay-controls">
           <button class="tool" id="underlay-toggle" aria-pressed="true">Underlay</button>
@@ -4043,10 +4041,6 @@
   const METHOD_LABELS = { 'printed-dimension': 'printed dimension', 'scale-bar': 'scale bar', 'stated-scale': 'stated scale', 'map-metadata': 'map metadata', manual: 'manual', 'control-points': 'control points', 'known-object': 'known object' };
   const SOURCE_MIME = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
   const round1 = value => Math.round(value * 10) / 10;
-  const normRect = r => ({ x0: Math.min(r.x0, r.x1), y0: Math.min(r.y0, r.y1), x1: Math.max(r.x0, r.x1), y1: Math.max(r.y0, r.y1) });
-  const rectContains = (r, p) => { const q = normRect(r); return p.x >= q.x0 && p.x <= q.x1 && p.y >= q.y0 && p.y <= q.y1; };
-  const sameRect = (a, b) => { const p = normRect(a), q = normRect(b); return p.x0 === q.x0 && p.y0 === q.y0 && p.x1 === q.x1 && p.y1 === q.y1; };
-  const rectArea = r => Math.abs((r.x1 - r.x0) * (r.y1 - r.y0));
 
   // Parses a typed distance to mm: 3810mm, 3.81m, 381cm, 12.5ft, 12', 12'-6", 12' 6", 12'6", 12'-6 1/2",
   // 150in, 150". A bare number is ambiguous and is rejected.
@@ -4066,22 +4060,17 @@
     return { mm: Math.round(mm * 1000) / 1000 };
   }
 
-  // Active scale of a source. `within` (pixel points, or a rectangle) picks the smallest calibration region
-  // containing it; without one, or when no region contains it, the whole-image calibrations apply.
-  // Precise methods (manual, control-points) replace every other; otherwise the first automatic method
-  // present, in contract order, then one accepted known-object. Chosen calibrations combine by
-  // inverse-variance mean. Returns null when nothing applies.
-  function sourceScale(source, within) {
+  // Active scale of a source; one image has one scale. Precise methods (manual, control-points) replace
+  // every other; otherwise the first automatic method present, in contract order, then one accepted
+  // known-object. Chosen calibrations combine by inverse-variance mean. Returns null when nothing applies.
+  function sourceScale(source) {
     if (!source || source.kind === 'photo') return null;
     const calibrations = (source.calibrations ?? []).filter(item => item.mmPerPx > 0);
-    const points = !within ? [] : Array.isArray(within) ? within : [{ x: within.x0, y: within.y0 }, { x: within.x1, y: within.y1 }];
-    const region = points.length ? calibrations.map(item => item.region).filter(r => r && points.every(p => rectContains(r, p))).sort((a, b) => rectArea(a) - rectArea(b))[0] ?? null : null;
-    const group = calibrations.filter(item => region ? item.region && sameRect(item.region, region) : !item.region);
-    const precise = group.filter(item => PRECISE_METHODS.includes(item.method));
-    const automatic = group.filter(item => AUTOMATIC_METHODS.includes(item.method));
+    const precise = calibrations.filter(item => PRECISE_METHODS.includes(item.method));
+    const automatic = calibrations.filter(item => AUTOMATIC_METHODS.includes(item.method));
     const firstAutomatic = AUTOMATIC_METHODS.find(method => automatic.some(item => item.method === method));
     const chosen = precise.length ? precise : firstAutomatic ? automatic.filter(item => item.method === firstAutomatic)
-      : group.filter(item => item.method === 'known-object' && item.acceptedByUser === true).slice(-1);
+      : calibrations.filter(item => item.method === 'known-object' && item.acceptedByUser === true).slice(-1);
     if (!chosen.length) return null;
     const exact = chosen.filter(item => !(item.relativeUncertainty > 0));
     let mmPerPx, relativeUncertainty = 0;
@@ -4100,13 +4089,7 @@
       const between = Math.abs(Math.sin(angle(p) - angle(q)));
       return between >= Math.cos(Math.PI / 6) && Math.max(p.mmPerPx, q.mmPerPx) > Math.min(p.mmPerPx, q.mmPerPx) * 1.05;
     }));
-    return { mmPerPx, relativeUncertainty, methods: [...new Set(chosen.map(item => item.method))], calibrationIds: chosen.map(item => item.id), estimated: chosen.some(item => item.estimated), disagree, uneven, region };
-  }
-  // Every scale group of a source: the whole image, then each distinct region.
-  function sourceScaleGroups(source) {
-    const regions = [];
-    for (const item of source?.calibrations ?? []) if (item.region && !regions.some(r => sameRect(r, item.region))) regions.push(item.region);
-    return [{ region: null, scale: sourceScale(source) }, ...regions.map(region => ({ region, scale: sourceScale(source, region) }))];
+    return { mmPerPx, relativeUncertainty, methods: [...new Set(chosen.map(item => item.method))], calibrationIds: chosen.map(item => item.id), estimated: chosen.some(item => item.estimated), disagree, uneven };
   }
   // A north-derived placement also goes stale when the model's trueNorthDeg moves away from the one it used.
   const placementStale = (source, model = state.model) => Boolean(source?.placement) && (source.placement.sourceRevision !== source.revision || source.placement.calibrationRevision !== source.calibrationRevision
@@ -4123,10 +4106,6 @@
     const c = input.calibration;
     if (c) {
       body.calibration = { from: px(c.from), to: px(c.to), distanceMm: c.distanceMm, entered: String(c.entered ?? '').trim(), uncertaintyPx: round1(Math.max(0.5, c.uncertaintyPx ?? 0.5)) };
-      if (c.region) {
-        const r = normRect(c.region), label = String(c.region.label ?? '').trim();
-        body.calibration.region = { x0: round1(r.x0), y0: round1(r.y0), x1: round1(r.x1), y1: round1(r.y1), ...(label ? { label } : {}) };
-      }
     }
     const references = (input.references ?? []).map(item => ({ label: String(item.label ?? '').trim(), pixel: px(item.pixel) })).filter(item => item.label);
     if (references.length) body.references = references;
@@ -4143,17 +4122,16 @@
 
   // The size of an outlined area (canonical pixel points): pixel area × mmPerPx², perimeter in mm, and twice
   // the scale's relative uncertainty. `draftCalibration`, a valid scale line not yet applied, counts as the
-  // manual calibration it will become, so it replaces the estimates in its group. null when no scale applies.
+  // manual calibration it will become, so it replaces the estimates. null when no scale applies.
   function areaMeasure(source, points, draftCalibration = null) {
     if (!source || source.kind === 'photo' || !(points?.length >= 3)) return null;
     let measured = source;
     const c = draftCalibration, lengthPx = c ? Math.hypot(c.to.x - c.from.x, c.to.y - c.from.y) : 0;
     if (c && lengthPx > 0) {
       const line = { id: 'draft', method: 'manual', estimated: false, from: c.from, to: c.to, mmPerPx: c.distanceMm / lengthPx, relativeUncertainty: 2 * Math.max(0.5, c.uncertaintyPx ?? 0.5) / lengthPx };
-      if (c.region) line.region = normRect(c.region);
       measured = { ...source, calibrations: [...(source.calibrations ?? []), line] };
     }
-    const scale = sourceScale(measured, points);
+    const scale = sourceScale(measured);
     if (!scale) return null;
     const perimeterPx = points.reduce((sum, p, i) => { const q = points[(i + 1) % points.length]; return sum + Math.hypot(q.x - p.x, q.y - p.y); }, 0);
     return { areaMm2: polygonArea(points) * scale.mmPerPx ** 2, perimeterMm: perimeterPx * scale.mmPerPx, relativeUncertainty: 2 * scale.relativeUncertainty, scale, fromDraft: scale.calibrationIds.includes('draft') };
@@ -4188,8 +4166,8 @@
   const sheetView = { zoom: 1, fitZoom: 1, x: 0, y: 0, width: 0, height: 0, adjusted: false };
   const pointers = new Map();
   let dragDistance = 0;
-  // Sources view: the image key on the stage, the zoom its overlay was drawn at, and an active region drag.
-  let stageSource = null, overlayZoom = null, regionDrag = null, sourceChecks = Promise.resolve();
+  // Sources view: the image key on the stage and the zoom its overlay was drawn at.
+  let stageSource = null, overlayZoom = null, sourceChecks = Promise.resolve();
   // The Area tool: the pointer, for the outline preview, and how near the first point (screen px) closes it.
   let areaHover = null;
   const AREA_CLOSE_PX = 9;
@@ -4365,7 +4343,7 @@
       if (asset?.status === 'stale') note('source.stale', `${source.id}: ${asset.message} Re-import it with add --replace; until then it is not drawn or measured.`);
       else if (asset?.status === 'missing') note('source.stale', `${source.id}: ${asset.message} Re-import it with add --replace.`);
       else if (placementStale(source)) note('source.stale', `${source.id}: the placement predates the current image, calibration, or true north, so it is not drawn. Place it again with scripts/import-image.mjs place.`);
-      if (sourceScaleGroups(source).some(group => group.scale?.disagree)) note('source.disagree', `${source.id}: its calibrations differ by more than 5%. Resolve them before measuring from it.`);
+      if (sourceScale(source)?.disagree) note('source.disagree', `${source.id}: its calibrations differ by more than 5%. Resolve them before measuring from it. If the sheet mixes scales, crop each part into its own image and import it separately.`);
     }
     state.sourceFindings = out;
   }
@@ -4382,7 +4360,7 @@
       .map(([source, asset]) => ({ href: asset.href, width: source.pixels.width, height: source.pixels.height, transform: source.placement.transform, opacity: state.underlayOpacity }));
   }
 
-  const newDraft = sourceId => ({ sourceId, from: null, to: null, fromU: 0.5, toU: 0.5, distanceText: '', region: null, regionLabel: '', regionStart: null, references: [], areas: [], areaPoints: [], payload: '', copied: null });
+  const newDraft = sourceId => ({ sourceId, from: null, to: null, fromU: 0.5, toU: 0.5, distanceText: '', references: [], areas: [], areaPoints: [], payload: '', copied: null });
   function sourceDraft() {
     if (state.draft?.sourceId !== state.sourceId) state.draft = newDraft(state.sourceId);
     return state.draft;
@@ -4402,18 +4380,17 @@
       const lengthPx = Math.hypot(draft.to.x - draft.from.x, draft.to.y - draft.from.y);
       result.distanceNote += lengthPx > 0 ? ` over ${round1(lengthPx)} px: ${+(parsed.mm / lengthPx).toPrecision(4)} mm/px.` : '';
       if (lengthPx < 0.1 * Math.hypot(size.width, size.height)) return { ...result, problem: 'The two ends must be at least 10% of the image diagonal apart.' };
-      if (draft.region && !(rectContains(draft.region, draft.from) && rectContains(draft.region, draft.to))) return { ...result, problem: 'The scale line must lie inside the scale region.' };
       // A manual scale overrides the agent's estimates on purpose; say by how much so a typo is still visible.
       const automatic = { ...source, calibrations: (source.calibrations ?? []).filter(item => !PRECISE_METHODS.includes(item.method)) };
-      const estimate = sourceScale(automatic, draft.region ?? undefined), mmPerPx = parsed.mm / lengthPx;
-      if (estimate && (!draft.region || estimate.region) && Math.max(mmPerPx, estimate.mmPerPx) > Math.min(mmPerPx, estimate.mmPerPx) * 1.05) {
+      const estimate = sourceScale(automatic), mmPerPx = parsed.mm / lengthPx;
+      if (estimate && Math.max(mmPerPx, estimate.mmPerPx) > Math.min(mmPerPx, estimate.mmPerPx) * 1.05) {
         const off = Math.round((Math.max(mmPerPx, estimate.mmPerPx) / Math.min(mmPerPx, estimate.mmPerPx) - 1) * 100);
         const method = estimate.methods.join(', ').replace(/-/g, ' ');
         result.distanceWarning = `This overrides the ${method} estimate, which makes this line about ${formatLength(lengthPx * estimate.mmPerPx, sourceUnits())} (${off}% different).`;
       }
-      calibration = { from: draft.from, to: draft.to, distanceMm: parsed.mm, entered: text, uncertaintyPx: Math.max(draft.fromU, draft.toU), region: draft.region ? { ...draft.region, label: draft.regionLabel } : null };
+      calibration = { from: draft.from, to: draft.to, distanceMm: parsed.mm, entered: text, uncertaintyPx: Math.max(draft.fromU, draft.toU) };
       result.calibration = calibration;
-    } else if (draft.region) return { ...result, problem: 'A scale region needs its own scale line inside it.' };
+    }
     const labels = draft.references.map(item => item.label.trim());
     if (labels.some(label => !label)) return { ...result, problem: 'Label every reference point.' };
     if (new Set(labels).size < labels.length) return { ...result, problem: 'Give each reference point its own label.' };
@@ -4471,24 +4448,15 @@
     const k = 1 / sheetView.zoom, n = value => +value.toFixed(3), draft = sourceDraft(), parts = [];
     const xy = (a, b) => `x1="${n(a.x)}" y1="${n(a.y)}" x2="${n(b.x)}" y2="${n(b.y)}"`;
     const seg = (a, b, cls) => `<line class="ov-halo" ${xy(a, b)} stroke-width="${n(5 * k)}"/><line class="${cls}" ${xy(a, b)} stroke-width="${n(2 * k)}"/>`;
-    const box = (r, cls) => { const q = normRect(r), attrs = `x="${n(q.x0)}" y="${n(q.y0)}" width="${n(q.x1 - q.x0)}" height="${n(q.y1 - q.y0)}"`; return `<rect class="ov-halo" ${attrs} stroke-width="${n(5 * k)}"/><rect class="${cls}" ${attrs} stroke-width="${n(2 * k)}" stroke-dasharray="${n(8 * k)} ${n(5 * k)}"/>`; };
     const dot = (p, cls) => `<circle class="${cls} ov-dot" cx="${n(p.x)}" cy="${n(p.y)}" r="${n(4 * k)}" stroke-width="${n(2 * k)}"/>`;
     const label = (p, text) => `<text x="${n(p.x + 8 * k)}" y="${n(p.y - 8 * k)}" font-size="${n(12 * k)}" stroke-width="${n(3 * k)}">${escapeHtml(text)}</text>`;
     const outline = (points, cls, closed = true) => { const tag = closed ? 'polygon' : 'polyline', attrs = `points="${points.map(p => `${n(p.x)},${n(p.y)}`).join(' ')}"`; return `<${tag} class="ov-halo" ${attrs} stroke-width="${n(5 * k)}"/><${tag} class="${cls}" ${attrs} stroke-width="${n(2 * k)}" stroke-linejoin="round"/>`; };
     const middle = points => ({ x: points.reduce((sum, p) => sum + p.x, 0) / points.length, y: points.reduce((sum, p) => sum + p.y, 0) / points.length });
-    const regions = [];
     for (const item of source.calibrations ?? []) {
-      if (item.region && !regions.some(r => sameRect(r, item.region))) {
-        regions.push(item.region);
-        parts.push(box(item.region, 'ov-ink'), label({ x: normRect(item.region).x0, y: normRect(item.region).y0 }, item.region.label || `${item.id} scale region`));
-      }
       if (item.from && item.to) parts.push(seg(item.from, item.to, 'ov-ink'), dot(item.from, 'ov-ink'), dot(item.to, 'ov-ink'), label({ x: (item.from.x + item.to.x) / 2, y: (item.from.y + item.to.y) / 2 }, `${item.id} ${METHOD_LABELS[item.method] ?? item.method}`));
     }
     for (const item of source.references ?? []) parts.push(dot(item.pixel, 'ov-ink'), label(item.pixel, item.label));
     for (const item of source.areas ?? []) if (item.points?.length >= 3) parts.push(outline(item.points, 'ov-ink'), label(middle(item.points), item.label));
-    const pending = regionDrag?.current ? { x0: regionDrag.start.x, y0: regionDrag.start.y, x1: regionDrag.current.x, y1: regionDrag.current.y } : draft.region;
-    if (pending) parts.push(box(pending, 'ov-draft'));
-    if (draft.regionStart) parts.push(dot(draft.regionStart, 'ov-draft'));
     if (draft.from && draft.to) parts.push(seg(draft.from, draft.to, 'ov-draft'));
     for (const p of [draft.from, draft.to].filter(Boolean)) parts.push(dot(p, 'ov-draft'));
     draft.references.forEach((item, i) => parts.push(dot(item.pixel, 'ov-draft'), label(item.pixel, item.label.trim() || `Point ${i + 1}`)));
@@ -4513,7 +4481,7 @@
     if (asset?.status === 'missing') flags.push(['warning', 'Missing', 're-import with add --replace']);
     if (asset?.status === 'unverified') flags.push(['advisory', 'Not verified', 'this page cannot check the file hash']);
     if (placementStale(source)) flags.push(['warning', 'Placement out of date', 'not drawn']);
-    if (sourceScaleGroups(source).some(group => group.scale?.disagree)) flags.push(['warning', 'Calibrations disagree', 'resolve before measuring']);
+    if (sourceScale(source)?.disagree) flags.push(['warning', 'Calibrations disagree', 'resolve them, or crop each part of a mixed-scale sheet into its own image']);
     return flags;
   }
   function placementLabel(source) {
@@ -4528,8 +4496,9 @@
     const asset = sourceAssets.get(source.id);
     const dims = [['Pixels', `${source.pixels.width} x ${source.pixels.height}`], ['Revision', `${source.revision}.${source.calibrationRevision}`], ['Placed on', placementLabel(source)]];
     if (source.north) dims.push(['North', `${num(source.north.deg)}° ${source.north.source.replace('-', ' ')}`]);
-    const scales = source.kind === 'photo' ? ['<li>Photos are not calibrated: perspective is not a uniform scale.</li>']
-      : sourceScaleGroups(source).map(group => `<li>${escapeHtml(group.region ? group.region.label || 'Scale region' : 'Whole image')}: ${escapeHtml(scaleSummary(group.scale))}${group.scale?.disagree ? ' <b>(disagree)</b>' : ''}</li>`);
+    const scale = sourceScale(source);
+    const scaleText = source.kind === 'photo' ? '<p class="entity-context">Photos are not calibrated: perspective is not a uniform scale.</p>'
+      : `<p class="entity-context">${escapeHtml(scaleSummary(scale))}${scale?.disagree ? ' <b>(disagree)</b>' : ''}</p>${scale?.disagree ? '<p class="field-note">If the sheet mixes scales, such as an enlarged detail or a location map, crop each part into its own image and import it separately.</p>' : ''}`;
     const calibrations = (source.calibrations ?? []).map(item => `<li><b>${escapeHtml(item.id)}</b> ${escapeHtml(METHOD_LABELS[item.method] ?? item.method)}, ${escapeHtml(`${+item.mmPerPx.toPrecision(4)} mm/px ± ${percentLabel(item.relativeUncertainty ?? 0)}`)}${item.estimated ? ', estimated' : ''}${item.method === 'known-object' && !item.acceptedByUser ? ', not accepted' : ''}. ${escapeHtml(item.provenance)}</li>`).join('');
     const areas = (source.areas ?? []).map(item => `<li><b>${escapeHtml(item.label)}</b>: ${escapeHtml(areaSummary(source, areaMeasure(source, item.points)))}</li>`).join('');
     const check = !asset || asset.status === 'loading' ? 'Checking the file against its import.'
@@ -4540,7 +4509,7 @@
       `<h3 class="entity-subhead">${escapeHtml(source.id)}</h3>`,
       `<p class="entity-context">${escapeHtml(`${SOURCE_KINDS[source.kind] ?? source.kind}, ${source.path}`)}${source.notes ? `. ${escapeHtml(source.notes)}` : ''}</p>`,
       `<dl class="key-dims">${dims.map(([dt, dd]) => `<div><dt>${escapeHtml(dt)}</dt><dd>${escapeHtml(dd)}</dd></div>`).join('')}</dl>`,
-      `<h4 class="entity-subhead">Scale</h4><ul class="open-items">${scales.join('')}</ul>`,
+      `<h4 class="entity-subhead">Scale</h4>${scaleText}`,
       calibrations ? `<h4 class="entity-subhead">Calibrations</h4><ul class="open-items">${calibrations}</ul>` : '',
       areas ? `<h4 class="entity-subhead">Areas</h4><ul class="open-items">${areas}</ul>` : '',
       source.legacyCalibration ? `<p class="field-note">${escapeHtml(`From the brief, not yet located on the image: ${source.legacyCalibration.description}.`)}</p>` : '',
@@ -4559,9 +4528,6 @@
     const line = draft.from ? `<dl class="key-dims"><div><dt>From</dt><dd>${pt(draft.from)}</dd></div><div><dt>To</dt><dd>${draft.to ? pt(draft.to) : 'Not set'}</dd></div>${lengthPx != null ? `<div><dt>Length</dt><dd>${lengthPx} px</dd></div><div><dt>End accuracy</dt><dd>± ${round1(Math.max(draft.fromU, draft.toU))} px</dd></div>` : ''}</dl>` : '';
     const example = sourceUnits() === 'metric' ? '3810 mm' : '12\'-6"';
     const distance = photo ? '' : `<label class="text-field" for="cal-distance">Distance between the ends<input id="cal-distance" type="text" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(`For example ${example}`)}" value="${escapeHtml(draft.distanceText)}" aria-describedby="cal-distance-note"></label><p id="cal-distance-note" class="field-note"></p>`;
-    const region = photo ? '' : '<h4 class="entity-subhead">Scale region</h4>' + (draft.region
-      ? `<p class="entity-context">${escapeHtml(`${pt({ x: normRect(draft.region).x0, y: normRect(draft.region).y0 })} to ${pt({ x: normRect(draft.region).x1, y: normRect(draft.region).y1 })}`)}</p><label class="text-field" for="cal-region-label">Scale region label (optional)<input id="cal-region-label" type="text" autocomplete="off" value="${escapeHtml(draft.regionLabel)}"></label><div class="calibrate-actions"><button type="button" class="tool" id="cal-region-clear">Clear scale region</button></div>`
-      : draft.regionStart ? '<p class="field-note">Mark the opposite corner.</p>' : '<p class="field-note">Only for part of a sheet drawn at its own scale, such as a detail or inset. It needs its own scale line. To measure a feature, use Area.</p>');
     const refs = draft.references.map((item, i) => `<li><label class="text-field" for="cal-ref-${i}">${escapeHtml(`Label for ${pt(item.pixel)}`)}<input id="cal-ref-${i}" data-ref-index="${i}" type="text" autocomplete="off" value="${escapeHtml(item.label)}"></label><button type="button" class="tool" data-ref-remove="${i}" aria-label="Remove reference point ${i + 1}">Remove</button></li>`).join('');
     const areaItems = draft.areas.map((item, i) => `<li><div><label class="text-field" for="cal-area-${i}">${escapeHtml(`Label for area ${i + 1} (${item.points.length} points)`)}<input id="cal-area-${i}" data-area-index="${i}" type="text" autocomplete="off" value="${escapeHtml(item.label)}" aria-describedby="cal-area-${i}-size"></label><p id="cal-area-${i}-size" class="field-note"></p></div><button type="button" class="tool" data-area-remove="${i}" aria-label="Remove area ${i + 1}">Remove</button></li>`).join('');
     const open = draft.areaPoints.length;
@@ -4570,7 +4536,7 @@
     const copied = draft.copied === 'ok' ? '<div id="cal-copied"><p class="field-note">Copied.</p></div>'
       : draft.copied === 'failed' ? `<div id="cal-copied"><p class="field-note">Copying is blocked here. Copy this text yourself.</p><textarea id="cal-payload" class="payload" readonly aria-label="Calibration text to copy">${escapeHtml(draft.payload)}</textarea></div>` : '';
     return [
-      head, `<p class="entity-context">${escapeHtml(intro)}</p>`, line, distance, region,
+      head, `<p class="entity-context">${escapeHtml(intro)}</p>`, line, distance,
       `<h4 class="entity-subhead">Reference points</h4>${refs ? `<ol class="ref-list">${refs}</ol>` : '<p class="field-note">Optional. Choose Reference point and mark a feature, such as a house corner, to name it.</p>'}`,
       areas,
       '<p id="cal-problem" class="field-note field-note--error"></p>',
@@ -4600,8 +4566,6 @@
     inspector.querySelectorAll('[data-source-id]').forEach(button => button.addEventListener('click', () => selectSource(button.dataset.sourceId)));
     const draft = source ? sourceDraft() : null, edited = () => { if (draft.copied) { draft.copied = null; $('#cal-copied')?.remove(); } updateCalibrationStatus(); };
     $('#cal-distance')?.addEventListener('input', event => { draft.distanceText = event.target.value; edited(); });
-    $('#cal-region-label')?.addEventListener('input', event => { draft.regionLabel = event.target.value; edited(); });
-    $('#cal-region-clear')?.addEventListener('click', () => { draft.region = null; draft.copied = null; renderSourcesInspector(); drawSourceOverlay(); announce('Scale region cleared.'); });
     inspector.querySelectorAll('[data-ref-index]').forEach(input => {
       input.addEventListener('input', () => { draft.references[Number(input.dataset.refIndex)].label = input.value; edited(); drawSourceOverlay(); });
       input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); viewport.focus(); } });
@@ -4666,7 +4630,6 @@
   }
   function setTool(tool) {
     state.tool = state.tool === tool ? null : tool;
-    if (state.draft) state.draft.regionStart = null;
     updateSourceTools();
     renderSourcesInspector();
     drawSourceOverlay();
@@ -4680,13 +4643,6 @@
     const rect = viewport.getBoundingClientRect();
     return imagePoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
   }
-  function setRegion(a, b, asset) {
-    const clamp = (v, max) => round1(Math.min(max, Math.max(0, v)));
-    const region = normRect({ x0: clamp(a.x, asset.width), y0: clamp(a.y, asset.height), x1: clamp(b.x, asset.width), y1: clamp(b.y, asset.height) });
-    if (region.x1 - region.x0 < 1 || region.y1 - region.y0 < 1) { announce('That scale region is too small.'); return; }
-    sourceDraft().region = region;
-    announce(`Scale region set from ${region.x0}, ${region.y0} to ${region.x1}, ${region.y1}.`);
-  }
   // Marks a point for the active tool. Uncertainty is one screen pixel in image pixels, at least 0.5.
   function sourcePick(p) {
     const source = selectedSource(), asset = source && sourceAssets.get(source.id);
@@ -4697,10 +4653,7 @@
     draft.copied = null;
     if (state.tool === 'line') {
       if (!draft.from || draft.to) { Object.assign(draft, { from: point, fromU: u, to: null }); announce(`Scale line starts at ${point.x}, ${point.y}. Mark the other end.`); }
-      else { Object.assign(draft, { to: point, toU: u }); announce(`Scale line ends at ${point.x}, ${point.y}. Type the distance.`); if (!draft.distanceText.trim()) focus = '#cal-distance'; }
-    } else if (state.tool === 'region') {
-      if (!draft.regionStart) { draft.regionStart = point; announce(`Scale region corner at ${point.x}, ${point.y}. Mark the opposite corner.`); }
-      else { setRegion(draft.regionStart, point, asset); draft.regionStart = null; }
+      else { Object.assign(draft, { to: point, toU: u }); announce(`Scale line ends at ${point.x}, ${point.y}. Type the distance.`);       if (!draft.distanceText.trim()) focus = '#cal-distance'; }
     } else if (state.tool === 'area') {
       const first = draft.areaPoints[0];
       if (draft.areaPoints.length >= 3 && Math.hypot(p.x - first.x, p.y - first.y) * sheetView.zoom <= AREA_CLOSE_PX) { closeArea(); return; }
@@ -4719,8 +4672,7 @@
   function cancelSourceStep() {
     const draft = sourceDraft();
     if (draft.areaPoints.length) { cancelArea(); return; }
-    if (draft.regionStart) draft.regionStart = null;
-    else if (draft.from && !draft.to) draft.from = null;
+    if (draft.from && !draft.to) draft.from = null;
     else { setTool(null); return; }
     renderSourcesInspector();
     drawSourceOverlay();
@@ -4804,7 +4756,6 @@
       if (active) $('#stage').setAttribute('aria-labelledby', tab.id);
     });
     updateSourceTools();
-    if (!isSources) regionDrag = null;
     if (!isSheet && !isSources) showStageStatus(null);
     if (state.blocked && !isSources) {
       stageSource = null;
@@ -4910,7 +4861,7 @@
   }
 
   // Pan and zoom for drawing sheets and source images. On the Sources view a click (or Enter on the
-  // centre crosshair) marks a point for the active tool, and a drag with the Region tool draws a region.
+  // centre crosshair) marks a point for the active tool.
   function wireViewport() {
     $('#zoom-in').addEventListener('click', () => zoomAt(1.25));
     $('#zoom-out').addEventListener('click', () => zoomAt(0.8));
@@ -4923,7 +4874,6 @@
     viewport.addEventListener('pointerdown', event => {
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (pointers.size === 1) dragDistance = 0;
-      regionDrag = state.view === 'sources' && state.tool === 'region' && stageSource && pointers.size === 1 ? { start: imagePoint(event.clientX, event.clientY), current: null } : null;
       viewport.setPointerCapture(event.pointerId);
       viewport.classList.add('dragging');
     });
@@ -4932,10 +4882,8 @@
       const current = { x: event.clientX, y: event.clientY };
       if (pointers.size === 1) {
         dragDistance += Math.hypot(current.x - previous.x, current.y - previous.y);
-        if (regionDrag) { if (dragDistance > 4) { regionDrag.current = imagePoint(current.x, current.y); drawSourceOverlay(); } }
-        else if (dragDistance > 4) panBy(current.x - previous.x, current.y - previous.y);
+        if (dragDistance > 4) panBy(current.x - previous.x, current.y - previous.y);
       } else if (pointers.size === 2) {
-        regionDrag = null;
         const other = [...pointers.entries()].find(([id]) => id !== event.pointerId)[1];
         const before = Math.hypot(previous.x - other.x, previous.y - other.y), after = Math.hypot(current.x - other.x, current.y - other.y);
         const rect = viewport.getBoundingClientRect();
@@ -4947,18 +4895,7 @@
     const release = event => { pointers.delete(event.pointerId); if (!pointers.size) viewport.classList.remove('dragging'); };
     viewport.addEventListener('pointerup', event => {
       if (state.view === 'sources') {
-        if (pointers.size === 1) {
-          const asset = sourceAssets.get(state.sourceId), drag = regionDrag;
-          regionDrag = null;
-          if (drag?.current && assetUsable(asset)) {
-            const draft = sourceDraft();
-            setRegion(drag.start, imagePoint(event.clientX, event.clientY), asset);
-            draft.regionStart = null; draft.copied = null;
-            renderSourcesInspector();
-            drawSourceOverlay();
-          } else if (dragDistance <= 4) sourcePick(imagePoint(event.clientX, event.clientY));
-          else if (drag) drawSourceOverlay();
-        }
+        if (pointers.size === 1 && dragDistance <= 4) sourcePick(imagePoint(event.clientX, event.clientY));
         release(event);
         return;
       }
@@ -4968,7 +4905,7 @@
       }
       release(event);
     });
-    viewport.addEventListener('pointercancel', event => { regionDrag = null; release(event); });
+    viewport.addEventListener('pointercancel', release);
     viewport.addEventListener('keydown', event => {
       if (state.view === 'sources' && state.tool) {
         if ((event.key === 'Enter' || event.key === ' ') && event.target === viewport) { event.preventDefault(); sourcePick(centrePoint()); return; }
@@ -5076,7 +5013,7 @@
     bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, centerlineIssues, pathOutline, pathFillets, centerlineLength, outlineOf, anchorPoint, resolvePath, resolveAnchors, polygonArea, pointInPolygon, wallGeometry, wallLength, wallEndClip, terrainOf, siteExtent,
     renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, siteCategories, parseSiteHidden, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport,
-    parseLength, sourceScale, sourceScaleGroups, calibrationPayload, draftCheck, areaMeasure, areaSummary, sourcesProblem, placementStale, underlaySvg, start, sourcesChecked: () => sourceChecks
+    parseLength, sourceScale, calibrationPayload, draftCheck, areaMeasure, areaSummary, sourcesProblem, placementStale, underlaySvg, start, sourcesChecked: () => sourceChecks
   };
   if (typeof globalThis.__ARCHITECTURE_STUDIO_API__ === 'function') globalThis.__ARCHITECTURE_STUDIO_API__(studioApi);
   else start();

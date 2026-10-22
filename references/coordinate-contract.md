@@ -248,21 +248,21 @@ Images the user supplies are recorded in `sources/sources.json`
 
 ### Scale
 
-- Calibrations combine only within a `region` (a pixel rectangle), or across
-  the whole image when they have none. Two points are measured with the
-  smallest region that contains both; otherwise with the whole-image
-  calibrations.
-- Within a group, `manual` and `control-points` calibrations are precise and
+- An image has one scale, and every calibration on it applies to the whole
+  image. An image drawn at more than one scale (an enlarged detail, a
+  location map inset) is cropped into one image per scale by the user and
+  each part imported as its own source.
+- `manual` and `control-points` calibrations are precise and
   replace every other method. Without them, the scale comes from the
   automatic methods, in the order `printed-dimension`, `scale-bar`,
   `stated-scale`, `map-metadata`, and then accepted `known-object` (only one
   `acceptedByUser: true`). The active scale is the inverse-variance mean of the
   chosen calibrations, weighted by `1 / relativeUncertainty²`; its relative
   uncertainty is `1 / sqrt(Σ 1 / u²)`.
-- The group's calibrations disagree when the largest `mmPerPx` exceeds the
+- The calibrations disagree when the largest `mmPerPx` exceeds the
   smallest by more than 5 %. The calibrations compared are the precise ones
   when there are any, and otherwise every automatic one apart from
-  `known-object`. Measuring that group is then disabled until the user
+  `known-object`. Measuring from the image is then disabled until the user
   resolves it. Two calibrations within 30° of perpendicular that disagree
   point to uneven horizontal and vertical scaling.
 - Calibration points, and the points of a placement pair, must be at least
@@ -270,9 +270,8 @@ Images the user supplies are recorded in `sources/sources.json`
 - A measured distance has a relative uncertainty of
   `sqrt(u_scale² + (2ε / L)²)`, where `ε` is the endpoint uncertainty in
   pixels and `L` the measured length in pixels.
-- A labelled area measures `pixel area × mmPerPx²` with the active scale of
-  the group containing all its points, with a relative uncertainty of
-  `2 × u_scale`.
+- A labelled area measures `pixel area × mmPerPx²` with the active scale,
+  with a relative uncertainty of `2 × u_scale`.
 - `photo` sources are never calibrated: perspective is not a uniform scale.
 
 ### Placement

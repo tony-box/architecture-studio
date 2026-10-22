@@ -31,19 +31,6 @@
         "y": { "type": "integer" }
       }
     },
-    "region": {
-      "description": "A pixel rectangle that a calibration applies to, for sheets that mix views at different scales.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["x0", "y0", "x1", "y1"],
-      "properties": {
-        "label": { "type": "string" },
-        "x0": { "type": "number", "minimum": 0 },
-        "y0": { "type": "number", "minimum": 0 },
-        "x1": { "type": "number", "minimum": 0 },
-        "y1": { "type": "number", "minimum": 0 }
-      }
-    },
     "source": {
       "type": "object",
       "additionalProperties": false,
@@ -138,7 +125,6 @@
         "mmPerPx": { "type": "number", "exclusiveMinimum": 0 },
         "relativeUncertainty": { "type": "number", "minimum": 0, "description": "About 2 x uncertaintyPx / baselinePx for two-point methods; stated by the user or 0.02 for stated-scale and map-metadata." },
         "provenance": { "type": "string", "minLength": 1, "description": "Where the distance came from, for example: printed 48'-0\" dimension along the north wall." },
-        "region": { "$ref": "#/$defs/region" },
         "acceptedByUser": { "type": "boolean", "description": "Required true for known-object before it counts." },
         "sourceRevision": { "type": "integer", "minimum": 1 },
         "createdAt": { "type": "string" }

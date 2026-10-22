@@ -7,7 +7,7 @@ import test from 'node:test';
 import { initProject } from '../scripts/init.mjs';
 import {
   applyTransform, checkEvidenceReference, findDisagreement, fitPlacement, formatLength, measureUncertainty, parseCalibrationPayload,
-  parseLength, parsePixel, parseSeen, readImageInfo, readManifest, registerInBrief, run, selectScale, sourceFile
+  parseLength, parsePixel, parseSeen, readImageInfo, readManifest, registerInBrief, run, selectScale, sourceFile, USAGE
 } from '../scripts/import-image.mjs';
 
 const skillRoot = path.resolve(import.meta.dirname, '..');
@@ -312,16 +312,34 @@ test('calibrations: a disagreement disables measuring, --force overrides, and pe
   assert.equal(parallel, null, '4% is within tolerance');
 });
 
-test('calibrations: regions isolate their scale', async t => {
+test('calibrations: one image has one scale; --region is refused and a mixed sheet is told to crop', async t => {
   const { dir } = await planProject(t);
-  await ok('calibrate', dir, 'plan', '--method', 'printed-dimension', '--from', '100,700', '--to', '600,700', '--distance', '5000mm', '--provenance', 'plan dimension');
-  await ok('calibrate', dir, 'plan', '--method', 'printed-dimension', '--from', '10,10', '--to', '290,10', '--distance', '14000mm', '--region', '0,0,300,300,detail', '--provenance', 'detail dimension');
-  const inside = await measureJson(dir, '--from', '20,50', '--to', '220,50');
-  assert.equal(inside.json.distanceMm, 10000);
-  assert.equal(inside.json.region.label, 'detail');
-  const outside = await measureJson(dir, '--from', '400,400', '--to', '600,400');
-  assert.equal(outside.json.distanceMm, 2000);
-  assert.equal(outside.json.region, null);
+  const crop = /Scale regions were removed; crop each part of the sheet into its own image and import it separately\./;
+  const refused = await cli('calibrate', dir, 'plan', '--method', 'printed-dimension', '--from', '10,10', '--to', '290,10', '--distance', '14000mm', '--region', '0,0,300,300,detail', '--provenance', 'detail dimension');
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /--region is not an option\./);
+  assert.match(refused.err, crop);
+  assert.deepEqual(sourceOf(dir, 'plan').calibrations, []);
+  assert.doesNotMatch(USAGE, /--region/);
+  assert.match(USAGE, /One image has one scale\./);
+
+  // A plan dimension and an enlarged-detail dimension on one sheet disagree; the advice is to crop.
+  const first = await ok('calibrate', dir, 'plan', '--method', 'printed-dimension', '--from', '100,700', '--to', '600,700', '--distance', '5000mm', '--provenance', 'plan dimension');
+  assert.match(first.out, /Active scale: 10 mm\/px ± 1\.2% from cal-1 \(printed-dimension, estimated\)/);
+  assert.match((await ok('list', dir)).out, /^ {2}scale: 10 mm\/px ± 1\.2% from cal-1 \(printed-dimension, estimated\)$/m);
+  const mixed = await ok('calibrate', dir, 'plan', '--method', 'printed-dimension', '--from', '10,10', '--to', '290,10', '--distance', '14000mm', '--provenance', 'detail dimension');
+  const advice = /If the sheet mixes scales \(an enlarged detail, a location map inset\), crop each part into its own image and import each as a separate source\./;
+  assert.match(mixed.err, advice);
+  const measured = await measureJson(dir, '--from', '400,400', '--to', '600,400');
+  assert.equal(measured.code, 1);
+  assert.match(measured.err, advice);
+  const forced = await measureJson(dir, '--from', '400,400', '--to', '600,400', '--force');
+  assert.equal('region' in forced.json, false);
+  const [listed] = JSON.parse((await ok('list', dir, '--json')).out);
+  assert.match(listed.scale.disagreement, advice);
+  assert.ok(listed.calibrations.every(item => !('region' in item)));
+  const checked = JSON.parse((await ok('check', dir, '--json')).out);
+  assert.match(checked.warnings[0], /^plan: cal-2 .* disagree by/);
   assertValid(dir);
 });
 
@@ -368,8 +386,10 @@ test('placement: two pairs at a fixed scale, with north and trueNorthDeg set', a
   // list --json is how a later session learns everything the manifest knows about an image.
   await ok('reference', dir, 'plan', '--label', 'Gate', '--at', '250,640');
   const [listed] = JSON.parse((await ok('list', dir, '--json')).out);
-  assert.deepEqual(listed.scales[0].methods, ['printed-dimension']);
-  assert.equal(listed.scales[0].estimated, true);
+  assert.deepEqual(Object.keys(listed.scale), ['mmPerPx', 'relativeUncertainty', 'calibrationIds', 'methods', 'estimated', 'disagreement']);
+  assert.deepEqual(listed.scale.methods, ['printed-dimension']);
+  assert.equal(listed.scale.estimated, true);
+  assert.equal(listed.scale.disagreement, null);
   assert.deepEqual(listed.calibrations.map(cal => [cal.id, cal.method, cal.provenance]), [['cal-1', 'printed-dimension', 'south wall']]);
   assert.deepEqual(listed.north, { deg: 108, source: 'north-arrow' });
   assert.equal(listed.placement.pairs[1].label, 'NE corner');
@@ -626,7 +646,7 @@ test('a manual calibration overrides a different estimate, with a note', async t
   await ok('uncalibrate', dir, 'plan', 'cal-2');
   const result = await ok('apply', dir, payloadFor(sourceOf(dir, 'plan'), { calibration: override, references: [] }));
   assert.match(result.err, /Note: cal-4 \(manual, 5 mm\/px\) overrides the scale-bar estimate \(cal-1, 10 mm\/px\), a 100% difference\./);
-  assert.match(result.out, /Active scale, whole image: 5 mm\/px/, 'the override is the scale');
+  assert.match(result.out, /Active scale: 5 mm\/px/, 'the override is the scale');
 });
 
 test('apply takes the viewer payload and refuses stale or mismatched ones', async t => {
@@ -640,6 +660,10 @@ test('apply takes the viewer payload and refuses stale or mismatched ones', asyn
   const wrongRevision = await cli('apply', dir, payloadFor(source, { sourceRevision: 2 }));
   assert.match(wrongRevision.err, /revision 2/);
   assert.match((await cli('apply', dir, '{"type":"something-else"}')).err, /not an Architecture Studio/);
+  const regional = await cli('apply', dir, payloadFor(source, { calibration: { from: { x: 10, y: 10 }, to: { x: 290, y: 10 }, distanceMm: 14000, entered: '14 m', uncertaintyPx: 0.5, region: { x0: 0, y0: 0, x1: 300, y1: 300, label: 'detail' } } }));
+  assert.equal(regional.code, 1);
+  assert.match(regional.err, /Scale regions were removed; crop each part of the sheet into its own image and import it separately\./);
+  assert.deepEqual(sourceOf(dir, 'plan').calibrations, [], 'a refused paste records nothing');
 
   const good = await ok('apply', dir, payloadFor(source));
   assert.match(good.out, /Added cal-1 \(manual\)/);
@@ -681,6 +705,7 @@ test('apply records labelled areas; list measures them live and to-model convert
   assert.equal(sourceOf(dir, 'plan').calibrationRevision, 0, 'areas do not change calibrations');
   assertValid(dir);
   let [listed] = JSON.parse((await ok('list', dir, '--json')).out);
+  assert.equal(listed.scale, null, 'no scale before calibrating');
   assert.equal(listed.areas[0].areaMm2, null);
   assert.equal(listed.areas[0].notMeasured, 'no scale applies');
 
@@ -689,7 +714,7 @@ test('apply records labelled areas; list measures them live and to-model convert
   await ok('calibrate', dir, 'plan', '--method', 'printed-dimension', '--from', '100,700', '--to', '600,700', '--distance', '5000mm', '--uncertainty-px', '2', '--provenance', 'south wall');
   [listed] = JSON.parse((await ok('list', dir, '--json')).out);
   assert.deepEqual(listed.areas, [{
-    label: 'Garden bed', points: rect, region: null, areaMm2: 6000000, areaDisplay: '64.6 sq ft', areaUncertaintyDisplay: '1.0 sq ft',
+    label: 'Garden bed', points: rect, areaMm2: 6000000, areaDisplay: '64.6 sq ft', areaUncertaintyDisplay: '1.0 sq ft',
     perimeterMm: 10000, perimeterDisplay: `32'-9 3/4"`, relativeUncertainty: 0.016, calibrationIds: ['cal-1'], methods: ['printed-dimension'], estimated: true, notMeasured: null
   }]);
   assert.match((await ok('list', dir)).out, /area "Garden bed", 4 points: 64\.6 sq ft ± 1\.0 sq ft, perimeter 32'-9 3\/4" \(cal-1, printed-dimension, estimated\)/);

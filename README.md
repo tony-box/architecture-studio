@@ -102,8 +102,10 @@ tab, which works before there is a model: click the two ends of a distance you
 know, type the distance, press **Copy calibration**, and paste the text to the
 agent. You can also mark labelled points, such as house corners, to help it
 place the image, and outline labelled areas, such as a garden bed, with the
-Area tool: the viewer shows each area's size from the image's scale. (Scale
-region is only for part of a sheet drawn at its own scale, such as a detail.)
+Area tool: the viewer shows each area's size from the image's scale. Each
+image has one scale. If a sheet mixes scales, such as a plan with an enlarged
+detail or a plat with a vicinity map, crop each part into its own PNG and
+import each separately.
 A calibrated, placed plan or site image can be shown under
 the floor plan or site plan in the viewer, with an Underlay toggle and an
 opacity slider (`?underlay=0` turns it off). The exported drawings never
