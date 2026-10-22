@@ -337,6 +337,8 @@
           <button class="tool" id="underlay-toggle" aria-pressed="true">Underlay</button>
           <label class="field" for="underlay-opacity"><span>Opacity</span><input type="range" id="underlay-opacity" min="0.1" max="1" step="0.05" value="0.5"></label>
         </div>
+        <button class="tool hidden-view" id="structure-toggle" aria-pressed="false" aria-describedby="structure-help">Structure only</button>
+        <span id="structure-help" class="visually-hidden">Hides plants, fixtures and equipment, and paving so the building reads on its own. Exported drawings keep everything.</span>
         <button class="tool primary" id="download-set" aria-describedby="download-status">Download drawing set</button>
       </div>
       <div class="canvas-wrap">
@@ -383,6 +385,7 @@
     tool: null,
     draft: null,
     underlay: true,
+    structureOnly: false,
     underlayOpacity: 0.5,
     blocked: null,
     // Served by scripts/serve.mjs with its write token: the Sources tab imports images (`upload`, the
@@ -2569,6 +2572,8 @@
   }
   // Plants that can appear in a vertical view: single plants, not marked for removal.
   const standingPlants = model => (model.plantings ?? []).filter(item => item.position && item.status !== 'remove' && plantOf(model, item));
+  // Whether elevations and sections draw anything the Structure only toggle would hide.
+  const hasNonStructural = model => Boolean(model) && (standingPlants(model).length > 0 || (model.fixtures ?? []).length > 0 || (model.equipment ?? []).length > 0 || (model.surfaces ?? []).length > 0);
   const plantBase = (model, planting) => terrainOf(model)?.at(planting.position) ?? (model.project.coordinates.siteDatumMm ?? 0);
   const plantTop = (model, planting, base = plantBase(model, planting)) => base + (planting.heightMm ?? plantOf(model, planting).matureHeightMm);
   // Elevations and sections show plants up to this far in front of the face or beyond the cut.
@@ -2616,7 +2621,7 @@
     return parts.join('');
   }
 
-  function renderElevationSheet(model, side) {
+  function renderElevationSheet(model, side, options = {}) {
     const bounds = modelBounds(model), roof = model.roofs[0], basis = elevationBasis(side, bounds);
     const wallBox = boundsOf(model.walls.flatMap(wallPoints));
     const projected = [{ x: wallBox.x0, y: wallBox.y0 }, { x: wallBox.x1, y: wallBox.y0 }, { x: wallBox.x1, y: wallBox.y1 }, { x: wallBox.x0, y: wallBox.y1 }].map(basis.project);
@@ -2674,7 +2679,7 @@
           }
           parts.push(`<g data-entity="${escapeHtml(opening.id)}">${svgPoly(box, { fill: DRAFT.paper, width: P.medium })}${inner.join('')}</g>`);
         }
-        parts.push(plants.map(item => plantProfileSvg(model, item, map, basis.project(item.position), datumZ, P)).join(''));
+        if (!options.structureOnly) parts.push(plants.map(item => plantProfileSvg(model, item, map, basis.project(item.position), datumZ, P)).join(''));
         parts.push(verticalAnnotations(model, ctx, minH, maxH, roof));
         return parts.join('');
       }
@@ -2931,7 +2936,9 @@
     return { cut, beyond, roofCut, hOf, regions, members, ground, plants };
   }
 
-  function renderSectionSheet(model, sectionId) {
+  // options.structureOnly (viewer only) leaves out plants, fixtures and equipment, and site surfaces; the
+  // extent is unchanged, so the sheet keeps its scale.
+  function renderSectionSheet(model, sectionId, options = {}) {
     const section = (model.sections ?? []).find(item => item.id === sectionId) ?? model.sections?.[0];
     if (!section) return null;
     const geometry = sectionGeometry(model, section), roof = model.roofs[0];
@@ -2963,6 +2970,8 @@
       extent: { minH, maxH, minZ: Math.min(...zs), maxZ: Math.max(...zs) },
       draw(ctx) {
         const { map, profile, warnings, ratio } = ctx, P = profile.pens, parts = [];
+        const surfaceIds = options.structureOnly ? new Set((model.surfaces ?? []).map(item => item.id)) : new Set();
+        const cutItems = geometry.cut.filter(item => !surfaceIds.has(item.id)), regionItems = geometry.regions.filter(item => !surfaceIds.has(item.id));
         const mats = materialContext(model, profile, materialsActive(model, ratio));
         ctx.materials = mats.active ? mats : null;
         const rect = item => item.poly ? item.poly.map(p => map(p.h, p.z)) : [map(item.h0, item.z1), map(item.h1, item.z1), map(item.h1, item.z0), map(item.h0, item.z0)];
@@ -2981,8 +2990,8 @@
           const points = groundProfile ? [...groundProfile.map(p => map(p.h, p.under ?? p.z)), map(groundProfile.at(-1).h, earthBottom), map(groundProfile[0].h, earthBottom)] : rect(box);
           parts.push(`<g data-role="earth" pointer-events="none">${mats.region(points, frameOf(box), mats.resolve(earthId), groundProfile ? `clip-earth-${section.id}` : null)}</g>`);
         }
-        if (sectionPlants.length) parts.push(`<g data-role="plants">${sectionPlants.map(item => plantProfileSvg(model, item.planting, map, item.h, plantBase(model, item.planting), P)).join('')}</g>`);
-        for (const item of [...geometry.beyond].sort((a, b) => b.depth - a.depth)) {
+        if (sectionPlants.length && !options.structureOnly) parts.push(`<g data-role="plants">${sectionPlants.map(item => plantProfileSvg(model, item.planting, map, item.h, plantBase(model, item.planting), P)).join('')}</g>`);
+        for (const item of [...geometry.beyond].filter(item => !(options.structureOnly && item.kind === 'object')).sort((a, b) => b.depth - a.depth)) {
           const pen = item.depth < 1000 ? P.medium : P.thin;
           if (item.kind === 'roof') parts.push(`<g data-entity="${escapeHtml(item.id)}">${svgPoly(item.hull.map(p => map(p.x, p.y)), { fill: DRAFT.paper, width: P.thin })}</g>`);
           else if (item.kind === 'stair') {
@@ -3001,11 +3010,11 @@
             parts.push(`<g data-entity="${escapeHtml(item.id)}">${svgPoly(rect(item), { fill: DRAFT.paper, width: pen })}${openings}</g>`);
           }
         }
-        const cutShapes = geometry.cut.map(item => ({ id: item.id, points: item.profile ? item.profile.map(p => map(p.h, p.z)) : rect(item) }));
+        const cutShapes = cutItems.map(item => ({ id: item.id, points: item.profile ? item.profile.map(p => map(p.h, p.z)) : rect(item) }));
         parts.push(cutShapes.map(shape => `<g data-entity="${escapeHtml(shape.id)}">${svgPoly(shape.points, { fill: DRAFT.poche, width: P.cut * 2, join: 'miter' })}</g>`).join(''));
         if (mats.active) {
-          const owners = new Set(geometry.regions.map(region => region.id)), fills = [], lines = [];
-          for (const item of geometry.cut) {
+          const owners = new Set(regionItems.map(region => region.id)), fills = [], lines = [];
+          for (const item of cutItems) {
             if (owners.has(item.id)) continue;
             // Stairs are the only cut elements without assembly regions; they take their own material.
             const points = item.profile ? item.profile.map(p => map(p.h, p.z)) : rect(item), box = boundsOf(points);
@@ -3014,7 +3023,7 @@
             fills.push(mats.region(points, frame, mats.resolve(material)));
           }
           // Layers first, then headers, so an angle lintel draws over the layer it carries.
-          for (const region of [...geometry.regions].sort((a, b) => (a.role === 'header') - (b.role === 'header'))) {
+          for (const region of [...regionItems].sort((a, b) => (a.role === 'header') - (b.role === 'header'))) {
             const box = rect(region), frame = frameOf(region);
             if (region.role === 'layer') {
               fills.push(mats.region(box, frame, mats.resolve(region.materialId)));
@@ -3404,10 +3413,10 @@
     return renderPlanSheet(state.model, state.levelId, includeSystems ? { systems: state.systems } : {}).svg;
   }
   function elevationSvg() {
-    return renderElevationSheet(state.model, state.elevation).svg;
+    return renderElevationSheet(state.model, state.elevation, { structureOnly: state.structureOnly }).svg;
   }
   function sectionSvg() {
-    return renderSectionSheet(state.model, state.sectionId)?.svg ?? '';
+    return renderSectionSheet(state.model, state.sectionId, { structureOnly: state.structureOnly })?.svg ?? '';
   }
 
   function entityExists(id) {
@@ -4298,8 +4307,8 @@
     const underlays = viewUnderlays();
     if (state.view === 'plan') return renderPlanSheet(state.model, state.levelId, { underlays });
     if (state.view === 'systems') return renderPlanSheet(state.model, state.levelId, { systems: state.systems, underlays });
-    if (state.view === 'elevation') return renderElevationSheet(state.model, state.elevation);
-    if (state.view === 'section') return renderSectionSheet(state.model, state.sectionId);
+    if (state.view === 'elevation') return renderElevationSheet(state.model, state.elevation, { structureOnly: state.structureOnly });
+    if (state.view === 'section') return renderSectionSheet(state.model, state.sectionId, { structureOnly: state.structureOnly });
     if (state.view === 'site') return renderSitePlanSheet(state.model, { hidden: state.siteHidden, underlays });
     return null;
   }
@@ -5239,6 +5248,8 @@
     $('#underlay-controls').classList.toggle('hidden-view', !isSheet || !underlaySources().length);
     $('#underlay-toggle').setAttribute('aria-pressed', String(state.underlay));
     $('#underlay-opacity').disabled = !state.underlay;
+    $('#structure-toggle').classList.toggle('hidden-view', !live || !['elevation', 'section'].includes(state.view) || !hasNonStructural(state.model));
+    $('#structure-toggle').setAttribute('aria-pressed', String(state.structureOnly));
     $('#source-readout').classList.toggle('hidden-view', !isSources);
     // Downloads belong with the drawings; the model, review, and source pages are not sheets.
     $('#download-set').classList.toggle('hidden-view', !isSheet);
@@ -5292,6 +5303,7 @@
     if (state.siteHidden.size) params.set('hide', [...state.siteHidden].join(',')); else params.delete('hide');
     if (state.sourceId) params.set('source', state.sourceId); else params.delete('source');
     if (state.underlay) params.delete('underlay'); else params.set('underlay', '0');
+    if (state.structureOnly) params.set('structure', '1'); else params.delete('structure');
     history.replaceState(null, '', `${location.pathname}?${params}${location.hash}`);
   }
 
@@ -5336,6 +5348,7 @@
       render();
     }));
     $('#underlay-toggle').addEventListener('click', () => { state.underlay = !state.underlay; render(); });
+    $('#structure-toggle').addEventListener('click', () => { state.structureOnly = !state.structureOnly; render(); });
     $('#underlay-opacity').addEventListener('input', event => {
       state.underlayOpacity = Number(event.target.value);
       event.target.setAttribute('aria-valuetext', `${Math.round(state.underlayOpacity * 100)}%`);
@@ -5475,6 +5488,7 @@
     const requestedSource = params.get('source');
     state.sourceId = sourceList().some(item => item.id === requestedSource) ? requestedSource : (sourceList()[0]?.id ?? null);
     state.underlay = params.get('underlay') !== '0';
+    state.structureOnly = params.get('structure') === '1';
     state.view = resolveView(params.get('view') ?? state.view, state.model);
     if (state.blocked) {
       if (!hasSources()) {
@@ -5509,7 +5523,7 @@
   const studioApi = {
     state, PROFILES, DISCIPLINES, MATERIAL_CATEGORIES, HEADER_KINDS, materialContext, materialsActive, wallBands, segmentPolygonIntervals, triangulate, pushExtrusion, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
     bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, centerlineIssues, pathOutline, pathFillets, centerlineLength, outlineOf, anchorPoint, resolvePath, resolveAnchors, polygonArea, pointInPolygon, wallGeometry, wallLength, wallEndClip, terrainOf, siteExtent,
-    renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, siteCategories, parseSiteHidden, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
+    renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, hasNonStructural, siteCategories, parseSiteHidden, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport,
     parseLength, sourceScale, calibrationPayload, calibrationPayloadObject, sourcesWritable, uploadFileProblem, formatBytes, draftCheck, savedMarks, nextMarkLabel, closeOpenArea, areaMeasure, areaSummary, sourcesProblem, placementStale, underlaySvg, start, sourcesChecked: () => sourceChecks
   };

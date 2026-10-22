@@ -1544,3 +1544,53 @@ test('Add image imports a dropped or chosen file, offers to replace an existing 
   assert.match(failing.element('#inspector').innerHTML, /<p id="upload-problem" class="field-note field-note--error">PDF files are not supported/);
   assert.equal(failing.element('#upload-submit').disabled, false, 'it can be tried again');
 });
+test('Structure only leaves plants, fixtures and equipment, and site surfaces out of elevations and sections', () => {
+  const { api } = loadStudio();
+  const model = structuredClone(siteFixture);
+  const surfaceIds = model.surfaces.map(item => item.id), plantingIds = model.plantings.map(item => item.id);
+  const has = (svg, ids) => ids.filter(id => svg.includes(`data-entity="${id}"`));
+  assert.equal(api.hasNonStructural(model), true);
+
+  const full = api.renderSectionSheet(model, 'section-aa').svg, bare = api.renderSectionSheet(model, 'section-aa', { structureOnly: true }).svg;
+  assert.match(full, /data-role="plants"/);
+  assert.ok(has(full, surfaceIds).length > 0, 'the full section cuts a site surface');
+  assert.doesNotMatch(bare, /data-role="plants"/);
+  assert.deepEqual(has(bare, surfaceIds), []);
+  assert.equal(svgAttr(bare, 'data-scale'), svgAttr(full, 'data-scale'), 'hiding never changes the scale');
+  for (const id of model.walls.map(item => item.id)) assert.equal(bare.includes(`data-entity="${id}"`), full.includes(`data-entity="${id}"`), `${id} is structure`);
+
+  const sides = ['north', 'east', 'south', 'west'];
+  const shown = sides.flatMap(side => has(api.renderElevationSheet(model, side).svg, plantingIds));
+  assert.ok(shown.length > 0, 'some elevation shows a plant');
+  for (const side of sides) {
+    const elevation = api.renderElevationSheet(model, side, { structureOnly: true }).svg;
+    assert.deepEqual(has(elevation, plantingIds), [], side);
+    assert.equal(svgAttr(elevation, 'data-scale'), svgAttr(api.renderElevationSheet(model, side).svg, 'data-scale'));
+  }
+
+  const objects = structuredClone(fixture), objectIds = [...objects.fixtures, ...objects.equipment].map(item => item.id);
+  for (const section of objects.sections ?? []) assert.deepEqual(has(api.renderSectionSheet(objects, section.id, { structureOnly: true }).svg, objectIds), [], section.id);
+  assert.equal(api.hasNonStructural({ ...structuredClone(fixture), fixtures: [], equipment: [], surfaces: [], plantings: [] }), false);
+});
+test('the viewer applies Structure only to the drawn sheet, from the toggle and from ?structure=1', async () => {
+  const files = { './models/building.json': JSON.stringify(siteFixture) };
+  const h = startHarness({ files, search: '?view=section&section=section-aa' });
+  await h.api.start();
+  await h.settle();
+  assert.equal(h.element('#structure-toggle').classList.contains('hidden-view'), false);
+  assert.match(h.element('#sheet-stage').innerHTML, /data-role="plants"/);
+  h.element('#structure-toggle').dispatch('click');
+  assert.equal(h.element('#structure-toggle').attributes['aria-pressed'], 'true');
+  assert.doesNotMatch(h.element('#sheet-stage').innerHTML, /data-role="plants"/);
+
+  const start = startHarness({ files, search: '?view=elevation&elevation=south&structure=1' });
+  await start.api.start();
+  await start.settle();
+  assert.equal(start.element('#structure-toggle').attributes['aria-pressed'], 'true');
+  for (const planting of siteFixture.plantings) assert.doesNotMatch(start.element('#sheet-stage').innerHTML, new RegExp(`data-entity="${planting.id}"`));
+
+  const plan = startHarness({ files, search: '?view=plan' });
+  await plan.api.start();
+  await plan.settle();
+  assert.equal(plan.element('#structure-toggle').classList.contains('hidden-view'), true, 'only on elevations and sections');
+});

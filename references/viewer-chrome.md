@@ -156,6 +156,15 @@ table".
   review, Assumptions, and Sources views do not show it. On the Sources view
   of a page that can write, "Add image" (a sheet-with-plus icon in the
   drafting-symbol style) follows the Image select.
+- **Structure only**: on the Elevations and Sections views, when the model has
+  plants, fixtures, equipment, or site surfaces, the toolbar adds a "Structure
+  only" toggle (`aria-pressed`, off by default, `?structure=1` to start on).
+  On, the sheet leaves out plants (in front of an elevation, beyond a
+  section), fixtures and equipment beyond a section cut, and cut or beyond
+  site surfaces such as patios and walks, so walls, openings, slabs,
+  foundations, framing, the roof, and stairs read on their own. The ground
+  line, earth, datums, and dimensions stay, and the sheet keeps its scale.
+  It is a viewer-only filter: exported drawings always carry everything.
 - **Underlay**: on the Plans, Systems, and Site views, when a placed source
   image applies to the sheet, the toolbar adds an "Underlay" toggle
   (`aria-pressed`) and an Opacity slider (default 0.5). `?underlay=0` starts
