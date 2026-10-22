@@ -807,7 +807,7 @@ test('a manual distance that disagrees with the estimate warns before copying', 
   const size = { width: 4000, height: 3000 };
   assert.equal(api.draftCheck(source, draft('30 m'), size).distanceWarning, '', 'agreeing with the scale bar');
   const wrong = api.draftCheck(source, draft('20 m'), size);
-  assert.match(wrong.distanceWarning, /^This is 50% off the scale bar estimate, which makes this line about 98'-5 1\/8"\./);
+  assert.match(wrong.distanceWarning, /^This overrides the scale bar estimate, which makes this line about 98'-5 1\/8" \(50% different\)\.$/);
   assert.ok(wrong.input, 'a warning never blocks copying');
   const manualOnly = testSource([cal('cal-1', 'manual', 10, 0.01)]);
   assert.equal(api.draftCheck(manualOnly, draft('20 m'), size).distanceWarning, '', 'only automatic estimates are compared');

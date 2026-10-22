@@ -4364,13 +4364,13 @@
       result.distanceNote += lengthPx > 0 ? ` over ${round1(lengthPx)} px: ${+(parsed.mm / lengthPx).toPrecision(4)} mm/px.` : '';
       if (lengthPx < 0.1 * Math.hypot(size.width, size.height)) return { ...result, problem: 'The two ends must be at least 10% of the image diagonal apart.' };
       if (draft.region && !(rectContains(draft.region, draft.from) && rectContains(draft.region, draft.to))) return { ...result, problem: 'The scale line must lie inside the region.' };
-      // A manual scale replaces the agent's estimates, so a mistyped distance would otherwise win silently.
+      // A manual scale overrides the agent's estimates on purpose; say by how much so a typo is still visible.
       const automatic = { ...source, calibrations: (source.calibrations ?? []).filter(item => !PRECISE_METHODS.includes(item.method)) };
       const estimate = sourceScale(automatic, draft.region ?? undefined), mmPerPx = parsed.mm / lengthPx;
       if (estimate && (!draft.region || estimate.region) && Math.max(mmPerPx, estimate.mmPerPx) > Math.min(mmPerPx, estimate.mmPerPx) * 1.05) {
         const off = Math.round((Math.max(mmPerPx, estimate.mmPerPx) / Math.min(mmPerPx, estimate.mmPerPx) - 1) * 100);
         const method = estimate.methods.join(', ').replace(/-/g, ' ');
-        result.distanceWarning = `This is ${off}% off the ${method} estimate, which makes this line about ${formatLength(lengthPx * estimate.mmPerPx, sourceUnits())}. Check the distance and both ends before copying.`;
+        result.distanceWarning = `This overrides the ${method} estimate, which makes this line about ${formatLength(lengthPx * estimate.mmPerPx, sourceUnits())} (${off}% different).`;
       }
       calibration = { from: draft.from, to: draft.to, distanceMm: parsed.mm, entered: text, uncertaintyPx: Math.max(draft.fromU, draft.toU), region: draft.region ? { ...draft.region, label: draft.regionLabel } : null };
     } else if (draft.region) return { ...result, problem: 'A region needs a scale line inside it.' };
