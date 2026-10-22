@@ -69,7 +69,7 @@ components:
 # Architecture Studio viewer
 
 This file governs the interface around the drawings: masthead, view tabs,
-toolbar, inspector, and the Code review and Assumptions pages. The drawing
+toolbar, inspector, and the Code review, Assumptions, and Sources pages. The drawing
 sheets themselves are governed only by `drafting-standard.md`; nothing here
 applies inside a sheet, including its title block.
 
@@ -95,7 +95,8 @@ stays out of their way.
 - `control-line` outlines every control at 3:1 or better against `paper` and
   `sheet`; `line` is only for passive dividers.
 - `accent` (terracotta) marks exactly two things: the selected tab and the
-  selected or focused drawing entity. It is never used for text and never
+  selected or focused drawing entity (on the Sources view, the calibration
+  being drawn and the centre crosshair). It is never used for text and never
   reused for data.
 - Discipline colours (plumbing blue, electrical magenta, mechanical green) are
   drawing data owned by `drafting-standard.md`. The interface only repeats them
@@ -143,12 +144,41 @@ table".
   (Trees, Shrubs and groundcover, Surfaces, Grading, Property lines), styled
   like the system toggles; the hidden set is kept in `?hide=`.
   3D model, Code review, and Assumptions sit together at the right edge behind a
-  divider, because they are not drawing sheets.
+  divider, because they are not drawing sheets. A Sources tab joins them, last,
+  when `sources/sources.json` lists images or cannot be read.
 - **Toolbar**: one shared toolbar for every view; only the controls for the
   active view are shown. The view's sheet dropdown (Level, Face, or Section)
   comes first. Related buttons are fused into one segmented control (zoom,
   camera mode, system toggles) so each group reads as a single tool. The
   primary "Download drawing set" sits at the far right.
+- **Underlay**: on the Plans, Systems, and Site views, when a placed source
+  image applies to the sheet, the toolbar adds an "Underlay" toggle
+  (`aria-pressed`) and an Opacity slider (default 0.5). `?underlay=0` starts
+  hidden. The image draws beneath all linework, clipped to the drawing area
+  (on the site plan, short of the plant schedule column), and only in the
+  viewer: exported sheets never carry it. A stale file or placement is not
+  drawn and adds a Source image note.
+- **Sources view**: the inspector lists each image with its kind, revision,
+  active scale with its uncertainty and method, and any flag (Stale, Missing,
+  Not verified, Placement out of date, Calibrations disagree), followed by the
+  selected image's details and the Calibrate panel. The stage shows the image
+  at natural pixel size with the sheet's pan and zoom, a pixel readout in the
+  corner, and the recorded calibration lines, regions, and labelled reference
+  points on top. The toolbar holds the zoom group ("Fit image") and the
+  calibration tools Scale line, Region, and Reference point as pressed toggles.
+  With a tool chosen, a click marks a point, a drag with Region draws a
+  rectangle, and Enter on the focused stage marks the point under a centre
+  crosshair, so every step works from the keyboard. Escape steps back. The
+  draft draws in the accent, as the current selection. "Copy calibration"
+  copies the text the agent applies; if the browser refuses, the text appears
+  selected in a read-only box. A file whose hash or size no longer matches
+  its import turns calibration off and says to re-import it. `?view=sources`
+  and `?source=<id>` restore the place.
+- **Source-only mode**: when the model is missing or invalid but source images
+  exist, the tabs stay live. Every drawing and review view still shows its
+  "Model unavailable" or "Resolve model errors" message, and the Sources view
+  works, because calibration does not need the model. Placements wait for a
+  valid model.
 - **Toggle buttons** use `aria-pressed`; pressed is ink-filled.
 - **Inspector (default)**: "Needs your input". Findings are grouped into To
   check (errors as Fix, warnings as Check) and Notes (advisories), each with a

@@ -12,7 +12,7 @@ import vm from 'node:vm';
 import { isMain, parseArgs, printFindings, readJson, resolveStudioPage } from './lib.mjs';
 
 const DRAWING_DIRS = ['site', 'plans', 'elevations', 'sections', 'systems'];
-const HANDOFF_ARTIFACTS = ['brief.json', 'models/building.json', 'ASSUMPTIONS.md', 'HANDOFF.md', 'reviews/code-findings.json', 'reviews/code-review.md'];
+const HANDOFF_ARTIFACTS = ['brief.json', 'models/building.json', 'ASSUMPTIONS.md', 'HANDOFF.md', 'reviews/code-findings.json', 'reviews/code-review.md', 'sources/sources.json'];
 
 export function extractStudioScript(html) {
   const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];

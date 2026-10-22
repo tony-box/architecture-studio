@@ -2,10 +2,11 @@
 //
 //   node <skill>/scripts/serve.mjs [project-dir] [--port <n>] [--no-open] [--no-watch] [--json]
 //
-// The viewer loads models/building.json and the review files with fetch(), which browsers
-// block for file:// pages, so the project needs a local server. The default port is derived
-// from the project path: the same project always gets the same origin, which keeps the
-// approvals the viewer stores in localStorage. The server keeps running until stopped.
+// The viewer loads models/building.json, the review files, and the source images with
+// fetch(), which browsers block for file:// pages, so the project needs a local server. The
+// default port is derived from the project path: the same project always gets the same
+// origin, which keeps the approvals the viewer stores in localStorage. The server keeps
+// running until stopped.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -15,7 +16,7 @@ import { isMain, parseArgs } from './lib.mjs';
 
 export const EVENTS_PATH = '/__architecture-studio/events';
 const RELOAD_SNIPPET = `<script>(() => { const events = new EventSource('${EVENTS_PATH}'); events.onmessage = () => location.reload(); })();</script>`;
-const WATCHED = /^(index\.html|brief\.json|models\/|reviews\/|exports\/manifest\.json)/;
+export const WATCHED = /^(index\.html|brief\.json|models\/|reviews\/|sources\/|exports\/manifest\.json)/;
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.json': 'application/json; charset=utf-8',

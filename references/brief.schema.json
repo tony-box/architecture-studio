@@ -90,7 +90,8 @@
         "required": ["path", "kind"],
         "properties": {
           "path": { "type": "string", "description": "Relative to the project folder, normally under sources/." },
-          "kind": { "enum": ["sketch", "plan", "photo", "survey", "code-document", "other"] },
+          "kind": { "enum": ["sketch", "plan", "photo", "survey", "code-document", "satellite", "site-plan", "floor-plan", "framing-plan", "elevation", "other"] },
+          "sourceId": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "description": "The image's id in sources/sources.json, which is authoritative for its scale and placement." },
           "calibration": {
             "type": "object",
             "additionalProperties": false,

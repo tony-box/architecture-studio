@@ -163,6 +163,45 @@
   .page tr[data-entity]:hover { background: #f1eee6; }
   .page .finding { margin-top: 8px; }
   .empty { border: 1px dashed var(--control-line); padding: 18px; color: var(--muted); }
+  .visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .tool:disabled { color: var(--muted); background: var(--panel); border-color: var(--line); cursor: not-allowed; }
+  .tool.primary:disabled { color: var(--muted); background: var(--panel); border-color: var(--line); }
+  input[type="range"] { width: 120px; accent-color: var(--ink); }
+  /* Sources: the image at natural pixel size under a screen-constant overlay of marks. */
+  .source-frame { position: relative; box-shadow: 0 2px 10px rgba(31, 36, 32, .18); background: var(--sheet); }
+  .source-image { display: block; user-select: none; -webkit-user-drag: none; }
+  .sheet-stage.is-pixelated .source-image { image-rendering: pixelated; }
+  .sheet-stage svg.source-overlay { position: absolute; left: 0; top: 0; box-shadow: none; overflow: visible; pointer-events: none; }
+  .source-overlay text { fill: var(--ink); stroke: var(--sheet); paint-order: stroke; font-family: var(--sans); font-weight: 600; }
+  .source-overlay .ov-halo { fill: none; stroke: var(--sheet); opacity: .85; }
+  .source-overlay .ov-ink { fill: none; stroke: var(--ink); }
+  .source-overlay .ov-draft { fill: none; stroke: var(--accent); }
+  .source-overlay .ov-dot { fill: var(--sheet); }
+  .sheet-viewport.is-picking { cursor: crosshair; }
+  .source-readout { position: absolute; right: 14px; bottom: 14px; padding: 6px 10px; border: 1px solid var(--line); background: rgba(251, 250, 246, .94); font: 600 12px/1.3 var(--mono); }
+  .crosshair { display: none; position: absolute; left: 50%; top: 50%; width: 28px; height: 28px; margin: -14px 0 0 -14px; pointer-events: none; }
+  .crosshair::before, .crosshair::after { content: ""; position: absolute; background: var(--accent); box-shadow: 0 0 0 1px var(--sheet); }
+  .crosshair::before { left: 13px; top: 0; width: 2px; height: 28px; }
+  .crosshair::after { left: 0; top: 13px; width: 28px; height: 2px; }
+  #sheet-viewport:focus-visible ~ .crosshair.is-armed { display: block; }
+  .source-item[aria-current="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .source-item .queue-item__kind { color: var(--muted); }
+  .source-flags { grid-column: 2; display: grid; gap: 2px; font-size: 12px; }
+  .source-flags b { font-weight: 700; }
+  .flag--warning b { color: var(--warning); }
+  .flag--advisory b { color: var(--advisory); }
+  .text-field { display: grid; gap: 4px; margin: 12px 0 0; color: var(--muted); font-size: 12px; }
+  .text-field input, .payload { width: 100%; min-height: var(--control-h); padding: 6px 10px; border: 1px solid var(--control-line); border-radius: 4px; background: var(--sheet); color: var(--ink); font: 14px/1.3 var(--sans); }
+  .text-field input[aria-invalid="true"] { border-color: var(--error); }
+  .payload { min-height: 120px; margin-top: 8px; font: 12px/1.4 var(--mono); resize: vertical; }
+  .field-note { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+  .field-note:empty { display: none; }
+  .field-note--error { color: var(--error); }
+  .ref-list { display: grid; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+  .ref-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+  .ref-list .text-field { margin: 0; }
+  .calibrate-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .calibrate-actions .tool.primary { margin-left: 0; }
 
   @media (max-width: 900px) {
     body { overflow: auto; }
@@ -194,6 +233,7 @@
         <button class="tab" role="tab" id="tab-model" data-view="model" aria-selected="false" aria-controls="stage" tabindex="-1">3D model</button>
         <button class="tab" role="tab" id="tab-code" data-view="code" aria-selected="false" aria-controls="stage" tabindex="-1">Code review</button>
         <button class="tab" role="tab" id="tab-assumptions" data-view="assumptions" aria-selected="false" aria-controls="stage" tabindex="-1">Assumptions</button>
+        <button class="tab" role="tab" id="tab-sources" data-view="sources" aria-selected="false" aria-controls="stage" tabindex="-1" hidden>Sources</button>
       </div>
     </div>
   </header>
@@ -218,10 +258,22 @@
           <button class="tool system-toggle" data-system="mechanical" aria-pressed="true"><span class="swatch" style="color:#1f7a4d"></span>Mechanical</button>
         </div>
         <div class="group hidden-view" id="site-controls" role="group" aria-label="Site plan layers shown"></div>
+        <div class="group hidden-view" id="source-tools" role="group" aria-label="Calibration tools">
+          <button class="tool source-tool" data-tool="line" aria-pressed="false">Scale line</button>
+          <button class="tool source-tool" data-tool="region" aria-pressed="false">Region</button>
+          <button class="tool source-tool" data-tool="point" aria-pressed="false">Reference point</button>
+        </div>
+        <div class="field hidden-view" id="underlay-controls">
+          <button class="tool" id="underlay-toggle" aria-pressed="true">Underlay</button>
+          <label class="field" for="underlay-opacity"><span>Opacity</span><input type="range" id="underlay-opacity" min="0.1" max="1" step="0.05" value="0.5"></label>
+        </div>
         <button class="tool primary" id="download-set" aria-describedby="download-status">Download drawing set</button>
       </div>
       <div class="canvas-wrap">
         <div id="sheet-viewport" class="sheet-viewport" tabindex="0" role="region" aria-label="Drawing sheet. Arrow keys pan, plus and minus zoom, 0 fits the sheet."><div id="sheet-stage" class="sheet-stage sheet"></div></div>
+        <div id="source-crosshair" class="crosshair" aria-hidden="true"></div>
+        <div id="source-readout" class="source-readout hidden-view" aria-hidden="true"></div>
+        <p id="source-live" class="visually-hidden" role="status" aria-live="polite"></p>
         <canvas id="model3d" class="hidden-view" tabindex="0" aria-label="Interactive three-dimensional concept model. Arrow keys orbit, plus and minus zoom."></canvas>
         <article id="content" class="hidden-view"></article>
         <div id="model-help" class="model-help hidden-view">Drag or use arrow keys to look. Scroll or press plus and minus to zoom.<br>Walk mode: W A S D to move, Q and E to change height.</div>
@@ -252,13 +304,25 @@
     renderWarnings: [],
     selected: null,
     cameraMode: 'orbit',
-    approvals: {}
+    approvals: {},
+    // Source images (sources/sources.json). `blocked` holds the stage message when the model is missing or
+    // invalid; only the Sources view works then.
+    sources: { status: 'missing' },
+    sourceId: null,
+    sourceFindings: [],
+    tool: null,
+    draft: null,
+    underlay: true,
+    underlayOpacity: 0.5,
+    blocked: null
   };
   const SHEET_VIEWS = ['plan', 'elevation', 'section', 'systems', 'site'];
   const DOCUMENT_VIEWS = ['code', 'assumptions'];
-  const ALL_VIEWS = ['plan', 'elevation', 'section', 'systems', 'site', 'model', 'code', 'assumptions'];
+  const ALL_VIEWS = ['plan', 'elevation', 'section', 'systems', 'site', 'model', 'code', 'assumptions', 'sources'];
+  // The Sources tab shows when sources/sources.json lists images, or is unreadable (to say so).
+  const hasSources = () => state.sources.status === 'invalid' || (state.sources.status === 'loaded' && state.sources.data.sources.length > 0);
   // Views a model offers, in tab order. The site plan exists only for models with site content.
-  const availableViews = model => ALL_VIEWS.filter(view => view !== 'site' || hasSiteContent(model));
+  const availableViews = model => ALL_VIEWS.filter(view => view === 'sources' ? hasSources() : view !== 'site' || hasSiteContent(model));
   const resolveView = (requested, model) => availableViews(model).includes(requested) ? requested : 'plan';
   const $ = selector => document.querySelector(selector);
   const viewport = $('#sheet-viewport');
@@ -1507,6 +1571,19 @@
     ].join('');
   }
 
+  // Viewer-only underlays: placed source images drawn pixel -> model -> sheet through the sheet's own
+  // map, beneath all linework and clipped to `clip` (paper mm). Exports never pass underlays.
+  function underlaySvg(underlays, frame, clip, id) {
+    if (!underlays?.length) return '';
+    const { place, ext, ratio: r } = frame, n = value => +value.toFixed(6);
+    const images = underlays.map(item => {
+      const { a, b, c, d, e, f } = item.transform;
+      const matrix = [a / r, -b / r, c / r, -d / r, place.x + (e - ext.minX) / r, place.y + (ext.maxY - f) / r].map(n).join(', ');
+      return `<image href="${escapeHtml(item.href)}" x="0" y="0" width="${item.width}" height="${item.height}" preserveAspectRatio="none" opacity="${n(item.opacity ?? 0.5)}" transform="matrix(${matrix})"/>`;
+    }).join('');
+    return `<g data-layer="underlay" pointer-events="none"><clipPath id="${escapeHtml(id)}"><rect x="${n(clip.x0)}" y="${n(clip.y0)}" width="${n(clip.x1 - clip.x0)}" height="${n(clip.y1 - clip.y0)}"/></clipPath><g clip-path="url(#${escapeHtml(id)})">${images}</g></g>`;
+  }
+
   // Dimension string in paper space. `side` is a paper unit vector pointing away from the building.
   // The value sits at the middle of the line when that spot is clear. Otherwise it slides along the line,
   // then the whole string steps farther out; `options.warn` hears when no clear spot exists.
@@ -2379,7 +2456,8 @@
 
     const title = screened ? `${level.name} systems coordination` : `${level.name} plan`;
     const sheetId = screened ? `M-1${String(levelIndex + 1).padStart(2, '0')}` : `A-1${String(levelIndex + 1).padStart(2, '0')}`;
-    const body = ['site', 'rooms', 'roof', 'objects', 'stairs', 'wallStroke', 'wallFill', 'wallLines', 'structure', 'openings', 'marks', 'dims', 'tags', 'systems']
+    const frame = { place, ext, ratio, clip: { x0: area.x0, y0: area.y0, x1: area.x1, y1: area.y1 } };
+    const body = underlaySvg(options.underlays, frame, frame.clip, `underlay-${level.id}`) + ['site', 'rooms', 'roof', 'objects', 'stairs', 'wallStroke', 'wallFill', 'wallLines', 'structure', 'openings', 'marks', 'dims', 'tags', 'systems']
       .filter(key => layers[key].length || !['site', 'wallLines', 'structure'].includes(key))
       .map(key => {
         // Site surfaces of a site model stop at the plan frame instead of pushing the frame out.
@@ -2390,7 +2468,7 @@
         return `<g data-layer="${key}"${key === 'wallFill' || key === 'wallLines' ? ' pointer-events="none"' : ''}>${layers[key].join('')}</g>`;
       }).join('');
     const svg = sheetSvg(model, profile, { sheetId, title, scaleLabel, ratio, area, view: screened ? 'systems' : 'plan', northDeg: model.project.coordinates.trueNorthDeg ?? 0, legend, materialContext: mats.active ? mats : null, warnings }, body);
-    return { svg, sheetId, title, view: screened ? 'systems' : 'plan', ratio, scaleLabel, warnings };
+    return { svg, sheetId, title, view: screened ? 'systems' : 'plan', ratio, scaleLabel, warnings, frame };
   }
 
   // Elevation or section outline of a plant: trunk lines and a canopy outline at the thin pen, with no
@@ -3218,10 +3296,11 @@
       layers.schedule.push(`<g data-role="plant-schedule">${parts.join('')}</g>`);
     }
 
-    const body = Object.entries(layers).filter(([, items]) => items.length).map(([key, items]) => `<g data-layer="${key}">${items.join('')}</g>`).join('');
+    const frame = { place, ext, ratio, clip: { x0: area.x0, y0: area.y0, x1: area.x1 - extra.x, y1: area.y1 } };
+    const body = underlaySvg(options.underlays, frame, frame.clip, 'underlay-site') + Object.entries(layers).filter(([, items]) => items.length).map(([key, items]) => `<g data-layer="${key}">${items.join('')}</g>`).join('');
     const title = 'Site plan';
     const svg = sheetSvg(model, profile, { sheetId: 'L-101', title, scaleLabel, ratio, area, view: 'site', northDeg, materialContext: mats, warnings }, body);
-    return { svg, sheetId: 'L-101', title, view: 'site', ratio, scaleLabel, warnings };
+    return { svg, sheetId: 'L-101', title, view: 'site', ratio, scaleLabel, warnings, frame };
   }
 
   // Full drawing set for the model. scripts/export-drawings.mjs writes these files; the viewer
@@ -3556,7 +3635,8 @@
     'evidence.review': 'Evidence to confirm', 'stair.code': 'Stair', 'code.status': 'Code research', 'system.review': 'Systems',
     'label.placement': 'Drawing label', 'dimension.placement': 'Dimension placement', 'section.empty': 'Section', 'webgl.unavailable': '3D view', 'structure.review': 'Structure',
     'material.key-overflow': 'Material key', 'material.evidence': 'Material sources', 'material.category-use': 'Material use',
-    'site.survey': 'Survey', 'site.schedule-overflow': 'Plant schedule', 'site.outside-lot': 'Outside the lot', 'surface.under-building': 'Surface placement', 'planting.under-building': 'Planting placement', 'surface.path': 'Path geometry', 'surface.anchor': 'Anchor', 'surface.anchor-angle': 'Walk alignment', 'terrain.constraint-failed': 'Terrain', 'terrain.degenerate': 'Terrain', 'scene.reduced-detail': '3D view', 'wall.join-fallback': 'Wall join'
+    'site.survey': 'Survey', 'site.schedule-overflow': 'Plant schedule', 'site.outside-lot': 'Outside the lot', 'surface.under-building': 'Surface placement', 'planting.under-building': 'Planting placement', 'surface.path': 'Path geometry', 'surface.anchor': 'Anchor', 'surface.anchor-angle': 'Walk alignment', 'terrain.constraint-failed': 'Terrain', 'terrain.degenerate': 'Terrain', 'scene.reduced-detail': '3D view', 'wall.join-fallback': 'Wall join',
+    'source.stale': 'Source image', 'source.manifest': 'Source images', 'source.disagree': 'Source scale'
   };
   // Groups findings by code so repeated notes (one per system, say) read as one entry.
   function reviewQueue(findings) {
@@ -3582,7 +3662,7 @@
 
   function renderInspector() {
     const entity = selectedEntity();
-    const findings = [...state.findings, ...state.renderWarnings];
+    const findings = [...state.findings, ...state.renderWarnings, ...state.sourceFindings];
     const errors = findings.filter(item => item.severity === 'error');
     if (entity) {
       const details = entityDetails(state.model, entity.id);
@@ -3951,14 +4031,137 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Source images: scale selection and the calibration hand-off (coordinate-contract.md, Source Images)
+  // ---------------------------------------------------------------------------
+  const PRECISE_METHODS = ['manual', 'control-points'];
+  const AUTOMATIC_METHODS = ['printed-dimension', 'scale-bar', 'stated-scale', 'map-metadata'];
+  const SOURCE_KINDS = { satellite: 'Satellite', survey: 'Survey', 'site-plan': 'Site plan', 'floor-plan': 'Floor plan', 'framing-plan': 'Framing plan', elevation: 'Elevation', photo: 'Photo', sketch: 'Sketch', other: 'Other' };
+  const METHOD_LABELS = { 'printed-dimension': 'printed dimension', 'scale-bar': 'scale bar', 'stated-scale': 'stated scale', 'map-metadata': 'map metadata', manual: 'manual', 'control-points': 'control points', 'known-object': 'known object' };
+  const SOURCE_MIME = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
+  const round1 = value => Math.round(value * 10) / 10;
+  const normRect = r => ({ x0: Math.min(r.x0, r.x1), y0: Math.min(r.y0, r.y1), x1: Math.max(r.x0, r.x1), y1: Math.max(r.y0, r.y1) });
+  const rectContains = (r, p) => { const q = normRect(r); return p.x >= q.x0 && p.x <= q.x1 && p.y >= q.y0 && p.y <= q.y1; };
+  const sameRect = (a, b) => { const p = normRect(a), q = normRect(b); return p.x0 === q.x0 && p.y0 === q.y0 && p.x1 === q.x1 && p.y1 === q.y1; };
+  const rectArea = r => Math.abs((r.x1 - r.x0) * (r.y1 - r.y0));
+
+  // Parses a typed distance to mm: 3810mm, 3.81m, 381cm, 12.5ft, 12', 12'-6", 12' 6", 12'6", 12'-6 1/2",
+  // 150in, 150". A bare number is ambiguous and is rejected.
+  function parseLength(text) {
+    const s = String(text ?? '').trim().toLowerCase().replace(/[\u2019\u2032]/g, "'").replace(/[\u201d\u2033]/g, '"').replace(/''/g, '"').replace(/(\d),(\d{3})(?!\d)/g, '$1$2');
+    if (!s) return { error: 'Type the distance between the two points.' };
+    const N = '(\\d+(?:\\.\\d*)?|\\.\\d+)', F = '(?:\\s+(\\d+)\\/(\\d+))?';
+    const inches = (whole, n, d) => Number(whole) + (n ? Number(n) / Number(d) : 0);
+    let m, mm;
+    if ((m = s.match(new RegExp(`^${N}\\s*(mm|cm|m)$`)))) mm = Number(m[1]) * { mm: 1, cm: 10, m: 1000 }[m[2]];
+    else if ((m = s.match(new RegExp(`^${N}\\s*(?:'|ft|feet|foot)$`)))) mm = Number(m[1]) * 304.8;
+    else if ((m = s.match(new RegExp(`^${N}${F}\\s*(?:"|in|inch|inches)$`)))) mm = inches(m[1], m[2], m[3]) * 25.4;
+    else if ((m = s.match(new RegExp(`^${N}\\s*(?:'|ft|feet|foot)\\s*-?\\s*${N}${F}\\s*(?:"|in|inch|inches)?$`)))) mm = Number(m[1]) * 304.8 + inches(m[2], m[3], m[4]) * 25.4;
+    else if (/^[\d.\s/]+$/.test(s)) return { error: 'Add a unit, for example 12\'-6" or 3810 mm.' };
+    else return { error: 'Use a length like 12\'-6", 150", 3.81 m, or 3810 mm.' };
+    if (!Number.isFinite(mm) || mm <= 0) return { error: 'The distance must be greater than zero.' };
+    return { mm: Math.round(mm * 1000) / 1000 };
+  }
+
+  // Active scale of a source. `within` (pixel points, or a rectangle) picks the smallest calibration region
+  // containing it; without one, or when no region contains it, the whole-image calibrations apply.
+  // Precise methods (manual, control-points) replace every other; otherwise the first automatic method
+  // present, in contract order, then one accepted known-object. Chosen calibrations combine by
+  // inverse-variance mean. Returns null when nothing applies.
+  function sourceScale(source, within) {
+    if (!source || source.kind === 'photo') return null;
+    const calibrations = (source.calibrations ?? []).filter(item => item.mmPerPx > 0);
+    const points = !within ? [] : Array.isArray(within) ? within : [{ x: within.x0, y: within.y0 }, { x: within.x1, y: within.y1 }];
+    const region = points.length ? calibrations.map(item => item.region).filter(r => r && points.every(p => rectContains(r, p))).sort((a, b) => rectArea(a) - rectArea(b))[0] ?? null : null;
+    const group = calibrations.filter(item => region ? item.region && sameRect(item.region, region) : !item.region);
+    const precise = group.filter(item => PRECISE_METHODS.includes(item.method));
+    const automatic = group.filter(item => AUTOMATIC_METHODS.includes(item.method));
+    const firstAutomatic = AUTOMATIC_METHODS.find(method => automatic.some(item => item.method === method));
+    const chosen = precise.length ? precise : firstAutomatic ? automatic.filter(item => item.method === firstAutomatic)
+      : group.filter(item => item.method === 'known-object' && item.acceptedByUser === true).slice(-1);
+    if (!chosen.length) return null;
+    const exact = chosen.filter(item => !(item.relativeUncertainty > 0));
+    let mmPerPx, relativeUncertainty = 0;
+    if (exact.length) mmPerPx = exact.reduce((sum, item) => sum + item.mmPerPx, 0) / exact.length;
+    else {
+      const weights = chosen.map(item => 1 / item.relativeUncertainty ** 2), total = weights.reduce((sum, w) => sum + w, 0);
+      mmPerPx = chosen.reduce((sum, item, i) => sum + weights[i] * item.mmPerPx, 0) / total;
+      relativeUncertainty = 1 / Math.sqrt(total);
+    }
+    const compared = precise.length ? precise : automatic, values = compared.map(item => item.mmPerPx);
+    const disagree = values.length > 1 && Math.max(...values) > Math.min(...values) * 1.05;
+    // Disagreeing lines within 30 degrees of perpendicular point to uneven horizontal and vertical scaling.
+    const angle = item => Math.atan2(item.to.y - item.from.y, item.to.x - item.from.x);
+    const lines = compared.filter(item => item.from && item.to);
+    const uneven = disagree && lines.some((p, i) => lines.slice(i + 1).some(q => {
+      const between = Math.abs(Math.sin(angle(p) - angle(q)));
+      return between >= Math.cos(Math.PI / 6) && Math.max(p.mmPerPx, q.mmPerPx) > Math.min(p.mmPerPx, q.mmPerPx) * 1.05;
+    }));
+    return { mmPerPx, relativeUncertainty, methods: [...new Set(chosen.map(item => item.method))], calibrationIds: chosen.map(item => item.id), estimated: chosen.some(item => item.estimated), disagree, uneven, region };
+  }
+  // Every scale group of a source: the whole image, then each distinct region.
+  function sourceScaleGroups(source) {
+    const regions = [];
+    for (const item of source?.calibrations ?? []) if (item.region && !regions.some(r => sameRect(r, item.region))) regions.push(item.region);
+    return [{ region: null, scale: sourceScale(source) }, ...regions.map(region => ({ region, scale: sourceScale(source, region) }))];
+  }
+  // A north-derived placement also goes stale when the model's trueNorthDeg moves away from the one it used.
+  const placementStale = (source, model = state.model) => Boolean(source?.placement) && (source.placement.sourceRevision !== source.revision || source.placement.calibrationRevision !== source.calibrationRevision
+    || (Number.isFinite(source.placement.trueNorthDeg) && Boolean(model) && Math.abs((((model.project?.coordinates?.trueNorthDeg ?? 0) - source.placement.trueNorthDeg) % 360 + 540) % 360 - 180) > 1e-9));
+
+  // The text the viewer copies for the agent; scripts/import-image.mjs apply reads the JSON between the
+  // first { and the last }. Pixels are canonical (natural image pixels), rounded to 0.1 px.
+  function calibrationPayload(source, input = {}) {
+    const px = p => ({ x: round1(p.x), y: round1(p.y) });
+    const body = {
+      type: 'architecture-studio/source-calibration', version: 1, sourceId: source.id, contentHash: source.contentHash,
+      pixels: { width: source.pixels.width, height: source.pixels.height }, sourceRevision: source.revision, calibrationRevision: source.calibrationRevision
+    };
+    const c = input.calibration;
+    if (c) {
+      body.calibration = { from: px(c.from), to: px(c.to), distanceMm: c.distanceMm, entered: String(c.entered ?? '').trim(), uncertaintyPx: round1(Math.max(0.5, c.uncertaintyPx ?? 0.5)) };
+      if (c.region) {
+        const r = normRect(c.region), label = String(c.region.label ?? '').trim();
+        body.calibration.region = { x0: round1(r.x0), y0: round1(r.y0), x1: round1(r.x1), y1: round1(r.y1), ...(label ? { label } : {}) };
+      }
+    }
+    const references = (input.references ?? []).map(item => ({ label: String(item.label ?? '').trim(), pixel: px(item.pixel) })).filter(item => item.label);
+    if (references.length) body.references = references;
+    if (!body.calibration && !body.references) throw new Error('A calibration needs a scale line or at least one labelled reference point.');
+    return `Architecture Studio calibration for ${source.id}. Paste this to your agent; it applies it with scripts/import-image.mjs apply.\n${JSON.stringify(body)}`;
+  }
+
+  // Light structural check of sources/sources.json; scripts/import-image.mjs check is the full validator.
+  function sourcesProblem(data) {
+    if (data?.schemaVersion !== '1.0.0') return `sources/sources.json has schemaVersion ${JSON.stringify(data?.schemaVersion ?? null)}; this viewer reads 1.0.0.`;
+    if (!Array.isArray(data.sources)) return 'sources/sources.json has no sources list.';
+    for (const [i, s] of data.sources.entries()) {
+      const ok = typeof s?.id === 'string' && /^[a-z][a-z0-9-]*$/.test(s.id) && typeof s.path === 'string' && /^sources\/[^/\\]+$/.test(s.path) && !/^sources\/\.+$/.test(s.path)
+        && Number.isInteger(s.pixels?.width) && s.pixels.width > 0 && Number.isInteger(s.pixels?.height) && s.pixels.height > 0
+        && typeof s.contentHash === 'string' && Number.isInteger(s.revision) && Number.isInteger(s.calibrationRevision)
+        && Array.isArray(s.calibrations) && Array.isArray(s.references);
+      if (!ok) return `sources/sources.json entry ${i + 1}${typeof s?.id === 'string' ? ` (${s.id})` : ''} is malformed. Run scripts/import-image.mjs check.`;
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
   // Viewer runtime
   // ---------------------------------------------------------------------------
   const PX_PER_MM = 96 / 25.4;
   const sheetView = { zoom: 1, fitZoom: 1, x: 0, y: 0, width: 0, height: 0, adjusted: false };
   const pointers = new Map();
   let dragDistance = 0;
+  // Sources view: the image key on the stage, the zoom its overlay was drawn at, and an active region drag.
+  let stageSource = null, overlayZoom = null, regionDrag = null, sourceChecks = Promise.resolve();
+  const sourceAssets = new Map();
 
-  function applySheetTransform() { sheetStage.style.transform = `translate(${sheetView.x}px, ${sheetView.y}px) scale(${sheetView.zoom})`; }
+  function applySheetTransform() {
+    sheetStage.style.transform = `translate(${sheetView.x}px, ${sheetView.y}px) scale(${sheetView.zoom})`;
+    if (state.view === 'sources' && stageSource) {
+      sheetStage.classList.toggle('is-pixelated', sheetView.zoom >= 4);
+      if (overlayZoom !== sheetView.zoom) drawSourceOverlay();
+    }
+  }
   function fitSheet() {
     const rect = viewport.getBoundingClientRect();
     if (!sheetView.width || !rect.width || !rect.height) return;
@@ -3969,7 +4172,9 @@
   function zoomAt(factor, cx, cy) {
     const rect = viewport.getBoundingClientRect();
     const px = cx ?? rect.width / 2, py = cy ?? rect.height / 2;
-    const next = Math.min(sheetView.fitZoom * 12, Math.max(sheetView.fitZoom * 0.5, sheetView.zoom * factor));
+    // Source images may zoom past 12x fit so single pixels can be picked on large scans.
+    const max = state.view === 'sources' ? Math.max(sheetView.fitZoom * 12, 16) : sheetView.fitZoom * 12;
+    const next = Math.min(max, Math.max(sheetView.fitZoom * 0.5, sheetView.zoom * factor));
     sheetView.x = px - (px - sheetView.x) * (next / sheetView.zoom);
     sheetView.y = py - (py - sheetView.y) * (next / sheetView.zoom);
     sheetView.zoom = next; sheetView.adjusted = true;
@@ -3978,11 +4183,12 @@
   function panBy(dx, dy) { sheetView.x += dx; sheetView.y += dy; sheetView.adjusted = true; applySheetTransform(); }
 
   function currentSheetResult() {
-    if (state.view === 'plan') return renderPlanSheet(state.model, state.levelId);
-    if (state.view === 'systems') return renderPlanSheet(state.model, state.levelId, { systems: state.systems });
+    const underlays = viewUnderlays();
+    if (state.view === 'plan') return renderPlanSheet(state.model, state.levelId, { underlays });
+    if (state.view === 'systems') return renderPlanSheet(state.model, state.levelId, { systems: state.systems, underlays });
     if (state.view === 'elevation') return renderElevationSheet(state.model, state.elevation);
     if (state.view === 'section') return renderSectionSheet(state.model, state.sectionId);
-    if (state.view === 'site') return renderSitePlanSheet(state.model, { hidden: state.siteHidden });
+    if (state.view === 'site') return renderSitePlanSheet(state.model, { hidden: state.siteHidden, underlays });
     return null;
   }
   function entityLabel(id) {
@@ -3992,6 +4198,7 @@
   function renderSheetView(refit) {
     const focusedId = document.activeElement?.closest?.('[data-entity]')?.dataset.entity;
     const result = currentSheetResult();
+    stageSource = null;
     if (!result) {
       sheetStage.innerHTML = '';
       state.renderWarnings = [];
@@ -4024,6 +4231,413 @@
     stageStatus.classList.toggle('hidden-view', !title);
     if (title) stageStatus.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail ?? '')}</span>`;
   }
+
+  // ---------------------------------------------------------------------------
+  // Sources view and underlays. The server is read-only, so a calibration made here is copied as text
+  // for the agent, which records it with scripts/import-image.mjs apply.
+  // ---------------------------------------------------------------------------
+  async function loadSources() {
+    try {
+      const response = await fetch('./sources/sources.json', { cache: 'no-store' });
+      if (response.status === 404) return { status: 'missing' };
+      if (!response.ok) return { status: 'invalid', message: `The sources/sources.json request failed with status ${response.status}.` };
+      let data;
+      try { data = await response.json(); } catch { return { status: 'invalid', message: 'sources/sources.json is not valid JSON. Run scripts/import-image.mjs check.' }; }
+      const problem = sourcesProblem(data);
+      return problem ? { status: 'invalid', message: problem } : { status: 'loaded', data };
+    } catch {
+      return { status: 'missing' };
+    }
+  }
+  const sourceList = () => state.sources.status === 'loaded' ? state.sources.data.sources : [];
+  const selectedSource = () => sourceList().find(item => item.id === state.sourceId) ?? null;
+  const assetUsable = asset => asset?.status === 'ok' || asset?.status === 'unverified';
+  const sourceUnits = () => state.model?.project?.coordinates?.displayUnits === 'metric' ? 'metric' : 'feet-inches';
+  const announce = text => { $('#source-live').textContent = text; };
+
+  // Fetches a source once and checks it against the manifest: SHA-256 when crypto.subtle exists (secure
+  // contexts only), and the decoded size. The object URL holds exactly the bytes that were checked.
+  function sourceAsset(source) {
+    const key = `${source.id}|${source.contentHash}|${source.path}`;
+    let asset = sourceAssets.get(source.id);
+    if (asset?.key === key) return asset;
+    asset = { key, status: 'loading' };
+    sourceAssets.set(source.id, asset);
+    asset.ready = verifySource(source, asset).then(() => refreshAfterSource(source));
+    return asset;
+  }
+  async function verifySource(source, asset) {
+    try {
+      const response = await fetch(`./${source.path}`, { cache: 'no-store' });
+      if (!response.ok) { Object.assign(asset, { status: 'missing', message: response.status === 404 ? `${source.path} is missing.` : `${source.path} could not be read (status ${response.status}).` }); return; }
+      const bytes = await response.arrayBuffer();
+      let hashMatches = null;
+      if (globalThis.crypto?.subtle?.digest) {
+        try {
+          const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
+          hashMatches = `sha256:${hex}` === source.contentHash;
+        } catch { hashMatches = null; }
+      }
+      const url = URL.createObjectURL(new Blob([bytes], { type: SOURCE_MIME[source.format] ?? '' }));
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      const width = image.naturalWidth, height = image.naturalHeight;
+      const reasons = [hashMatches === false ? 'the file changed since it was imported' : '', width === source.pixels.width && height === source.pixels.height ? '' : `it is ${width} x ${height} px, not ${source.pixels.width} x ${source.pixels.height}`].filter(Boolean);
+      Object.assign(asset, { url, image, width, height, hashMatches, status: reasons.length ? 'stale' : hashMatches ? 'ok' : 'unverified', message: reasons.length ? `${capitalize(reasons.join(', and '))}.` : '' });
+      if (assetUsable(asset)) asset.href = await orientedHref(source, asset);
+    } catch {
+      Object.assign(asset, { status: 'missing', message: `${source.path} could not be read as an image.` });
+    }
+  }
+  // <img> and canvas drawImage apply EXIF orientation, but SVG <image> does not do so consistently across
+  // browsers. An EXIF-rotated file is redrawn once through a canvas so the underlay gets upright pixels with
+  // no orientation tag; every other file is drawn from its checked bytes as is.
+  async function orientedHref(source, asset) {
+    if ((source.exifOrientation ?? 1) === 1) return asset.url;
+    try {
+      const surface = document.createElement('canvas');
+      surface.width = asset.width; surface.height = asset.height;
+      surface.getContext('2d').drawImage(asset.image, 0, 0);
+      const blob = await new Promise(resolve => surface.toBlob(resolve, 'image/jpeg', 0.92));
+      return blob ? URL.createObjectURL(blob) : asset.url;
+    } catch { return asset.url; }
+  }
+  // Checks every source in the background, placed ones first so underlays appear soon.
+  async function loadSourceAssets() {
+    const list = [...sourceList()].sort((a, b) => Boolean(b.placement) - Boolean(a.placement));
+    for (const source of list) await sourceAsset(source).ready;
+  }
+  function refreshAfterSource(source) {
+    const before = JSON.stringify(state.sourceFindings);
+    updateSourceFindings();
+    if (!state.model && !state.blocked) return;
+    if (state.view === 'sources') { if (source.id === state.sourceId) renderSourcesView(false); else renderSourcesInspector(); return; }
+    const changed = before !== JSON.stringify(state.sourceFindings);
+    if (underlaySources().includes(source)) render();
+    else if (changed) { if (state.view === 'model' && !state.blocked) renderInspector(); else render(); }
+  }
+  function updateSourceFindings() {
+    const out = [], note = (code, message) => out.push({ severity: 'advisory', code, message, entityId: null });
+    if (state.sources.status === 'invalid') note('source.manifest', state.sources.message);
+    for (const source of sourceList()) {
+      const asset = sourceAssets.get(source.id);
+      if (asset?.status === 'stale') note('source.stale', `${source.id}: ${asset.message} Re-import it with add --replace; until then it is not drawn or measured.`);
+      else if (asset?.status === 'missing') note('source.stale', `${source.id}: ${asset.message} Re-import it with add --replace.`);
+      else if (placementStale(source)) note('source.stale', `${source.id}: the placement predates the current image, calibration, or true north, so it is not drawn. Place it again with scripts/import-image.mjs place.`);
+      if (sourceScaleGroups(source).some(group => group.scale?.disagree)) note('source.disagree', `${source.id}: its calibrations differ by more than 5%. Resolve them before measuring from it.`);
+    }
+    state.sourceFindings = out;
+  }
+  // Placed, current sources under the active sheet: the site plan, or a level's plan and systems sheets.
+  function underlaySources() {
+    if (state.blocked || !state.model) return [];
+    const key = state.view === 'site' ? 'site' : ['plan', 'systems'].includes(state.view) ? state.levelId : null;
+    const finite = t => ['a', 'b', 'c', 'd', 'e', 'f'].every(name => Number.isFinite(t?.[name]));
+    return key ? sourceList().filter(source => source.placement?.view === key && finite(source.placement.transform) && !placementStale(source) && !['stale', 'missing'].includes(sourceAssets.get(source.id)?.status)) : [];
+  }
+  function viewUnderlays() {
+    if (!state.underlay) return [];
+    return underlaySources().map(source => [source, sourceAssets.get(source.id)]).filter(([, asset]) => assetUsable(asset) && asset.href)
+      .map(([source, asset]) => ({ href: asset.href, width: source.pixels.width, height: source.pixels.height, transform: source.placement.transform, opacity: state.underlayOpacity }));
+  }
+
+  const newDraft = sourceId => ({ sourceId, from: null, to: null, fromU: 0.5, toU: 0.5, distanceText: '', region: null, regionLabel: '', regionStart: null, references: [], payload: '', copied: null });
+  function sourceDraft() {
+    if (state.draft?.sourceId !== state.sourceId) state.draft = newDraft(state.sourceId);
+    return state.draft;
+  }
+  // What the draft would copy (`input`), or why it cannot be copied yet.
+  function draftCheck(source, draft, size) {
+    const result = { input: null, problem: '', distanceError: '', distanceNote: '' };
+    const text = draft.distanceText.trim(), parsed = text ? parseLength(text) : null;
+    if (parsed?.error) result.distanceError = parsed.error;
+    else if (parsed) result.distanceNote = sourceUnits() === 'metric' ? formatLength(parsed.mm, 'metric') : `${formatLength(parsed.mm, 'feet-inches')} (${+parsed.mm.toFixed(1)} mm)`;
+    let calibration = null;
+    if (draft.from || text) {
+      if (!draft.from) return { ...result, problem: 'Choose Scale line and mark both ends.' };
+      if (!draft.to) return { ...result, problem: 'Mark the other end of the scale line.' };
+      if (!parsed) return { ...result, distanceNote: 'Type the distance between the two ends.' };
+      if (parsed.error) return result;
+      const lengthPx = Math.hypot(draft.to.x - draft.from.x, draft.to.y - draft.from.y);
+      result.distanceNote += lengthPx > 0 ? ` over ${round1(lengthPx)} px: ${+(parsed.mm / lengthPx).toPrecision(4)} mm/px.` : '';
+      if (lengthPx < 0.1 * Math.hypot(size.width, size.height)) return { ...result, problem: 'The two ends must be at least 10% of the image diagonal apart.' };
+      if (draft.region && !(rectContains(draft.region, draft.from) && rectContains(draft.region, draft.to))) return { ...result, problem: 'The scale line must lie inside the region.' };
+      calibration = { from: draft.from, to: draft.to, distanceMm: parsed.mm, entered: text, uncertaintyPx: Math.max(draft.fromU, draft.toU), region: draft.region ? { ...draft.region, label: draft.regionLabel } : null };
+    } else if (draft.region) return { ...result, problem: 'A region needs a scale line inside it.' };
+    const labels = draft.references.map(item => item.label.trim());
+    if (labels.some(label => !label)) return { ...result, problem: 'Label every reference point.' };
+    if (new Set(labels).size < labels.length) return { ...result, problem: 'Give each reference point its own label.' };
+    if (!calibration && !labels.length) return result;
+    return { ...result, input: { calibration, references: draft.references } };
+  }
+
+  function selectSource(id) {
+    if (!sourceList().some(item => item.id === id) || id === state.sourceId) return;
+    state.sourceId = id;
+    state.tool = null;
+    renderSourcesView(true);
+    syncLocation();
+    inspector.querySelector(`[data-source-id="${CSS.escape(id)}"]`)?.focus();
+  }
+  function renderSourcesView(refit) {
+    const source = selectedSource(), asset = source ? sourceAsset(source) : null;
+    renderSourcesInspector();
+    updateSourceTools();
+    const readout = $('#source-readout');
+    if (!source || !asset.url || !(assetUsable(asset) || asset.status === 'stale')) {
+      stageSource = null;
+      sheetStage.innerHTML = '';
+      readout.classList.add('hidden-view');
+      if (state.sources.status === 'invalid') showStageStatus('Source images unreadable', state.sources.message);
+      else if (!source) showStageStatus('No source images', 'Import images with scripts/import-image.mjs add.');
+      else if (asset.status === 'loading') showStageStatus('Loading the image', `Reading ${source.path}.`);
+      else showStageStatus('Image unavailable', `${asset.message} Re-import it with scripts/import-image.mjs add --replace.`);
+      return;
+    }
+    showStageStatus(null);
+    readout.classList.remove('hidden-view');
+    const key = `${source.id}|${asset.url}`;
+    if (stageSource !== key) {
+      sheetStage.innerHTML = `<div class="source-frame" style="width:${asset.width}px;height:${asset.height}px"><img class="source-image" src="${escapeHtml(asset.url)}" width="${asset.width}" height="${asset.height}" alt="${escapeHtml(`${SOURCE_KINDS[source.kind] ?? 'Image'} ${source.id}`)}" draggable="false"><svg class="source-overlay" xmlns="http://www.w3.org/2000/svg" width="${asset.width}" height="${asset.height}" viewBox="0 0 ${asset.width} ${asset.height}" aria-hidden="true"></svg></div>`;
+      stageSource = key;
+      sheetView.width = asset.width; sheetView.height = asset.height;
+      readout.textContent = `${asset.width} x ${asset.height} px`;
+      refit = true;
+    }
+    overlayZoom = null;
+    if (refit || !sheetView.adjusted) fitSheet(); else applySheetTransform();
+    if (overlayZoom === null) drawSourceOverlay();
+  }
+  // Marks over the image in natural pixels, sized to stay constant on screen at the current zoom.
+  function drawSourceOverlay() {
+    const svg = sheetStage.querySelector?.('.source-overlay'), source = selectedSource();
+    if (!svg || !source) return;
+    overlayZoom = sheetView.zoom;
+    const k = 1 / sheetView.zoom, n = value => +value.toFixed(3), draft = sourceDraft(), parts = [];
+    const xy = (a, b) => `x1="${n(a.x)}" y1="${n(a.y)}" x2="${n(b.x)}" y2="${n(b.y)}"`;
+    const seg = (a, b, cls) => `<line class="ov-halo" ${xy(a, b)} stroke-width="${n(5 * k)}"/><line class="${cls}" ${xy(a, b)} stroke-width="${n(2 * k)}"/>`;
+    const box = (r, cls) => { const q = normRect(r), attrs = `x="${n(q.x0)}" y="${n(q.y0)}" width="${n(q.x1 - q.x0)}" height="${n(q.y1 - q.y0)}"`; return `<rect class="ov-halo" ${attrs} stroke-width="${n(5 * k)}"/><rect class="${cls}" ${attrs} stroke-width="${n(2 * k)}" stroke-dasharray="${n(8 * k)} ${n(5 * k)}"/>`; };
+    const dot = (p, cls) => `<circle class="${cls} ov-dot" cx="${n(p.x)}" cy="${n(p.y)}" r="${n(4 * k)}" stroke-width="${n(2 * k)}"/>`;
+    const label = (p, text) => `<text x="${n(p.x + 8 * k)}" y="${n(p.y - 8 * k)}" font-size="${n(12 * k)}" stroke-width="${n(3 * k)}">${escapeHtml(text)}</text>`;
+    const regions = [];
+    for (const item of source.calibrations ?? []) {
+      if (item.region && !regions.some(r => sameRect(r, item.region))) {
+        regions.push(item.region);
+        parts.push(box(item.region, 'ov-ink'), label({ x: normRect(item.region).x0, y: normRect(item.region).y0 }, item.region.label || `${item.id} region`));
+      }
+      if (item.from && item.to) parts.push(seg(item.from, item.to, 'ov-ink'), dot(item.from, 'ov-ink'), dot(item.to, 'ov-ink'), label({ x: (item.from.x + item.to.x) / 2, y: (item.from.y + item.to.y) / 2 }, `${item.id} ${METHOD_LABELS[item.method] ?? item.method}`));
+    }
+    for (const item of source.references ?? []) parts.push(dot(item.pixel, 'ov-ink'), label(item.pixel, item.label));
+    const pending = regionDrag?.current ? { x0: regionDrag.start.x, y0: regionDrag.start.y, x1: regionDrag.current.x, y1: regionDrag.current.y } : draft.region;
+    if (pending) parts.push(box(pending, 'ov-draft'));
+    if (draft.regionStart) parts.push(dot(draft.regionStart, 'ov-draft'));
+    if (draft.from && draft.to) parts.push(seg(draft.from, draft.to, 'ov-draft'));
+    for (const p of [draft.from, draft.to].filter(Boolean)) parts.push(dot(p, 'ov-draft'));
+    draft.references.forEach((item, i) => parts.push(dot(item.pixel, 'ov-draft'), label(item.pixel, item.label.trim() || `Point ${i + 1}`)));
+    svg.innerHTML = parts.join('');
+  }
+
+  const percentLabel = u => `${+(u * 100).toPrecision(2)}%`;
+  const scaleSummary = scale => scale ? `${+scale.mmPerPx.toPrecision(4)} mm/px ± ${percentLabel(scale.relativeUncertainty)}, ${scale.methods.map(m => METHOD_LABELS[m] ?? m).join(', ')}${scale.estimated ? ', estimated' : ''}` : 'Not calibrated';
+  function sourceFlags(source) {
+    const asset = sourceAssets.get(source.id), flags = [];
+    if (asset?.status === 'loading') flags.push(['advisory', 'Checking', 'reading the file']);
+    if (asset?.status === 'stale') flags.push(['warning', 'Stale', 're-import with add --replace']);
+    if (asset?.status === 'missing') flags.push(['warning', 'Missing', 're-import with add --replace']);
+    if (asset?.status === 'unverified') flags.push(['advisory', 'Not verified', 'this page cannot check the file hash']);
+    if (placementStale(source)) flags.push(['warning', 'Placement out of date', 'not drawn']);
+    if (sourceScaleGroups(source).some(group => group.scale?.disagree)) flags.push(['warning', 'Calibrations disagree', 'resolve before measuring']);
+    return flags;
+  }
+  function placementLabel(source) {
+    const placement = source.placement;
+    if (!placement) return 'Not placed';
+    const level = state.model?.levels?.find?.(item => item.id === placement.view);
+    const where = placement.view === 'site' ? 'Site plan' : level ? `${level.name} plan` : placement.view;
+    const worst = Math.max(0, ...(placement.residualsMm ?? []));
+    return [where, placement.pairs?.length > 1 ? `residual up to ${Math.round(worst)} mm` : '', placementStale(source) ? 'out of date' : ''].filter(Boolean).join(', ');
+  }
+  function sourceDetails(source) {
+    const asset = sourceAssets.get(source.id);
+    const dims = [['Pixels', `${source.pixels.width} x ${source.pixels.height}`], ['Revision', `${source.revision}.${source.calibrationRevision}`], ['Placed on', placementLabel(source)]];
+    if (source.north) dims.push(['North', `${num(source.north.deg)}° ${source.north.source.replace('-', ' ')}`]);
+    const scales = source.kind === 'photo' ? ['<li>Photos are not calibrated: perspective is not a uniform scale.</li>']
+      : sourceScaleGroups(source).map(group => `<li>${escapeHtml(group.region ? group.region.label || 'Region' : 'Whole image')}: ${escapeHtml(scaleSummary(group.scale))}${group.scale?.disagree ? ' <b>(disagree)</b>' : ''}</li>`);
+    const calibrations = (source.calibrations ?? []).map(item => `<li><b>${escapeHtml(item.id)}</b> ${escapeHtml(METHOD_LABELS[item.method] ?? item.method)}, ${escapeHtml(`${+item.mmPerPx.toPrecision(4)} mm/px ± ${percentLabel(item.relativeUncertainty ?? 0)}`)}${item.estimated ? ', estimated' : ''}${item.method === 'known-object' && !item.acceptedByUser ? ', not accepted' : ''}. ${escapeHtml(item.provenance)}</li>`).join('');
+    const check = !asset || asset.status === 'loading' ? 'Checking the file against its import.'
+      : asset.status === 'ok' ? 'The file matches its import.'
+        : asset.status === 'unverified' ? 'Not verified: this page cannot compute the file hash (it needs localhost or https). The pixel size matches.'
+          : `${asset.message} Re-import it with add --replace.`;
+    return [
+      `<h3 class="entity-subhead">${escapeHtml(source.id)}</h3>`,
+      `<p class="entity-context">${escapeHtml(`${SOURCE_KINDS[source.kind] ?? source.kind}, ${source.path}`)}${source.notes ? `. ${escapeHtml(source.notes)}` : ''}</p>`,
+      `<dl class="key-dims">${dims.map(([dt, dd]) => `<div><dt>${escapeHtml(dt)}</dt><dd>${escapeHtml(dd)}</dd></div>`).join('')}</dl>`,
+      `<h4 class="entity-subhead">Scale</h4><ul class="open-items">${scales.join('')}</ul>`,
+      calibrations ? `<h4 class="entity-subhead">Calibrations</h4><ul class="open-items">${calibrations}</ul>` : '',
+      source.legacyCalibration ? `<p class="field-note">${escapeHtml(`From the brief, not yet located on the image: ${source.legacyCalibration.description}.`)}</p>` : '',
+      `<p class="evidence-line">${escapeHtml(check)}</p>`
+    ].join('');
+  }
+  function calibrateSection(source) {
+    const asset = sourceAssets.get(source.id), draft = sourceDraft(), head = '<h3 class="entity-subhead">Calibrate</h3>';
+    if (!assetUsable(asset)) {
+      const why = !asset || asset.status === 'loading' ? 'Checking the file first.' : asset.status === 'stale' ? 'Stale: re-import with add --replace. Calibration is off until the file matches its import.' : 'The file cannot be read, so calibration is off. Re-import it with add --replace.';
+      return `${head}<p class="entity-context">${escapeHtml(why)}</p>`;
+    }
+    const photo = source.kind === 'photo', pt = p => `${p.x}, ${p.y}`;
+    const intro = photo ? 'Photos are not calibrated. You can still name reference points for placement.' : 'Choose Scale line, mark both ends of a known distance, and type it. With the image focused, Enter marks the point under the centre crosshair.';
+    const lengthPx = draft.from && draft.to ? round1(Math.hypot(draft.to.x - draft.from.x, draft.to.y - draft.from.y)) : null;
+    const line = draft.from ? `<dl class="key-dims"><div><dt>From</dt><dd>${pt(draft.from)}</dd></div><div><dt>To</dt><dd>${draft.to ? pt(draft.to) : 'Not set'}</dd></div>${lengthPx != null ? `<div><dt>Length</dt><dd>${lengthPx} px</dd></div><div><dt>End accuracy</dt><dd>± ${round1(Math.max(draft.fromU, draft.toU))} px</dd></div>` : ''}</dl>` : '';
+    const example = sourceUnits() === 'metric' ? '3810 mm' : '12\'-6"';
+    const distance = photo ? '' : `<label class="text-field" for="cal-distance">Distance between the ends<input id="cal-distance" type="text" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(`For example ${example}`)}" value="${escapeHtml(draft.distanceText)}" aria-describedby="cal-distance-note"></label><p id="cal-distance-note" class="field-note"></p>`;
+    const region = photo ? '' : '<h4 class="entity-subhead">Region</h4>' + (draft.region
+      ? `<p class="entity-context">${escapeHtml(`${pt({ x: normRect(draft.region).x0, y: normRect(draft.region).y0 })} to ${pt({ x: normRect(draft.region).x1, y: normRect(draft.region).y1 })}`)}</p><label class="text-field" for="cal-region-label">Region label (optional)<input id="cal-region-label" type="text" autocomplete="off" value="${escapeHtml(draft.regionLabel)}"></label><div class="calibrate-actions"><button type="button" class="tool" id="cal-region-clear">Clear region</button></div>`
+      : draft.regionStart ? '<p class="field-note">Mark the opposite corner.</p>' : '<p class="field-note">Optional. Choose Region and drag a rectangle when this scale applies to one view of a mixed sheet.</p>');
+    const refs = draft.references.map((item, i) => `<li><label class="text-field" for="cal-ref-${i}">${escapeHtml(`Label for ${pt(item.pixel)}`)}<input id="cal-ref-${i}" data-ref-index="${i}" type="text" autocomplete="off" value="${escapeHtml(item.label)}"></label><button type="button" class="tool" data-ref-remove="${i}" aria-label="Remove reference point ${i + 1}">Remove</button></li>`).join('');
+    const copied = draft.copied === 'ok' ? '<div id="cal-copied"><p class="field-note">Copied.</p></div>'
+      : draft.copied === 'failed' ? `<div id="cal-copied"><p class="field-note">Copying is blocked here. Copy this text yourself.</p><textarea id="cal-payload" class="payload" readonly aria-label="Calibration text to copy">${escapeHtml(draft.payload)}</textarea></div>` : '';
+    return [
+      head, `<p class="entity-context">${escapeHtml(intro)}</p>`, line, distance, region,
+      `<h4 class="entity-subhead">Reference points</h4>${refs ? `<ol class="ref-list">${refs}</ol>` : '<p class="field-note">Optional. Choose Reference point and mark a feature, such as a house corner, to name it.</p>'}`,
+      '<p id="cal-problem" class="field-note field-note--error"></p>',
+      '<div class="calibrate-actions"><button type="button" class="tool primary" id="copy-calibration" aria-describedby="cal-copy-help">Copy calibration</button><button type="button" class="tool" id="cal-reset">Start over</button></div>',
+      '<p class="approval__note" id="cal-copy-help">Paste it to your agent, which records it with scripts/import-image.mjs apply, then reload this page.</p>',
+      copied
+    ].join('');
+  }
+  function renderSourcesInspector() {
+    const active = document.activeElement, keep = active && inspector.contains?.(active) ? { id: active.id, start: active.selectionStart, end: active.selectionEnd } : null;
+    if (state.sources.status === 'invalid') {
+      inspector.innerHTML = `<h2>Source images</h2><p class="lede">${escapeHtml(state.sources.message)}</p><p class="fineprint">Run scripts/import-image.mjs check to see every problem.</p>`;
+      return;
+    }
+    const source = selectedSource();
+    const items = sourceList().map(item => {
+      const flags = sourceFlags(item), body = `Revision ${item.revision} · ${item.kind === 'photo' ? 'not calibrated' : scaleSummary(sourceScale(item))}`;
+      return `<li><button type="button" class="queue-item source-item" data-source-id="${escapeHtml(item.id)}" aria-current="${item.id === state.sourceId}"><span class="queue-item__kind">${escapeHtml(SOURCE_KINDS[item.kind] ?? item.kind)}</span><span class="queue-item__title">${escapeHtml(item.id)}</span><span class="queue-item__body">${escapeHtml(body)}</span>${flags.length ? `<span class="source-flags">${flags.map(([severity, word, rest]) => `<span class="flag--${severity}"><b>${escapeHtml(word)}</b>: ${escapeHtml(rest)}</span>`).join('')}</span>` : ''}</button></li>`;
+    }).join('');
+    inspector.innerHTML = [
+      '<h2>Source images</h2>',
+      '<p class="lede">Calibrate an image here, then paste the result to your agent.</p>',
+      state.blocked ? '<p class="field-note">The building model is unavailable or has errors, so placed images are not drawn on the plans. Calibration still works.</p>' : '',
+      `<ol class="queue" aria-label="Source images">${items}</ol>`,
+      source ? sourceDetails(source) + calibrateSection(source) : ''
+    ].join('');
+    inspector.querySelectorAll('[data-source-id]').forEach(button => button.addEventListener('click', () => selectSource(button.dataset.sourceId)));
+    const draft = source ? sourceDraft() : null, edited = () => { if (draft.copied) { draft.copied = null; $('#cal-copied')?.remove(); } updateCalibrationStatus(); };
+    $('#cal-distance')?.addEventListener('input', event => { draft.distanceText = event.target.value; edited(); });
+    $('#cal-region-label')?.addEventListener('input', event => { draft.regionLabel = event.target.value; edited(); });
+    $('#cal-region-clear')?.addEventListener('click', () => { draft.region = null; draft.copied = null; renderSourcesInspector(); drawSourceOverlay(); announce('Region cleared.'); });
+    inspector.querySelectorAll('[data-ref-index]').forEach(input => {
+      input.addEventListener('input', () => { draft.references[Number(input.dataset.refIndex)].label = input.value; edited(); drawSourceOverlay(); });
+      input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); viewport.focus(); } });
+    });
+    inspector.querySelectorAll('[data-ref-remove]').forEach(button => button.addEventListener('click', () => {
+      draft.references.splice(Number(button.dataset.refRemove), 1); draft.copied = null;
+      renderSourcesInspector(); drawSourceOverlay(); announce('Reference point removed.');
+    }));
+    $('#copy-calibration')?.addEventListener('click', copyCalibration);
+    $('#cal-reset')?.addEventListener('click', () => { state.draft = newDraft(state.sourceId); renderSourcesInspector(); drawSourceOverlay(); announce('Calibration cleared.'); });
+    updateCalibrationStatus();
+    if (keep?.id) { const again = document.getElementById(keep.id); again?.focus(); if (again && keep.start != null) try { again.setSelectionRange(keep.start, keep.end); } catch {} }
+  }
+  function updateCalibrationStatus() {
+    const source = selectedSource(), asset = source && sourceAssets.get(source.id), copy = $('#copy-calibration');
+    if (!source || !assetUsable(asset) || !copy) return null;
+    const check = draftCheck(source, sourceDraft(), asset), note = $('#cal-distance-note');
+    if (note) { note.textContent = check.distanceError || check.distanceNote; note.classList.toggle('field-note--error', Boolean(check.distanceError)); }
+    $('#cal-distance')?.setAttribute('aria-invalid', String(Boolean(check.distanceError)));
+    $('#cal-problem').textContent = check.problem;
+    copy.disabled = !check.input;
+    return check;
+  }
+  async function copyCalibration() {
+    const source = selectedSource(), asset = source && sourceAssets.get(source.id);
+    if (!source || !assetUsable(asset)) return;
+    const draft = sourceDraft(), check = draftCheck(source, draft, asset);
+    if (!check.input) return;
+    draft.payload = calibrationPayload(source, check.input);
+    try { await navigator.clipboard.writeText(draft.payload); draft.copied = 'ok'; } catch { draft.copied = 'failed'; }
+    renderSourcesInspector();
+    if (draft.copied === 'failed') { const area = $('#cal-payload'); area?.focus(); area?.select(); announce('Copying is blocked here. The calibration text is selected below.'); }
+    else { $('#copy-calibration')?.focus(); announce('Calibration copied. Paste it to your agent.'); }
+  }
+
+  function updateSourceTools() {
+    const source = selectedSource(), asset = source && sourceAssets.get(source.id), usable = assetUsable(asset);
+    const blocked = tool => !usable || (source.kind === 'photo' && tool !== 'point');
+    if (state.tool && blocked(state.tool)) state.tool = null;
+    document.querySelectorAll('.source-tool').forEach(button => {
+      button.disabled = blocked(button.dataset.tool);
+      button.setAttribute('aria-pressed', String(state.tool === button.dataset.tool));
+    });
+    const armed = state.view === 'sources' && Boolean(state.tool);
+    viewport.classList.toggle('is-picking', armed);
+    $('#source-crosshair').classList.toggle('is-armed', armed);
+  }
+  function setTool(tool) {
+    state.tool = state.tool === tool ? null : tool;
+    if (state.draft) state.draft.regionStart = null;
+    updateSourceTools();
+    renderSourcesInspector();
+    drawSourceOverlay();
+  }
+  // Canonical (natural) image pixels under a viewport point, independent of zoom.
+  function imagePoint(clientX, clientY) {
+    const rect = viewport.getBoundingClientRect();
+    return { x: (clientX - rect.left - sheetView.x) / sheetView.zoom, y: (clientY - rect.top - sheetView.y) / sheetView.zoom };
+  }
+  function centrePoint() {
+    const rect = viewport.getBoundingClientRect();
+    return imagePoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  }
+  function setRegion(a, b, asset) {
+    const clamp = (v, max) => round1(Math.min(max, Math.max(0, v)));
+    const region = normRect({ x0: clamp(a.x, asset.width), y0: clamp(a.y, asset.height), x1: clamp(b.x, asset.width), y1: clamp(b.y, asset.height) });
+    if (region.x1 - region.x0 < 1 || region.y1 - region.y0 < 1) { announce('That region is too small.'); return; }
+    sourceDraft().region = region;
+    announce(`Region set from ${region.x0}, ${region.y0} to ${region.x1}, ${region.y1}.`);
+  }
+  // Marks a point for the active tool. Uncertainty is one screen pixel in image pixels, at least 0.5.
+  function sourcePick(p) {
+    const source = selectedSource(), asset = source && sourceAssets.get(source.id);
+    if (!state.tool || !assetUsable(asset)) return;
+    if (p.x < 0 || p.y < 0 || p.x > asset.width || p.y > asset.height) { announce('That point is outside the image.'); return; }
+    const draft = sourceDraft(), point = { x: round1(p.x), y: round1(p.y) }, u = round1(Math.max(0.5, 1 / sheetView.zoom));
+    let focus = null;
+    draft.copied = null;
+    if (state.tool === 'line') {
+      if (!draft.from || draft.to) { Object.assign(draft, { from: point, fromU: u, to: null }); announce(`Scale line starts at ${point.x}, ${point.y}. Mark the other end.`); }
+      else { Object.assign(draft, { to: point, toU: u }); announce(`Scale line ends at ${point.x}, ${point.y}. Type the distance.`); if (!draft.distanceText.trim()) focus = '#cal-distance'; }
+    } else if (state.tool === 'region') {
+      if (!draft.regionStart) { draft.regionStart = point; announce(`Region corner at ${point.x}, ${point.y}. Mark the opposite corner.`); }
+      else { setRegion(draft.regionStart, point, asset); draft.regionStart = null; }
+    } else {
+      draft.references.push({ label: '', pixel: point });
+      focus = `#cal-ref-${draft.references.length - 1}`;
+      announce(`Reference point at ${point.x}, ${point.y}. Type its label.`);
+    }
+    renderSourcesInspector();
+    drawSourceOverlay();
+    if (focus) $(focus)?.focus();
+  }
+  function cancelSourceStep() {
+    const draft = sourceDraft();
+    if (draft.regionStart) draft.regionStart = null;
+    else if (draft.from && !draft.to) draft.from = null;
+    else { setTool(null); return; }
+    renderSourcesInspector();
+    drawSourceOverlay();
+  }
+  function wireSourceControls() {
+    document.querySelectorAll('.source-tool').forEach(button => button.addEventListener('click', () => setTool(button.dataset.tool)));
+    viewport.addEventListener('pointermove', event => {
+      if (state.view !== 'sources' || !stageSource) return;
+      const p = imagePoint(event.clientX, event.clientY), asset = sourceAssets.get(state.sourceId);
+      $('#source-readout').textContent = asset && p.x >= 0 && p.y >= 0 && p.x <= asset.width && p.y <= asset.height ? `x ${p.x.toFixed(1)}, y ${p.y.toFixed(1)} px` : 'Outside the image';
+    });
+  }
   function setApproval(id, approved) {
     if (approved) state.approvals[id] = { approvedAt: new Date().toISOString().slice(0, 10) };
     else delete state.approvals[id];
@@ -4039,26 +4653,52 @@
   }
 
   function render(options = {}) {
-    if (!state.model) return;
-    const isSheet = SHEET_VIEWS.includes(state.view), isDocument = DOCUMENT_VIEWS.includes(state.view), isModel = state.view === 'model';
-    viewport.classList.toggle('hidden-view', !isSheet);
+    if (!state.model && !state.blocked) return;
+    const live = !state.blocked, isSources = state.view === 'sources';
+    const isSheet = live && SHEET_VIEWS.includes(state.view), isDocument = live && DOCUMENT_VIEWS.includes(state.view), isModel = live && state.view === 'model';
+    viewport.classList.toggle('hidden-view', !isSheet && !isSources);
     canvas.classList.toggle('hidden-view', !isModel);
     content.classList.toggle('hidden-view', !isDocument);
     modelHelp.classList.toggle('hidden-view', !isModel);
-    $('#level-control').classList.toggle('hidden-view', !['plan', 'systems'].includes(state.view));
-    $('#elevation-control').classList.toggle('hidden-view', state.view !== 'elevation');
-    $('#section-control').classList.toggle('hidden-view', state.view !== 'section' || !(state.model.sections ?? []).length);
-    $('#zoom-controls').classList.toggle('hidden-view', !isSheet);
+    $('#level-control').classList.toggle('hidden-view', !live || !['plan', 'systems'].includes(state.view));
+    $('#elevation-control').classList.toggle('hidden-view', !live || state.view !== 'elevation');
+    $('#section-control').classList.toggle('hidden-view', !live || state.view !== 'section' || !(state.model.sections ?? []).length);
+    $('#zoom-controls').classList.toggle('hidden-view', !isSheet && !isSources);
+    $('#zoom-fit').textContent = isSources ? 'Fit image' : 'Fit sheet';
     $('#camera-controls').classList.toggle('hidden-view', !isModel);
-    $('#system-controls').classList.toggle('hidden-view', !['systems', 'model'].includes(state.view));
-    $('#site-controls').classList.toggle('hidden-view', state.view !== 'site');
+    $('#system-controls').classList.toggle('hidden-view', !live || !['systems', 'model'].includes(state.view));
+    $('#site-controls').classList.toggle('hidden-view', !live || state.view !== 'site');
+    $('#source-tools').classList.toggle('hidden-view', !isSources);
+    $('#underlay-controls').classList.toggle('hidden-view', !isSheet || !underlaySources().length);
+    $('#underlay-toggle').setAttribute('aria-pressed', String(state.underlay));
+    $('#underlay-opacity').disabled = !state.underlay;
+    $('#source-readout').classList.toggle('hidden-view', !isSources);
+    $('#download-set').classList.toggle('hidden-view', !live);
+    viewport.setAttribute('aria-label', isSources ? 'Source image. Arrow keys pan, plus and minus zoom, 0 fits the image. With a tool chosen, Enter marks the point under the centre crosshair.' : 'Drawing sheet. Arrow keys pan, plus and minus zoom, 0 fits the sheet.');
     document.querySelectorAll('.tab').forEach(tab => {
       const active = tab.dataset.view === state.view;
       tab.setAttribute('aria-selected', String(active));
       tab.setAttribute('tabindex', active ? '0' : '-1');
       if (active) $('#stage').setAttribute('aria-labelledby', tab.id);
     });
-    if (!isSheet) showStageStatus(null);
+    updateSourceTools();
+    if (!isSources) regionDrag = null;
+    if (!isSheet && !isSources) showStageStatus(null);
+    if (state.blocked && !isSources) {
+      stageSource = null;
+      sheetStage.innerHTML = '';
+      state.renderWarnings = [];
+      showStageStatus(state.blocked.title, state.blocked.detail);
+      if (state.blocked.inspector) inspector.innerHTML = state.blocked.inspector; else renderInspector();
+      syncLocation();
+      return;
+    }
+    if (isSources) {
+      state.renderWarnings = [];
+      renderSourcesView(options.refit);
+      syncLocation();
+      return;
+    }
     if (isSheet) renderSheetView(options.refit);
     else state.renderWarnings = [];
     if (isModel) { if (glState) { buildScene(glState); state.renderWarnings = glState.notes ?? []; } requestAnimationFrame(renderWebGL); }
@@ -4083,6 +4723,8 @@
     if (state.sectionId) params.set('section', state.sectionId);
     if (state.elevation) params.set('elevation', state.elevation);
     if (state.siteHidden.size) params.set('hide', [...state.siteHidden].join(',')); else params.delete('hide');
+    if (state.sourceId) params.set('source', state.sourceId); else params.delete('source');
+    if (state.underlay) params.delete('underlay'); else params.set('underlay', '0');
     history.replaceState(null, '', `${location.pathname}?${params}${location.hash}`);
   }
 
@@ -4094,7 +4736,7 @@
     if (focusTab) $(`#tab-${view}`).focus();
   }
 
-  function wireControls() {
+  function wireTabs() {
     const tabs = [...document.querySelectorAll('.tab')].filter(tab => availableViews(state.model).includes(tab.dataset.view));
     tabs.forEach(tab => tab.addEventListener('click', () => setView(tab.dataset.view)));
     $('.tabs').addEventListener('keydown', event => {
@@ -4104,12 +4746,13 @@
       event.preventDefault();
       setView(tabs[(next + tabs.length) % tabs.length].dataset.view, true);
     });
+  }
+
+  function wireControls() {
+    wireTabs();
     levelSelect.addEventListener('change', () => { state.levelId = levelSelect.value; render(); });
     elevationSelect.addEventListener('change', () => { state.elevation = elevationSelect.value; render({ refit: true }); });
     sectionSelect.addEventListener('change', () => { state.sectionId = sectionSelect.value; render({ refit: true }); });
-    $('#zoom-in').addEventListener('click', () => zoomAt(1.25));
-    $('#zoom-out').addEventListener('click', () => zoomAt(0.8));
-    $('#zoom-fit').addEventListener('click', fitSheet);
     document.querySelectorAll('.system-toggle').forEach(button => button.addEventListener('click', () => {
       const key = button.dataset.system;
       if (state.systems.has(key)) state.systems.delete(key); else state.systems.add(key);
@@ -4125,6 +4768,12 @@
       button.setAttribute('aria-pressed', String(!state.siteHidden.has(key)));
       render();
     }));
+    $('#underlay-toggle').addEventListener('click', () => { state.underlay = !state.underlay; render(); });
+    $('#underlay-opacity').addEventListener('input', event => {
+      state.underlayOpacity = Number(event.target.value);
+      event.target.setAttribute('aria-valuetext', `${Math.round(state.underlayOpacity * 100)}%`);
+      sheetStage.querySelectorAll('[data-layer="underlay"] image').forEach(image => image.setAttribute('opacity', String(state.underlayOpacity)));
+    });
     const setCamera = mode => {
       state.cameraMode = mode;
       $('#mode-orbit').setAttribute('aria-pressed', String(mode === 'orbit'));
@@ -4134,7 +4783,16 @@
     $('#mode-orbit').addEventListener('click', () => setCamera('orbit'));
     $('#mode-walk').addEventListener('click', () => setCamera('walk'));
     $('#download-set').addEventListener('click', downloadDrawingSet);
+    wireViewport();
+    wireSourceControls();
+  }
 
+  // Pan and zoom for drawing sheets and source images. On the Sources view a click (or Enter on the
+  // centre crosshair) marks a point for the active tool, and a drag with the Region tool draws a region.
+  function wireViewport() {
+    $('#zoom-in').addEventListener('click', () => zoomAt(1.25));
+    $('#zoom-out').addEventListener('click', () => zoomAt(0.8));
+    $('#zoom-fit').addEventListener('click', fitSheet);
     viewport.addEventListener('wheel', event => {
       event.preventDefault();
       const rect = viewport.getBoundingClientRect();
@@ -4143,6 +4801,7 @@
     viewport.addEventListener('pointerdown', event => {
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (pointers.size === 1) dragDistance = 0;
+      regionDrag = state.view === 'sources' && state.tool === 'region' && stageSource && pointers.size === 1 ? { start: imagePoint(event.clientX, event.clientY), current: null } : null;
       viewport.setPointerCapture(event.pointerId);
       viewport.classList.add('dragging');
     });
@@ -4151,8 +4810,10 @@
       const current = { x: event.clientX, y: event.clientY };
       if (pointers.size === 1) {
         dragDistance += Math.hypot(current.x - previous.x, current.y - previous.y);
-        if (dragDistance > 4) panBy(current.x - previous.x, current.y - previous.y);
+        if (regionDrag) { if (dragDistance > 4) { regionDrag.current = imagePoint(current.x, current.y); drawSourceOverlay(); } }
+        else if (dragDistance > 4) panBy(current.x - previous.x, current.y - previous.y);
       } else if (pointers.size === 2) {
+        regionDrag = null;
         const other = [...pointers.entries()].find(([id]) => id !== event.pointerId)[1];
         const before = Math.hypot(previous.x - other.x, previous.y - other.y), after = Math.hypot(current.x - other.x, current.y - other.y);
         const rect = viewport.getBoundingClientRect();
@@ -4163,14 +4824,34 @@
     });
     const release = event => { pointers.delete(event.pointerId); if (!pointers.size) viewport.classList.remove('dragging'); };
     viewport.addEventListener('pointerup', event => {
+      if (state.view === 'sources') {
+        if (pointers.size === 1) {
+          const asset = sourceAssets.get(state.sourceId), drag = regionDrag;
+          regionDrag = null;
+          if (drag?.current && assetUsable(asset)) {
+            const draft = sourceDraft();
+            setRegion(drag.start, imagePoint(event.clientX, event.clientY), asset);
+            draft.regionStart = null; draft.copied = null;
+            renderSourcesInspector();
+            drawSourceOverlay();
+          } else if (dragDistance <= 4) sourcePick(imagePoint(event.clientX, event.clientY));
+          else if (drag) drawSourceOverlay();
+        }
+        release(event);
+        return;
+      }
       if (pointers.size === 1 && dragDistance <= 4) {
         const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-entity]');
         select(target?.dataset.entity ?? null);
       }
       release(event);
     });
-    viewport.addEventListener('pointercancel', release);
+    viewport.addEventListener('pointercancel', event => { regionDrag = null; release(event); });
     viewport.addEventListener('keydown', event => {
+      if (state.view === 'sources' && state.tool) {
+        if ((event.key === 'Enter' || event.key === ' ') && event.target === viewport) { event.preventDefault(); sourcePick(centrePoint()); return; }
+        if (event.key === 'Escape') { event.preventDefault(); cancelSourceStep(); return; }
+      }
       const entity = event.target.closest?.('[data-entity]');
       if (entity && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(entity.dataset.entity); return; }
       if (event.key === 'Escape' && state.selected) { select(null); return; }
@@ -4181,8 +4862,8 @@
       else if (event.key === '0') { event.preventDefault(); fitSheet(); }
     });
     window.addEventListener('resize', () => {
-      if (SHEET_VIEWS.includes(state.view) && !sheetView.adjusted) fitSheet();
-      if (state.view === 'model') renderWebGL();
+      if ((SHEET_VIEWS.includes(state.view) || state.view === 'sources') && !sheetView.adjusted) fitSheet();
+      if (state.view === 'model' && !state.blocked) renderWebGL();
     });
   }
 
@@ -4195,11 +4876,16 @@
     return response.json();
   }
 
+  const modelUnavailable = error => ({
+    title: 'Model unavailable', detail: 'Expected a schema-valid model at models/building.json. The studio does not invent fallback geometry.',
+    inspector: `<h2>Model unavailable</h2><p class="lede">${escapeHtml(error instanceof Error ? error.message : String(error))}</p><div class="disclaimer">Expected a schema-valid model at <code>models/building.json</code>. The studio will not invent fallback geometry.</div>`
+  });
+  // A missing or invalid model blocks every drawing view with its status message. When source images
+  // exist the tabs stay wired anyway, so the Sources view can still calibrate them.
   async function start() {
+    const params = new URLSearchParams(location.search);
     try {
-      const params = new URLSearchParams(location.search);
       state.model = await loadModel(params);
-      state.view = resolveView(params.get('view') ?? state.view, state.model);
       const siteTab = $('#tab-site'); if (siteTab) siteTab.hidden = !hasSiteContent(state.model);
       const requestedLevel = params.get('level'); state.levelId = state.model.levels.some(level => level.id === requestedLevel) ? requestedLevel : (sortedLevels(state.model)[0]?.id ?? null);
       const requestedSection = params.get('section'); state.sectionId = (state.model.sections ?? []).some(item => item.id === requestedSection) ? requestedSection : (state.model.sections?.[0]?.id ?? null);
@@ -4221,20 +4907,44 @@
       }
       $('#project-name').textContent = state.model.project.name;
       $('#project-meta').textContent = `${state.model.project.status} · ${profileFor(state.model).label}`;
-      if (state.findings.some(item => item.severity === 'error')) {
-        showStageStatus('Resolve model errors', 'The drawings stay hidden until every model error in the inspector is fixed.');
-        renderInspector();
+      if (state.findings.some(item => item.severity === 'error')) state.blocked = { title: 'Resolve model errors', detail: 'The drawings stay hidden until every model error in the inspector is fixed.' };
+    } catch (error) {
+      state.model = null;
+      state.findings = [];
+      state.blocked = modelUnavailable(error);
+    }
+    state.sources = await loadSources();
+    updateSourceFindings();
+    const sourcesTab = $('#tab-sources'); if (sourcesTab) sourcesTab.hidden = !hasSources();
+    const requestedSource = params.get('source');
+    state.sourceId = sourceList().some(item => item.id === requestedSource) ? requestedSource : (sourceList()[0]?.id ?? null);
+    state.underlay = params.get('underlay') !== '0';
+    state.view = resolveView(params.get('view') ?? state.view, state.model);
+    if (state.blocked) {
+      if (!hasSources()) {
+        showStageStatus(state.blocked.title, state.blocked.detail);
+        if (state.blocked.inspector) inspector.innerHTML = state.blocked.inspector; else renderInspector();
         return;
       }
+      wireTabs();
+      wireViewport();
+      wireSourceControls();
+      render({ refit: true });
+      sourceChecks = loadSourceAssets();
+      return;
+    }
+    try {
       levelSelect.innerHTML = sortedLevels(state.model).map(level => `<option value="${escapeHtml(level.id)}"${level.id === state.levelId ? ' selected' : ''}>${escapeHtml(level.name)}</option>`).join('');
       sectionSelect.innerHTML = (state.model.sections ?? []).map(section => `<option value="${escapeHtml(section.id)}"${section.id === state.sectionId ? ' selected' : ''}>${escapeHtml(section.name)}</option>`).join('');
       elevationSelect.value = state.elevation;
       wireControls();
       render({ refit: true });
       loadManifest();
+      sourceChecks = loadSourceAssets();
     } catch (error) {
-      showStageStatus('Model unavailable', 'Expected a schema-valid model at models/building.json. The studio does not invent fallback geometry.');
-      inspector.innerHTML = `<h2>Model unavailable</h2><p class="lede">${escapeHtml(error instanceof Error ? error.message : String(error))}</p><div class="disclaimer">Expected a schema-valid model at <code>models/building.json</code>. The studio will not invent fallback geometry.</div>`;
+      const blocked = modelUnavailable(error);
+      showStageStatus(blocked.title, blocked.detail);
+      inspector.innerHTML = blocked.inspector;
     }
   }
 
@@ -4242,7 +4952,8 @@
     state, PROFILES, DISCIPLINES, MATERIAL_CATEGORIES, HEADER_KINDS, materialContext, materialsActive, wallBands, segmentPolygonIntervals, triangulate, pushExtrusion, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
     bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, centerlineIssues, pathOutline, pathFillets, centerlineLength, outlineOf, anchorPoint, resolvePath, resolveAnchors, polygonArea, pointInPolygon, wallGeometry, wallLength, wallEndClip, terrainOf, siteExtent,
     renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, siteCategories, parseSiteHidden, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
-    planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport
+    planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport,
+    parseLength, sourceScale, sourceScaleGroups, calibrationPayload, sourcesProblem, placementStale, underlaySvg, start, sourcesChecked: () => sourceChecks
   };
   if (typeof globalThis.__ARCHITECTURE_STUDIO_API__ === 'function') globalThis.__ARCHITECTURE_STUDIO_API__(studioApi);
   else start();

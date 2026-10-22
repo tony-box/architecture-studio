@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/tony-box/architecture-studio/main/references/sources.schema.json",
+  "title": "Architecture Studio Source Images",
+  "description": "sources/sources.json: the images the user supplied, with their identity, calibration, and placement. Written only by scripts/import-image.mjs. It is authoritative for image scale and placement; brief.json sources[] is the intake summary. See references/image-intake.md and coordinate-contract.md, Source Images.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sources"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "sources": { "type": "array", "items": { "$ref": "#/$defs/source" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "pixel": {
+      "description": "Canonical pixel coordinates: after EXIF orientation, origin at the top-left corner of the top-left pixel, x right, y down, continuous (the centre of pixel (i, j) is (i + 0.5, j + 0.5)).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0 },
+        "y": { "type": "number", "minimum": 0 }
+      }
+    },
+    "modelPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" }
+      }
+    },
+    "region": {
+      "description": "A pixel rectangle that a calibration applies to, for sheets that mix views at different scales.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x0", "y0", "x1", "y1"],
+      "properties": {
+        "label": { "type": "string" },
+        "x0": { "type": "number", "minimum": 0 },
+        "y0": { "type": "number", "minimum": 0 },
+        "x1": { "type": "number", "minimum": 0 },
+        "y1": { "type": "number", "minimum": 0 }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "kind", "format", "contentHash", "revision", "calibrationRevision", "pixels", "exifOrientation", "importedAt", "calibrations", "references"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "path": { "type": "string", "pattern": "^sources/[^/\\\\]+$", "description": "Relative to the project folder." },
+        "kind": { "enum": ["satellite", "survey", "site-plan", "floor-plan", "framing-plan", "elevation", "photo", "sketch", "other"] },
+        "format": { "enum": ["png", "jpeg", "webp"] },
+        "contentHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "description": "Hash of the file bytes at import. A file that no longer matches is stale: nothing measures or draws from it until it is re-imported with add --replace." },
+        "revision": { "type": "integer", "minimum": 1, "description": "Increments each time the file is replaced. Replacing clears calibrations, north, and placement." },
+        "calibrationRevision": { "type": "integer", "minimum": 0, "description": "Increments whenever calibrations or the placement change (a new or recomputed placement transform). Placements, pasted viewer payloads, and evidence references record the value they were made against." },
+        "pixels": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["width", "height"],
+          "properties": {
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "exifOrientation": { "type": "integer", "minimum": 1, "maximum": 8, "description": "The JPEG EXIF orientation tag (1 when absent). pixels are already oriented." },
+        "importedAt": { "type": "string", "description": "ISO 8601 date and time." },
+        "notes": { "type": "string" },
+        "north": { "$ref": "#/$defs/north" },
+        "calibrations": { "type": "array", "items": { "$ref": "#/$defs/calibration" } },
+        "placement": { "$ref": "#/$defs/placement" },
+        "references": {
+          "description": "Labelled points the user or agent marked on the image, such as a house corner, for later image-to-model pairs.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "pixel"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1 },
+              "pixel": { "$ref": "#/$defs/pixel" }
+            }
+          }
+        },
+        "legacyCalibration": {
+          "description": "A calibration copied from brief.json sources[] that has no pixel points yet. The agent must locate it on the image and record a real calibration.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["description", "valueMm"],
+          "properties": {
+            "description": { "type": "string" },
+            "valueMm": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        }
+      }
+    },
+    "north": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deg", "source"],
+      "properties": {
+        "deg": { "type": "number", "minimum": 0, "exclusiveMaximum": 360, "description": "Clockwise degrees from image-up to true north, the same convention as project.coordinates.trueNorthDeg." },
+        "source": { "enum": ["north-arrow", "survey-basis", "user", "assumed"], "description": "assumed (for example a north-up satellite image) must also be listed as an assumption." },
+        "note": { "type": "string" }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "method", "estimated", "mmPerPx", "relativeUncertainty", "provenance", "sourceRevision", "createdAt"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "method": {
+          "description": "printed-dimension, scale-bar, stated-scale, and map-metadata are the automatic fallbacks. manual comes from the viewer; control-points from image-to-model pairs. known-object needs acceptedByUser.",
+          "enum": ["printed-dimension", "scale-bar", "stated-scale", "map-metadata", "manual", "control-points", "known-object"]
+        },
+        "estimated": { "type": "boolean", "description": "true when the agent estimated the endpoint pixels by reading the image." },
+        "from": { "$ref": "#/$defs/pixel" },
+        "to": { "$ref": "#/$defs/pixel" },
+        "distanceMm": { "type": "number", "exclusiveMinimum": 0 },
+        "baselinePx": { "type": "number", "exclusiveMinimum": 0 },
+        "uncertaintyPx": { "type": "number", "minimum": 0, "description": "Endpoint uncertainty, in canonical pixels." },
+        "mmPerPx": { "type": "number", "exclusiveMinimum": 0 },
+        "relativeUncertainty": { "type": "number", "minimum": 0, "description": "About 2 x uncertaintyPx / baselinePx for two-point methods; stated by the user or 0.02 for stated-scale and map-metadata." },
+        "provenance": { "type": "string", "minLength": 1, "description": "Where the distance came from, for example: printed 48'-0\" dimension along the north wall." },
+        "region": { "$ref": "#/$defs/region" },
+        "acceptedByUser": { "type": "boolean", "description": "Required true for known-object before it counts." },
+        "sourceRevision": { "type": "integer", "minimum": 1 },
+        "createdAt": { "type": "string" }
+      },
+      "if": { "properties": { "method": { "enum": ["stated-scale", "map-metadata"] } } },
+      "then": {},
+      "else": { "required": ["from", "to", "distanceMm", "baselinePx", "uncertaintyPx"] }
+    },
+    "placement": {
+      "description": "Where the image sits in model coordinates. model = [a c e; b d f] x [px; py; 1]. It is a similarity transform with a y flip (image y runs down, model y up), so a*d - b*c < 0.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["view", "pairs", "mmPerPx", "rotationDeg", "transform", "residualsMm", "calibrationRevision", "sourceRevision", "createdAt"],
+      "properties": {
+        "view": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "description": "site, or the id of the level whose plan the image underlays." },
+        "pairs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pixel", "model"],
+            "properties": {
+              "label": { "type": "string" },
+              "pixel": { "$ref": "#/$defs/pixel" },
+              "model": { "$ref": "#/$defs/modelPoint" }
+            }
+          }
+        },
+        "usesNorth": { "type": "boolean", "description": "true when the rotation came from north (one pair) rather than from fitting two or more pairs." },
+        "trueNorthDeg": { "type": "number", "minimum": 0, "exclusiveMaximum": 360, "description": "The model's project.coordinates.trueNorthDeg a north-derived placement used. The placement is stale when the model's value differs." },
+        "mmPerPx": { "type": "number", "exclusiveMinimum": 0 },
+        "rotationDeg": { "type": "number", "description": "Counter-clockwise rotation from the y-flipped image to model axes." },
+        "transform": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["a", "b", "c", "d", "e", "f"],
+          "properties": {
+            "a": { "type": "number" }, "b": { "type": "number" }, "c": { "type": "number" },
+            "d": { "type": "number" }, "e": { "type": "number" }, "f": { "type": "number" }
+          }
+        },
+        "residualsMm": { "type": "array", "items": { "type": "number", "minimum": 0 } },
+        "calibrationRevision": { "type": "integer", "minimum": 0, "description": "The source's calibrationRevision after this placement was made; the source bumps it on every calibration or placement change." },
+        "sourceRevision": { "type": "integer", "minimum": 1 },
+        "createdAt": { "type": "string" }
+      }
+    }
+  }
+}

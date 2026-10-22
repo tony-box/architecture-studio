@@ -225,6 +225,95 @@ A section definition is a vertical cutting plane through `start` and `end`.
   1/8 inch. Display strings are never used as inputs to geometry.
 - Metric display defaults to millimeters below 10 m and meters above 10 m.
 
+## Source Images
+
+Images the user supplies are recorded in `sources/sources.json`
+(`sources.schema.json`) by `scripts/import-image.mjs`. That manifest, not
+`brief.json`, is authoritative for an image's scale and placement.
+
+### Pixel frame
+
+- Pixels are taken after EXIF orientation, including the mirrored
+  orientations. `pixels.width` and `pixels.height` are the oriented size; a
+  browser reports the same values as `naturalWidth` and `naturalHeight`.
+- The origin is the top-left corner of the top-left pixel. `x` runs right and
+  `y` runs down, in continuous units: the centre of pixel `(i, j)` is
+  `(i + 0.5, j + 0.5)`.
+- A coordinate read from a resized copy is given with the size that was seen
+  (`--seen <w>x<h>`) and rescaled by `width / seenWidth` and
+  `height / seenHeight`. Coordinates read from a crop are not accepted.
+- `north.deg` is clockwise degrees from image-up to true north, the same
+  convention as `trueNorthDeg`. Its `source` says where it came from; an
+  `assumed` north (a north-up satellite image) is also an assumption.
+
+### Scale
+
+- Calibrations combine only within a `region` (a pixel rectangle), or across
+  the whole image when they have none. Two points are measured with the
+  smallest region that contains both; otherwise with the whole-image
+  calibrations.
+- Within a group, `manual` and `control-points` calibrations are precise and
+  replace every other method. Without them, the scale comes from the
+  automatic methods, in the order `printed-dimension`, `scale-bar`,
+  `stated-scale`, `map-metadata`, and then accepted `known-object` (only one
+  `acceptedByUser: true`). The active scale is the inverse-variance mean of the
+  chosen calibrations, weighted by `1 / relativeUncertainty²`; its relative
+  uncertainty is `1 / sqrt(Σ 1 / u²)`.
+- The group's calibrations disagree when the largest `mmPerPx` exceeds the
+  smallest by more than 5 %. The calibrations compared are the precise ones
+  when there are any, and otherwise every automatic one apart from
+  `known-object`. Measuring that group is then disabled until the user
+  resolves it. Two calibrations within 30° of perpendicular that disagree
+  point to uneven horizontal and vertical scaling.
+- Calibration points, and the points of a placement pair, must be at least
+  10 % of the image diagonal apart.
+- A measured distance has a relative uncertainty of
+  `sqrt(u_scale² + (2ε / L)²)`, where `ε` is the endpoint uncertainty in
+  pixels and `L` the measured length in pixels.
+- `photo` sources are never calibrated: perspective is not a uniform scale.
+
+### Placement
+
+A placement maps image pixels to model millimetres with one similarity
+transform and a y flip:
+
+```text
+model.x = a·px + c·py + e
+model.y = b·px + d·py + f
+a = s·cos θ,  b = s·sin θ,  c = s·sin θ,  d = -s·cos θ
+```
+
+`s` is `mmPerPx` and `θ` is `rotationDeg`, counter-clockwise. The active
+calibration is the only scale: with it, two or more pairs fix `θ` and the
+translation by least squares at that scale, and each pair reports its
+residual. A residual above 2 % of the pair spacing, or above 150 mm, is a
+warning. One pair and `north` fix `θ = north.deg − trueNorthDeg`. Without a
+calibration, two or more pairs also fit `s`, and that is recorded as a
+`control-points` calibration, never as a second scale. Recalibrating
+recomputes the placement from its stored pairs.
+
+Renderers draw a placed image as `pixel → model → sheet`, through the
+sheet's own map, on every render. A source whose file no longer matches its
+`contentHash`, or whose placement records an older `sourceRevision` or
+`calibrationRevision`, is not drawn and is not measured.
+
+### Evidence from images
+
+An entity derived from an image sets `evidence.reference` to
+`source:<id>@<revision>.<calibrationRevision>`, for example
+`source:survey-plat@1.2`. `import-image.mjs check` lists entities whose
+reference is older than the source. The default confidence is a policy
+value, not an accuracy:
+
+| Origin | `source` | `confidence` |
+| --- | --- | --- |
+| A value printed on the image, read as written | `attachment` | 0.7 |
+| Measured with a `manual` or `control-points` scale | `attachment` | 0.6, lower when the uncertainty exceeds 2 % |
+| Measured with an estimated scale | `attachment` | 0.4 |
+| Measured with an accepted `known-object` scale | `heuristic` | 0.2 |
+
+Image-derived entities stay `needs-review` until the user confirms them.
+
 ## Evidence
 
 Each authored entity records an evidence object:

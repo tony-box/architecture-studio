@@ -7,14 +7,18 @@ export const SKILL_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.ur
 export const TEMPLATE_PATH = path.join(SKILL_ROOT, 'assets', 'studio-template.html');
 
 // Parses `--key value` and bare `--flag` arguments. Positional arguments land in `_`.
+// An option given more than once collects its values into an array; once, it stays a scalar.
 export function parseArgs(argv) {
   const args = { _: [] };
   for (let i = 0; i < argv.length; i += 1) {
     const key = argv[i];
     if (!key.startsWith('--')) { args._.push(key); continue; }
     const next = argv[i + 1];
-    if (next === undefined || next.startsWith('--')) args[key.slice(2)] = true;
-    else { args[key.slice(2)] = next; i += 1; }
+    let value = true;
+    if (next !== undefined && !next.startsWith('--')) { value = next; i += 1; }
+    const name = key.slice(2);
+    if (!Object.hasOwn(args, name)) args[name] = value;
+    else args[name] = [].concat(args[name], value);
   }
   return args;
 }

@@ -77,6 +77,49 @@ The agent then:
    open (SSH, containers, cloud agents), the agent gives you the URL.
 5. **Exports the drawing set** and writes `ASSUMPTIONS.md` and `HANDOFF.md`.
 
+## Bring your own images
+
+Images help the agent get sizes and positions right. Useful ones:
+
+- satellite or aerial views of the lot,
+- surveys and plats,
+- site plans and floor plans,
+- framing, rafter, or truss plans,
+- elevations,
+- sketches with at least one dimension you trust,
+- photos of the site or an existing building.
+
+The agent imports each image into the project's `sources/` folder
+(`scripts/import-image.mjs`) and reads it. Numbers printed on a drawing are
+used exactly as written. For anything not dimensioned, the agent estimates the
+image's scale from what is printed on it (a scale bar, a dimension string, a
+stated scale on a scan whose resolution you confirm) and tells you the result
+with its uncertainty, for example "about 48 ft ± 2 ft, estimated from the
+scale bar".
+
+To make it precise, calibrate the image yourself in the studio's **Sources**
+tab, which works before there is a model: click the two ends of a distance you
+know, type the distance, press **Copy calibration**, and paste the text to the
+agent. You can also mark labelled points, such as house corners, to help it
+place the image. A calibrated, placed plan or site image can be shown under
+the floor plan or site plan in the viewer, with an Underlay toggle and an
+opacity slider (`?underlay=0` turns it off). The exported drawings never
+include it.
+
+What images can't do:
+
+- Imagery never sets property lines, setbacks, or existing trees. Those come
+  from a survey, a plat, or you. A satellite view can suggest drives and trees
+  for you to confirm.
+- Photos are context only; they are never measured.
+- Elevations give heights only and are not shown as underlays.
+- A car, door, or parking stall is used for scale only if you accept it as an
+  assumption.
+
+Supported formats are PNG, JPEG, and WebP. Export PDFs to PNG, HEIC photos to
+JPEG, and TIFF scans to PNG first, at full resolution and without cropping off
+the scale bar or north arrow.
+
 ## Project folder
 
 ```text
@@ -85,6 +128,7 @@ my-workshop/
   index.html                 the studio viewer
   brief.json                 your confirmed answers
   sources/                   sketches, photos, and documents you supplied
+  sources/sources.json       scale and placement of each image
   models/building.json       the single source of truth
   models/variants/           complete alternative concepts
   exports/                   SVG drawing set and manifest.json
@@ -107,6 +151,7 @@ All scripts live in `scripts/` and run with plain `node`.
 | `node scripts/export-drawings.mjs --project <project>` | Validate the model and write `exports/**/*.svg` plus `exports/manifest.json`. Writes nothing while the model has errors. |
 | `node scripts/inspect.mjs --project <project> --id <id>` | Report one element as numbers (size, area, path width and radii, clearance to the building and the lot, its findings), so the agent can check a curve edit without looking at a drawing. For a door or window it lists the jamb and centre points anchors can use. Without `--id` it lists the elements. |
 | `node scripts/bundle.mjs <project>` | Write one self-contained HTML file to `exports/` for sharing. It opens with a double-click and needs no server. |
+| `node scripts/import-image.mjs <command> <project> ...` | Import images into `sources/` and record their scale and placement in `sources/sources.json`: `add`, `calibrate`, `uncalibrate`, `north`, `reference`, `place`, `measure`, `to-model`, `apply` (a calibration pasted from the viewer), `check`, `list`. See [`references/image-intake.md`](references/image-intake.md). |
 
 `serve.mjs` picks a port derived from the project path, so a project always
 opens at the same address and keeps the approvals the viewer stores in the
