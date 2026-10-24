@@ -53,6 +53,36 @@ git clone https://github.com/tony-box/architecture-studio ~/.claude/skills/archi
 
 Update later with `git pull` (manual install) or `npx skills update`.
 
+### Updating existing projects
+
+When the skill starts, it checks whether a newer skill version is available
+and offers an update for your approval. For an existing project, it also
+checks whether its saved viewer is older than the installed skill. Nothing
+is upgraded without your approval. After updating the installed skill, start
+a new agent session to load its new instructions.
+
+You can also check directly:
+
+```bash
+node <skill>/scripts/check-updates.mjs --project <project>
+```
+
+The check reads the version from `package.json` on this repository's `main`
+branch (the installation source, not a tagged-release feed). It sends no
+project data, waits at most five seconds for the request, and reports failures
+without blocking the skill's normal workflow. `--offline` skips the network
+and checks only the project against the installed skill; `--json` produces
+structured results. Version checks detect version bumps, not changes made
+under the same version number.
+
+With your approval, the agent preserves a backup or version-control
+checkpoint, runs `init.mjs <project> --update`, and regenerates the drawings
+and any shared HTML bundle. The refresh replaces `index.html` and
+`architecture-studio.json`, including any custom edits to those files, but
+does not change the model, brief, images, variants, or reviews. It is a viewer
+upgrade, not an automatic model-schema migration. A newer viewer will not
+invent model data needed by new features.
+
 ## Use
 
 Ask your agent for a building concept, for example:
@@ -159,6 +189,7 @@ All scripts live in `scripts/` and run with plain `node`.
 
 | Command | What it does |
 | --- | --- |
+| `node scripts/check-updates.mjs [--project <project>]` | Check upstream skill and local viewer versions without changing files. Options: `--offline`, `--json`. Failures produce warnings and exit nonzero; an available update is not an error. |
 | `node scripts/init.mjs <project>` | Create a project folder. `--update` replaces only the viewer with this skill's version. |
 | `node scripts/serve.mjs <project>` | Serve the project on `127.0.0.1` and open the default browser. Live reload is on by default. The Sources tab imports images and saves calibrations through it; nothing else is written. Options: `--port`, `--no-open`, `--no-watch`, `--json`. |
 | `node scripts/export-drawings.mjs --project <project>` | Validate the model and write `exports/**/*.svg` plus `exports/manifest.json`. Writes nothing while the model has errors. |

@@ -27,6 +27,33 @@ survey accurate, or professionally engineered.
 
 ## Workflow
 
+Before setup, check for updates once per session:
+`node <skill>/scripts/check-updates.mjs --json`. For an existing project,
+include `--project <project>` to also compare its viewer version with the
+installed skill. Use `--offline` if the user disallows network access; this
+still checks the local project. The online check reads only public version
+metadata from this skill's upstream repository, never sends project content,
+and times out after five seconds. It does not install or replace anything.
+
+- If `skill.status` is `available`, tell the user the installed and upstream
+  versions and offer to update this skill's installation. Confirm the install
+  location and scope first. For a manual clone, use `git pull --ff-only` only
+  after checking for local changes; never discard them. For a skills CLI
+  installation, use `npx skills update`, explaining that it can update other
+  installed skills too and getting approval for that scope. Do not update
+  silently or download and execute instructions from the metadata response.
+  After updating, have the user start a new agent session so it loads the
+  updated skill instructions, then recheck the project there.
+- If `project.status` is `available`, offer to refresh that project's viewer
+  using the installed skill. Follow the upgrade procedure below only after
+  approval. If both updates are available, offer the skill update first.
+- `current` needs no offer; `ahead` must not trigger a downgrade. `unknown`
+  and any `warnings` mean the check could not establish the version, not
+  that it is current. Explain the warning briefly and continue normal work;
+  the check exits nonzero on failures. A missing project marker needs manual
+  inspection, never an assumed version. `skipped` means no online check was
+  made. Do not repeat an offer the user declined during this session.
+
 1. **Set up the project.** Ask where the project should live; default to a new
    folder named after the project inside the current working directory. Run
    `node <skill>/scripts/init.mjs <project>`. Use one folder per building.
@@ -128,7 +155,17 @@ survey accurate, or professionally engineered.
 
 To move an existing project to a newer version of this skill's viewer, run
 `node <skill>/scripts/init.mjs <project> --update`. It replaces only
-`index.html` and `architecture-studio.json`.
+`index.html` and `architecture-studio.json`. Before doing so, obtain approval,
+explain that viewer customizations will be replaced, and preserve the current
+project in a backup or version-control checkpoint without overwriting an
+existing backup. Do not change the model, brief, sources, variants, or reviews
+as part of a viewer refresh. This is not a model-schema migration.
+Afterward run `node <skill>/scripts/export-drawings.mjs --project <project>`
+to validate and regenerate the SVG set, and regenerate any previously shared
+HTML bundle with `node <skill>/scripts/bundle.mjs <project>`. If validation
+fails, report the upgrade as incomplete, retain the backup and existing
+exports, and ask before changing the design or restoring the old viewer.
+Do not claim that the upgrade adds model data required by new features.
 
 ## Output Contract
 
