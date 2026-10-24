@@ -31,12 +31,26 @@ survey accurate, or professionally engineered.
    folder named after the project inside the current working directory. Run
    `node <skill>/scripts/init.mjs <project>`. Use one folder per building.
    If the folder is already a project, continue in it: read `brief.json` and
-   `models/building.json` before asking anything.
+   `models/building.json` before asking anything, and when
+   `sources/sources.json` exists run
+   `node <skill>/scripts/import-image.mjs list <project> --json` so you know
+   each image's scale, north, placement, and labelled points, including any
+   calibration the user applied since the last session. Never read scale or
+   positions from an image without its manifest entry.
 2. **Gather the brief.** Follow `references/intake.md`: ask in short rounds,
    write answers to `brief.json` (see `references/brief.schema.json`), and get
    the user's confirmation of the summary and every assumption. Do not model
-   until the brief is confirmed. If a sketch or image is dimensional evidence,
-   require at least one trusted calibration dimension.
+   until the brief is confirmed. Import every image the user supplies with
+   `node <skill>/scripts/import-image.mjs add` and follow
+   `references/image-intake.md`: estimate its scale from what is printed on
+   it, report each estimate with its ± and method, and offer the viewer's
+   manual calibration. The viewer (step 8) can start during intake for this;
+   its Sources tab works before a model exists. Served by `serve.mjs`, that
+   tab also lets the user add images and save calibrations (scale line,
+   labelled points, areas) straight to `sources/sources.json`; read them with
+   `node <skill>/scripts/import-image.mjs list <project> --json` rather than
+   asking the user to paste anything. `apply` remains for calibration text
+   pasted from a page that cannot write (a bundle, or a file opened offline).
 3. **Read the contracts.** Read `references/coordinate-contract.md`,
    `references/building.schema.json`, `references/model-validation.md`, and
    `references/drafting-standard.md` before authoring geometry, and
@@ -58,7 +72,8 @@ survey accurate, or professionally engineered.
    into numbers. When the site matters, add the property
    line, setbacks, contours, a grading limit, and `plants` with `plantings`;
    the model then draws a site plan, L-101. Lot lines, setbacks, and existing
-   trees come from a survey or the user, never from imagery or a guess.
+   trees come from a survey or the user, never from imagery or a guess;
+   `references/image-intake.md` covers reading surveys and site images.
 5. **Validate.** Check model references, polygons, hosted openings, vertical
    datums, stairs, and system connectivity. `export-drawings.mjs` (step 9)
    prints every validation error and writes nothing until they are fixed.
@@ -66,7 +81,9 @@ survey accurate, or professionally engineered.
    diagnostics and assumptions outputs. After adding or changing a curved
    element, run `node <skill>/scripts/inspect.mjs --project <project> --id <id>`
    and check its width, radii, bounds, and clearances as numbers; never judge a
-   curve by guessing how it looks.
+   curve by guessing how it looks. When the project has images, run
+   `node <skill>/scripts/import-image.mjs check <project>` and resolve
+   everything it lists.
 6. **Research the code.** If the user allowed network research, research
    adopted building codes and local amendments from official sources
    following `references/code-research.md`. Otherwise inspect user-provided
@@ -83,8 +100,11 @@ survey accurate, or professionally engineered.
    keeps running: `node <skill>/scripts/serve.mjs <project>`. It opens the
    user's default browser and prints the URL; always pass the URL on to the
    user, since the browser cannot open from remote or sandboxed sessions. The
-   page reloads itself whenever the model, brief, reviews, or exports change,
-   so leave it running while you iterate. Start it once per session.
+   page reloads itself whenever the model, brief, sources, reviews, or
+   exports change, so leave it running while you iterate. Start it once per
+   session. Its Sources tab is the one place the page writes: the user can
+   add images and save calibrations there, which land in `sources/` (check
+   them with `import-image.mjs list <project> --json`).
 9. **Export the drawings.** Run
    `node <skill>/scripts/export-drawings.mjs --project <project>`. It renders
    every sheet with the same code as `index.html` and writes
@@ -117,6 +137,7 @@ architecture-studio.json          # written by init.mjs
 index.html                        # the studio viewer, written by init.mjs
 brief.json                        # the confirmed intake brief
 sources/                          # user-supplied sketches, photos, documents
+sources/sources.json              # image scale and placement, written by import-image.mjs
 models/building.json
 models/variants/*.json            # optional complete alternatives
 exports/manifest.json             # written by export-drawings.mjs

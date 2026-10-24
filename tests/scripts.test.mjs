@@ -4,10 +4,11 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { bundleProject } from '../scripts/bundle.mjs';
+import { bundleProject, omittedSources } from '../scripts/bundle.mjs';
+import { buildDrawingSet } from '../scripts/export-drawings.mjs';
 import { MARKER_FILE, PROJECT_DIRS, initProject } from '../scripts/init.mjs';
-import { TEMPLATE_PATH, embedData } from '../scripts/lib.mjs';
-import { EVENTS_PATH, createStudioServer, defaultPort, listen } from '../scripts/serve.mjs';
+import { TEMPLATE_PATH, embedData, parseArgs } from '../scripts/lib.mjs';
+import { EVENTS_PATH, WATCHED, createStudioServer, defaultPort, listen } from '../scripts/serve.mjs';
 
 const skillRoot = path.resolve(import.meta.dirname, '..');
 const fixture = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', 'lakeside-barn-residence', 'building.json'), 'utf8'));
@@ -113,6 +114,59 @@ test('serve delivers project files, injects live reload, and stays inside the pr
         res.on('data', chunk => {
           if (chunk.includes('connected')) notify();
           if (chunk.includes('data: reload')) { req.destroy(); resolve(true); }
+        });
+      });
+      req.on('error', reject);
+    });
+    assert.equal(reload, true);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('parseArgs collects a repeated option into an array and keeps a single one scalar', () => {
+  assert.deepEqual(parseArgs(['place', 'dir', '--pair', '1,2=3,4', '--pair', '5,6=7,8', '--view', 'site', '--force']), { _: ['place', 'dir'], pair: ['1,2=3,4', '5,6=7,8'], view: 'site', force: true });
+  assert.deepEqual(parseArgs(['--pair', 'a', 'b']), { _: ['b'], pair: 'a' });
+  assert.deepEqual(parseArgs(['--deg', '-10', '--flag', '--flag']), { _: [], deg: '-10', flag: [true, true] });
+});
+
+const sourcesManifest = { schemaVersion: '1.0.0', sources: [{ id: 'plat', path: 'sources/plat.png' }] };
+
+test('the export manifest lists sources/sources.json only when the project has one', t => {
+  const dir = seedProject(t);
+  const artifacts = () => buildDrawingSet(template, fixture, dir).manifest.artifacts.map(item => item.path);
+  assert.ok(!artifacts().includes('sources/sources.json'));
+  fs.writeFileSync(path.join(dir, 'sources', 'sources.json'), JSON.stringify(sourcesManifest));
+  assert.ok(artifacts().includes('sources/sources.json'));
+});
+
+test('bundle names the source images it leaves out', t => {
+  const dir = seedProject(t);
+  assert.deepEqual(omittedSources(dir), []);
+  fs.writeFileSync(path.join(dir, 'sources', 'sources.json'), JSON.stringify(sourcesManifest));
+  assert.deepEqual(omittedSources(dir), [{ id: 'plat', path: 'sources/plat.png' }]);
+  const { html } = bundleProject(dir);
+  assert.doesNotMatch(html, /sources\/plat\.png/, 'images are not embedded');
+});
+
+test('serve reloads the viewer when the sources manifest or an image changes', async t => {
+  for (const file of ['sources/sources.json', 'sources/plat.png']) assert.match(file, WATCHED);
+  const dir = seedProject(t);
+  const { server, liveReload } = createStudioServer(dir);
+  const port = await listen(server, 0);
+  // Closed in `finally`, before the temp-dir cleanup: Windows will not delete a watched folder.
+  try {
+    if (!liveReload) { t.skip('recursive fs.watch is unavailable here'); return; }
+    const reload = await new Promise((resolve, reject) => {
+      let timer;
+      const req = http.get({ host: '127.0.0.1', port, path: EVENTS_PATH }, res => {
+        res.setEncoding('utf8');
+        res.on('data', chunk => {
+          if (chunk.includes('connected')) {
+            timer = setTimeout(() => { req.destroy(); resolve(false); }, 5000);
+            fs.writeFileSync(path.join(dir, 'sources', 'sources.json'), JSON.stringify(sourcesManifest));
+          }
+          if (chunk.includes('data: reload')) { clearTimeout(timer); req.destroy(); resolve(true); }
         });
       });
       req.on('error', reject);

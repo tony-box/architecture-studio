@@ -208,12 +208,17 @@ A section definition is a vertical cutting plane through `start` and `end`.
   along their length, are drawn as beyond elements at depth 0. Plants beyond
   the plane, up to 9 m away, are drawn in outline at full height.
 - Every level contributes a datum line. Without terrain, the ground line runs
-  across the full drawing at `z = siteDatumMm`. With terrain, the drawing
-  spans the whole cut line and the ground line follows the proposed ground,
-  broken under the lowest level's slabs, where the ground meets the slab
-  underside; existing ground is drawn dashed where it differs from proposed
-  ground by more than 30 mm. With `site.groundMaterialId`, earth is hatched
-  below the ground line.
+  across the full drawing at `z = siteDatumMm`. With terrain, the ground line
+  follows the proposed ground, broken under the lowest level's slabs, where
+  the ground meets the slab underside; existing ground is drawn dashed where
+  it differs from proposed ground by more than 30 mm. With
+  `site.groundMaterialId`, earth is hatched below the ground line.
+- The drawing spans the building plus 3000 mm of site each side along the
+  cut, no wider than everything the section draws. The building is every cut
+  or beyond element except site surfaces and fixtures or equipment. Ground,
+  plants, and other drawing past that span stop at the drawing's edge and
+  never set the scale (`drafting-standard.md`, Scales). A section that meets
+  no building element spans the whole cut line.
 
 ## Precision
 
@@ -224,6 +229,97 @@ A section definition is a vertical cutting plane through `start` and `end`.
 - Feet/inches display rounds to the nearest configured fraction, defaulting to
   1/8 inch. Display strings are never used as inputs to geometry.
 - Metric display defaults to millimeters below 10 m and meters above 10 m.
+
+## Source Images
+
+Images the user supplies are recorded in `sources/sources.json`
+(`sources.schema.json`) by `scripts/import-image.mjs`. That manifest, not
+`brief.json`, is authoritative for an image's scale and placement.
+
+### Pixel frame
+
+- Pixels are taken after EXIF orientation, including the mirrored
+  orientations. `pixels.width` and `pixels.height` are the oriented size; a
+  browser reports the same values as `naturalWidth` and `naturalHeight`.
+- The origin is the top-left corner of the top-left pixel. `x` runs right and
+  `y` runs down, in continuous units: the centre of pixel `(i, j)` is
+  `(i + 0.5, j + 0.5)`.
+- A coordinate read from a resized copy is given with the size that was seen
+  (`--seen <w>x<h>`) and rescaled by `width / seenWidth` and
+  `height / seenHeight`. Coordinates read from a crop are not accepted.
+- `north.deg` is clockwise degrees from image-up to true north, the same
+  convention as `trueNorthDeg`. Its `source` says where it came from; an
+  `assumed` north (a north-up satellite image) is also an assumption.
+
+### Scale
+
+- An image has one scale, and every calibration on it applies to the whole
+  image. An image drawn at more than one scale (an enlarged detail, a
+  location map inset) is cropped into one image per scale by the user and
+  each part imported as its own source.
+- `manual` and `control-points` calibrations are precise and
+  replace every other method. Without them, the scale comes from the
+  automatic methods, in the order `printed-dimension`, `scale-bar`,
+  `stated-scale`, `map-metadata`, and then accepted `known-object` (only one
+  `acceptedByUser: true`). The active scale is the inverse-variance mean of the
+  chosen calibrations, weighted by `1 / relativeUncertainty²`; its relative
+  uncertainty is `1 / sqrt(Σ 1 / u²)`.
+- The calibrations disagree when the largest `mmPerPx` exceeds the
+  smallest by more than 5 %. The calibrations compared are the precise ones
+  when there are any, and otherwise every automatic one apart from
+  `known-object`. Measuring from the image is then disabled until the user
+  resolves it. Two calibrations within 30° of perpendicular that disagree
+  point to uneven horizontal and vertical scaling.
+- Calibration points, and the points of a placement pair, must be at least
+  10 % of the image diagonal apart.
+- A measured distance has a relative uncertainty of
+  `sqrt(u_scale² + (2ε / L)²)`, where `ε` is the endpoint uncertainty in
+  pixels and `L` the measured length in pixels.
+- A labelled area measures `pixel area × mmPerPx²` with the active scale,
+  with a relative uncertainty of `2 × u_scale`.
+- `photo` sources are never calibrated: perspective is not a uniform scale.
+
+### Placement
+
+A placement maps image pixels to model millimetres with one similarity
+transform and a y flip:
+
+```text
+model.x = a·px + c·py + e
+model.y = b·px + d·py + f
+a = s·cos θ,  b = s·sin θ,  c = s·sin θ,  d = -s·cos θ
+```
+
+`s` is `mmPerPx` and `θ` is `rotationDeg`, counter-clockwise. The active
+calibration is the only scale: with it, two or more pairs fix `θ` and the
+translation by least squares at that scale, and each pair reports its
+residual. A residual above 2 % of the pair spacing, or above 150 mm, is a
+warning. One pair and `north` fix `θ = north.deg − trueNorthDeg`. Without a
+calibration, two or more pairs also fit `s`, and that is recorded as a
+`control-points` calibration, never as a second scale. Recalibrating
+recomputes the placement from its stored pairs.
+
+Renderers draw a placed image as `pixel → model → sheet`, through the
+sheet's own map, on every render. A source whose file no longer matches its
+`contentHash`, or whose placement records an older `sourceRevision` or
+`calibrationRevision`, is not drawn and is not measured.
+
+### Evidence from images
+
+An entity derived from an image sets `evidence.reference` to
+`source:<id>@<revision>.<calibrationRevision>`, for example
+`source:survey-plat@1.2`. `import-image.mjs check` lists entities whose
+reference is older than the source. The default confidence is a policy
+value, not an accuracy:
+
+| Origin | `source` | `confidence` |
+| --- | --- | --- |
+| A value printed on the image, read as written | `attachment` | 0.7 |
+| Measured with a `manual` or `control-points` scale | `attachment` | 0.6, lower when the uncertainty exceeds 2 % |
+| Measured with an estimated scale | `attachment` | 0.4 |
+| Measured with an accepted `known-object` scale | `heuristic` | 0.2 |
+
+Image-derived entities stay `needs-review` until the user confirms them.
 
 ## Evidence
 

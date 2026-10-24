@@ -45,7 +45,7 @@ before writing `models/building.json`, save it to `brief.json` (validated by
 | `site.setbacks` | Do you know the required setbacks? | Never infer them; mark unknown setbacks for code research. |
 | `site.orientation` | Which way does the main view or street face? | Sets `trueNorthDeg`. |
 | `site.slope` | Is the site flat or sloped? | Direction and rough grade change. A topographic survey or contours the user supplies become `site.contours`; never invent contours beyond a stated concept slope, and mark generated ones `needs-review`. |
-| `site.survey` | Do you have a survey, plat, or tree survey? | Copy it into `sources/`. Property lines, setbacks, and existing trees come only from a survey, a plat, or the user; satellite imagery can orient the site but never sets them. |
+| `site.survey` | Do you have a survey, plat, or tree survey? | Import an image of it with `import-image.mjs add --kind survey` and follow `image-intake.md`: read bearings and distances as printed, estimate the scale for anything undimensioned, and offer the viewer's calibration. A PDF must be exported to PNG first. Property lines, setbacks, and existing trees come only from a survey, a plat, or the user; satellite imagery can orient the site and suggest candidates the user confirms, but never sets them. |
 | `site.landscape` | Should the concept include landscaping? | Lawns, beds, walks, drive, patio, trees to keep or remove, new planting. Adds a site plan (L-101) and a plant schedule. |
 | `site.utilities` | Municipal water and sewer, or well and septic? | Affects plumbing concept. |
 | `site.access` | How do people and vehicles reach the building? | Driveway side, garage doors. |
@@ -66,7 +66,7 @@ before writing `models/building.json`, save it to `brief.json` (validated by
 
 | Field | Question | Notes |
 | --- | --- | --- |
-| `sources` | Do you have sketches, plans, photos, or code documents? | Copy them into `sources/`. A sketch used for dimensions needs at least one trusted calibration dimension; record it. |
+| `sources` | Do you have satellite views, site or floor plans, framing or truss plans, elevations, photos, sketches, or code documents? | Import each image with `node <skill>/scripts/import-image.mjs add` (PNG, JPEG, or WebP) and follow `image-intake.md`: estimate its scale from what is printed on it, report each estimate with its ± and method, and offer the viewer's manual calibration (start `serve.mjs` now if the user wants it; the Sources tab works before a model exists). Photos are context only. A sketch used for dimensions needs at least one trusted calibration dimension. Copy code documents and other files into `sources/`. |
 | `research.network` | May I look up the adopted building code online? | If no, code research is `unavailable` and the handoff lists the open code questions. |
 
 ## Before modeling

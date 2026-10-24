@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import { buildDrawingSet, loadStudioApi } from '../scripts/export-drawings.mjs';
+import vm from 'node:vm';
+import { buildDrawingSet, extractStudioScript, loadStudioApi } from '../scripts/export-drawings.mjs';
 import { expectedPreview } from '../scripts/build-preview.mjs';
 
 const skillRoot = path.resolve(import.meta.dirname, '..');
@@ -149,6 +151,8 @@ const svgAttr = (svg, name) => svg.match(new RegExp(`<svg[^>]*\\s${name}="([^"]*
 const entityGroup = (svg, id) => svg.match(new RegExp(`<g data-entity="${id}">([\\s\\S]*?)</g>`))?.[1] ?? '';
 const numbersIn = (markup, attr) => [...markup.matchAll(new RegExp(`\\s${attr}="(-?[\\d.]+)"`, 'g'))].map(match => Number(match[1]));
 const pointXs = markup => [...markup.matchAll(/points="([^"]+)"/g)].flatMap(match => match[1].split(' ').map(pair => Number(pair.split(',')[0])));
+// Open <g> groups left at the end of a markup slice.
+const groupDepth = markup => (markup.match(/<g[\s>]/g) ?? []).length - (markup.match(/<\/g>/g) ?? []).length;
 
 test('sheets follow the drafting profile selected by display units', () => {
   const { api } = loadStudio();
@@ -683,4 +687,993 @@ test('the mixed-material examples are generated and structurally identical', asy
   }
   const shape = model => JSON.stringify(Object.fromEntries(Object.entries(model).filter(([, value]) => Array.isArray(value)).map(([key, items]) => [key, items.map(item => [item.id, item.kind, (item.layers ?? []).map(layer => layer.id), (item.headers ?? []).map(header => `${header.kind}:${header.layerId}:${header.face ?? ''}`)])])));
   assert.equal(shape(materialFixture), shape(metricMaterialFixture));
+});
+
+// ---------------------------------------------------------------------------
+// Source images: scale selection, the calibration hand-off, underlays, and source-only mode.
+// ---------------------------------------------------------------------------
+const siteFixture = readFixture('hillside-garden-house');
+const HASH = `sha256:${'a'.repeat(64)}`;
+const cal = (id, method, mmPerPx, relativeUncertainty, extra = {}) => ({ id, method, estimated: !['manual', 'control-points'].includes(method), mmPerPx, relativeUncertainty, provenance: 'test', sourceRevision: 2, createdAt: '2026-10-01T00:00:00Z', ...extra });
+const testSource = (calibrations = [], extra = {}) => ({
+  id: 'survey-plat', path: 'sources/survey-plat.png', kind: 'survey', format: 'png', contentHash: HASH, revision: 2, calibrationRevision: 3,
+  pixels: { width: 4000, height: 3000 }, exifOrientation: 1, importedAt: '2026-10-01T00:00:00Z', calibrations, references: [], ...extra
+});
+// Placement transform per coordinate-contract.md: a = s cos t, b = s sin t, c = s sin t, d = -s cos t.
+const placementTransform = (s, deg, e, f) => { const t = deg * Math.PI / 180; return { a: s * Math.cos(t), b: s * Math.sin(t), c: s * Math.sin(t), d: -s * Math.cos(t), e, f }; };
+const underlayParts = svg => {
+  const match = svg.match(/<g data-layer="underlay" pointer-events="none"><clipPath id="([^"]+)"><rect x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"\/><\/clipPath><g clip-path="url\(#\1\)">(<image [^>]*\/>)<\/g><\/g>/);
+  assert.ok(match, 'the sheet draws one underlay group');
+  const image = match[6], matrix = image.match(/transform="matrix\(([^)]+)\)"/)[1].split(',').map(Number);
+  return { clip: { x0: +match[2], y0: +match[3], x1: +match[2] + +match[4], y1: +match[3] + +match[5] }, image, matrix };
+};
+// Values from the vm realm have foreign prototypes; strict deepEqual needs plain copies.
+const plain = value => JSON.parse(JSON.stringify(value));
+const near = (actual, expected, tolerance, label) => assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} vs ${expected}`);
+
+function assertUnderlayGeometry(sheet, transform, model, pixels) {
+  const { matrix, clip, image } = underlayParts(sheet.svg);
+  const { place, ext, ratio } = sheet.frame;
+  const toModel = p => ({ x: transform.a * p.x + transform.c * p.y + transform.e, y: transform.b * p.x + transform.d * p.y + transform.f });
+  const toSheet = p => ({ x: place.x + (p.x - ext.minX) / ratio, y: place.y + (ext.maxY - p.y) / ratio });
+  const [A, B, C, D, E, F] = matrix;
+  for (const p of [{ x: 0, y: 0 }, { x: pixels.width, y: 0 }, { x: 0, y: pixels.height }, { x: pixels.width, y: pixels.height }, { x: 1234.5, y: 678.9 }]) {
+    const expected = toSheet(toModel(p));
+    near(A * p.x + C * p.y + E, expected.x, 0.01, `x of pixel ${p.x},${p.y}`);
+    near(B * p.x + D * p.y + F, expected.y, 0.01, `y of pixel ${p.x},${p.y}`);
+  }
+  assert.match(image, new RegExp(`width="${pixels.width}" height="${pixels.height}" preserveAspectRatio="none" opacity="0.4"`));
+  assert.ok(model.project.coordinates.trueNorthDeg !== 0, 'the fixture rotates true north');
+  return clip;
+}
+
+test('length entry accepts the documented grammar and rejects bare numbers', () => {
+  const { api } = loadStudio();
+  for (const text of ['3810mm', '3810 mm', '3.81m', '381cm', '12.5ft', `12'-6"`, `12' 6"`, `12'6"`, '150in', '150"', '12 ft 6 in', '3,810 mm']) {
+    assert.equal(api.parseLength(text).mm, 3810, text);
+  }
+  assert.equal(api.parseLength(`12'`).mm, 3657.6);
+  assert.equal(api.parseLength(`12'-6 1/2"`).mm, 3822.7);
+  assert.match(api.parseLength('3810').error, /Add a unit/);
+  assert.match(api.parseLength('12 6').error, /Add a unit/);
+  for (const text of ['', '0 mm', '-5mm', 'twelve feet', '12 yards']) assert.ok(api.parseLength(text).error, `${JSON.stringify(text)} is rejected`);
+});
+
+test('source scale follows the contract selection rules', () => {
+  const { api } = loadStudio();
+  const precise = api.sourceScale(testSource([cal('cal-1', 'printed-dimension', 10, 0.01), cal('cal-2', 'manual', 11, 0.02)]));
+  assert.equal(precise.mmPerPx, 11);
+  assert.deepEqual(plain(precise.methods), ['manual']);
+  assert.equal(precise.estimated, false);
+  assert.equal(precise.disagree, false, 'precise calibrations are compared only with each other');
+
+  const mean = api.sourceScale(testSource([cal('cal-1', 'printed-dimension', 10, 0.01), cal('cal-2', 'printed-dimension', 10.4, 0.02)]));
+  near(mean.mmPerPx, (10 / 0.01 ** 2 + 10.4 / 0.02 ** 2) / (1 / 0.01 ** 2 + 1 / 0.02 ** 2), 1e-12, 'inverse-variance mean');
+  near(mean.relativeUncertainty, 1 / Math.sqrt(1 / 0.01 ** 2 + 1 / 0.02 ** 2), 1e-12, 'combined uncertainty');
+  assert.equal(mean.disagree, false);
+  assert.equal(mean.estimated, true);
+
+  const ordered = api.sourceScale(testSource([cal('cal-1', 'scale-bar', 11, 0.01), cal('cal-2', 'printed-dimension', 10, 0.05)]));
+  assert.equal(ordered.mmPerPx, 10, 'printed-dimension comes before scale-bar');
+  assert.equal(ordered.disagree, true, 'every automatic method is compared');
+
+  const horizontal = { from: { x: 0, y: 0 }, to: { x: 1000, y: 0 } }, vertical = { from: { x: 0, y: 0 }, to: { x: 0, y: 1000 } };
+  const uneven = api.sourceScale(testSource([cal('cal-1', 'printed-dimension', 10, 0.01, horizontal), cal('cal-2', 'printed-dimension', 11, 0.01, vertical)]));
+  assert.equal(uneven.disagree, true);
+  assert.equal(uneven.uneven, true);
+  assert.equal(api.sourceScale(testSource([cal('cal-1', 'manual', 10, 0.01), cal('cal-2', 'manual', 10.6, 0.01)])).disagree, true);
+
+  assert.equal(api.sourceScale(testSource([cal('cal-1', 'known-object', 9, 0.1)])), null, 'known-object needs acceptedByUser');
+  const known = api.sourceScale(testSource([cal('cal-1', 'known-object', 9, 0.1, { acceptedByUser: true })]));
+  assert.deepEqual(plain([known.mmPerPx, known.methods]), [9, ['known-object']]);
+  const knownIgnored = api.sourceScale(testSource([cal('cal-1', 'known-object', 20, 0.1, { acceptedByUser: true }), cal('cal-2', 'stated-scale', 10, 0.02)]));
+  assert.deepEqual([knownIgnored.mmPerPx, knownIgnored.disagree], [10, false], 'known-object is the last resort and never compared');
+
+  const withRegion = testSource([cal('cal-1', 'printed-dimension', 10, 0.01), cal('cal-2', 'scale-bar', 2, 0.01, { region: { x0: 100, y0: 100, x1: 900, y1: 900 } })]);
+  assert.equal(api.sourceScale(withRegion).disagree, true, 'one image has one scale: a stray region field isolates nothing');
+  assert.equal(api.sourceScale(withRegion).region, undefined);
+  assert.equal(api.sourceScaleGroups, undefined, 'scale groups were removed');
+  assert.equal(api.sourceScale(testSource([cal('cal-1', 'manual', 10, 0.01)], { kind: 'photo' })), null, 'photos are never calibrated');
+});
+
+test('the calibration payload is the exact text the apply command reads', () => {
+  const { api } = loadStudio();
+  const source = testSource();
+  const text = api.calibrationPayload(source, {
+    calibration: { from: { x: 100.04, y: 200.06 }, to: { x: 3100.16, y: 200 }, distanceMm: 3810, entered: ` 12'-6" `, uncertaintyPx: 0.3, region: { x0: 3200, y0: 2900, x1: 10, y1: 20, label: 'Main plan' } },
+    references: [{ label: 'NE house corner', pixel: { x: 12.34, y: 6.78 } }, { label: '  ', pixel: { x: 1, y: 1 } }]
+  });
+  assert.equal(text, 'Architecture Studio calibration for survey-plat. Paste this to your agent; it applies it with scripts/import-image.mjs apply.\n'
+    + `{"type":"architecture-studio/source-calibration","version":1,"sourceId":"survey-plat","contentHash":"${HASH}","pixels":{"width":4000,"height":3000},"sourceRevision":2,"calibrationRevision":3,`
+    + `"calibration":{"from":{"x":100,"y":200.1},"to":{"x":3100.2,"y":200},"distanceMm":3810,"entered":"12'-6\\"","uncertaintyPx":0.5},`
+    + '"references":[{"label":"NE house corner","pixel":{"x":12.3,"y":6.8}}]}');
+  const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+  assert.equal(json.calibration.entered, `12'-6"`);
+
+  const referencesOnly = api.calibrationPayload(source, { references: [{ label: 'Gate', pixel: { x: 5, y: 5 } }] });
+  const parsed = JSON.parse(referencesOnly.slice(referencesOnly.indexOf('{')));
+  assert.equal(parsed.calibration, undefined);
+  assert.deepEqual(parsed.references, [{ label: 'Gate', pixel: { x: 5, y: 5 } }]);
+  const unlabelled = api.calibrationPayload(source, { calibration: { from: { x: 0, y: 0 }, to: { x: 3000, y: 0 }, distanceMm: 1000, entered: '1 m', uncertaintyPx: 2 } });
+  assert.deepEqual(JSON.parse(unlabelled.slice(unlabelled.indexOf('{'))).calibration, { from: { x: 0, y: 0 }, to: { x: 3000, y: 0 }, distanceMm: 1000, entered: '1 m', uncertaintyPx: 2 });
+  assert.throws(() => api.calibrationPayload(source, {}), /a scale line, a labelled reference point, or a labelled area/);
+});
+
+test('areas are measured from the scale and copied with labels', () => {
+  const { api } = loadStudio();
+  api.state.model = cloneFixture();
+  assert.equal(api.state.model.project.coordinates.displayUnits, 'feet-inches');
+  // A 300 x 200 px rectangle at 10 mm/px: 60000 px² x 100 = 6 m² = 64.58 sq ft; perimeter 1000 px = 10 m.
+  const rect = [{ x: 100, y: 100 }, { x: 400, y: 100 }, { x: 400, y: 300 }, { x: 100, y: 300 }];
+  const scaled = testSource([cal('cal-1', 'scale-bar', 10, 0.01)]);
+  const measure = api.areaMeasure(scaled, rect);
+  near(measure.areaMm2, 6e6, 1e-6, 'area');
+  near(measure.perimeterMm, 10000, 1e-9, 'perimeter');
+  near(measure.relativeUncertainty, 0.02, 1e-12, 'twice the scale uncertainty');
+  assert.equal(api.areaSummary(scaled, measure), `64.6 sq ft ± 1.3 sq ft, perimeter 32'-9 3/4", estimated`);
+  assert.equal(api.areaSummary(scaled, measure, 'metric'), '6.00 m² ± 0.12 m², perimeter 10.00 m, estimated');
+
+  // The draft's own scale line, 3000 px = 15 m (5 mm/px), takes precedence over the scale bar: 1.5 m².
+  const draft = (areas, extra = {}) => ({ from: { x: 0, y: 0 }, to: { x: 3000, y: 0 }, fromU: 0.5, toU: 0.5, distanceText: '15 m', references: [], areas, areaPoints: [], ...extra });
+  const size = { width: 4000, height: 3000 };
+  const check = api.draftCheck(scaled, draft([{ label: 'Garden bed', points: rect }]), size);
+  const fromLine = api.areaMeasure(scaled, rect, check.calibration);
+  near(fromLine.areaMm2, 1.5e6, 1e-6, 'area from the draft line');
+  near(fromLine.relativeUncertainty, 2 * (2 * 0.5 / 3000), 1e-12, 'uncertainty of the draft line');
+  assert.equal(fromLine.fromDraft, true);
+  assert.equal(api.areaSummary(scaled, fromLine), `16.1 sq ft ± 0.0 sq ft, perimeter 16'-4 7/8"`);
+  assert.deepEqual(Object.keys(check.calibration).sort(), ['distanceMm', 'entered', 'from', 'to', 'uncertaintyPx'], 'the draft line applies to the whole image');
+
+  // Without a scale the area is not measured but can still be labelled and copied.
+  const bare = testSource();
+  assert.equal(api.areaMeasure(bare, rect), null);
+  assert.equal(api.areaSummary(bare, null), 'Not measured: add a scale line.');
+  const photo = testSource([], { kind: 'photo' });
+  assert.equal(api.areaMeasure(photo, rect), null);
+  assert.equal(api.areaSummary(photo, null), 'Not measured: photos have no scale.');
+  const onlyArea = api.draftCheck(bare, draft([{ label: '  Existing shed ', points: [{ x: 10.04, y: 20.06 }, { x: 110, y: 20 }, { x: 60.56, y: 90 }] }], { from: null, to: null, distanceText: '' }), size);
+  assert.equal(onlyArea.problem, '');
+  assert.equal(onlyArea.calibration, null);
+  const text = api.calibrationPayload(bare, onlyArea.input);
+  assert.equal(text, 'Architecture Studio calibration for survey-plat. Paste this to your agent; it applies it with scripts/import-image.mjs apply.\n'
+    + `{"type":"architecture-studio/source-calibration","version":1,"sourceId":"survey-plat","contentHash":"${HASH}","pixels":{"width":4000,"height":3000},"sourceRevision":2,"calibrationRevision":3,`
+    + '"areas":[{"label":"Existing shed","points":[{"x":10,"y":20.1},{"x":110,"y":20},{"x":60.6,"y":90}]}]}');
+
+  // Areas follow references in the payload.
+  const both = JSON.parse(api.calibrationPayload(bare, { references: [{ label: 'Gate', pixel: { x: 5, y: 5 } }], areas: [{ label: 'Bed', points: rect }] }).split('\n')[1]);
+  assert.deepEqual(Object.keys(both).slice(-2), ['references', 'areas']);
+
+  assert.equal(api.draftCheck(bare, draft([{ label: '', points: rect }], { from: null, to: null, distanceText: '' }), size).problem, 'Label every area.');
+  assert.equal(api.draftCheck(bare, draft([{ label: 'A', points: rect }, { label: 'A ', points: rect }], { from: null, to: null, distanceText: '' }), size).problem, 'Give each area its own label.');
+  assert.equal(api.draftCheck(bare, draft([], { from: null, to: null, distanceText: '', areaPoints: [{ x: 1, y: 1 }] }), size).problem, 'Finish or cancel the area you are outlining.');
+  assert.equal(api.draftCheck(bare, draft([{ label: 'Strip', points: rect.slice(0, 2) }], { from: null, to: null, distanceText: '' }), size).problem, 'An area needs at least 3 points.');
+  assert.throws(() => api.calibrationPayload(bare, { areas: [{ label: 'Strip', points: rect.slice(0, 2) }] }), /at least 3 points/);
+  assert.throws(() => api.calibrationPayload(bare, { areas: [{ label: ' ', points: rect }] }), /Label every area/);
+});
+
+test('named features take default labels, and recorded ones can be renamed or removed', () => {
+  const { api } = loadStudio();
+  const rect = [{ x: 100, y: 100 }, { x: 400, y: 100 }, { x: 400, y: 300 }];
+  const size = { width: 4000, height: 3000 };
+  const source = testSource([], { references: [{ label: 'Point 1', pixel: { x: 10.25, y: 20.5 } }, { label: 'Gate', pixel: { x: 5, y: 5 } }], areas: [{ label: 'Area 2', points: rect }] });
+  const draft = (extra = {}) => ({ from: null, to: null, fromU: 0.5, toU: 0.5, distanceText: '', references: [], areas: [], areaPoints: [], saved: { references: {}, areas: {} }, ...extra });
+  const payload = check => plain(api.calibrationPayloadObject(source, check.input));
+
+  // "Point N" and "Area N" take the smallest N no recorded or draft mark of that kind uses.
+  assert.equal(api.nextMarkLabel(source, draft(), 'point'), 'Point 2');
+  assert.equal(api.nextMarkLabel(source, draft({ references: [{ label: 'Point 2', pixel: { x: 1, y: 1 } }] }), 'point'), 'Point 3');
+  assert.equal(api.nextMarkLabel(source, draft(), 'area'), 'Area 1', 'points and areas are numbered apart');
+  assert.equal(api.nextMarkLabel(source, draft({ areas: [{ label: ' Area 1 ', points: rect }] }), 'area'), 'Area 3');
+  assert.equal(api.nextMarkLabel(source, draft({ saved: { references: { 'Point 1': { label: 'Point 2', removed: false } }, areas: {} } }), 'point'), 'Point 3', 'a recorded label stays taken until saved');
+  assert.equal(api.nextMarkLabel(testSource(), { references: [] }, 'point'), 'Point 1');
+
+  const listed = api.savedMarks(source, draft({ saved: { references: { Gate: { label: 'Gate', removed: true } }, areas: {} } }));
+  assert.deepEqual(plain(listed.references.map(item => [item.original, item.label, item.removed])), [['Point 1', 'Point 1', false], ['Gate', 'Gate', true]]);
+  assert.deepEqual(plain(listed.areas[0].points), rect);
+
+  // Nothing edited: nothing to save.
+  assert.equal(api.draftCheck(source, draft(), size).input, null);
+  assert.throws(() => api.calibrationPayloadObject(source, { removeReferences: [], removeAreas: [' '] }), /a scale line, a labelled reference point, or a labelled area/);
+
+  // Labels are checked across recorded and draft marks, and the problem names the inputs.
+  const clash = api.draftCheck(source, draft({ references: [{ label: ' Gate ', pixel: { x: 1, y: 1 } }] }), size);
+  assert.equal(clash.problem, 'Give each reference point its own label.');
+  assert.equal(clash.markProblem, true);
+  assert.deepEqual(plain(clash.invalidIds), ['cal-saved-ref-1', 'cal-ref-0']);
+  const cleared = api.draftCheck(source, draft({ saved: { references: { 'Point 1': { label: '  ', removed: false } }, areas: {} } }), size);
+  assert.deepEqual(plain([cleared.problem, cleared.invalidIds]), ['Label every reference point.', ['cal-saved-ref-0']]);
+  const areaClash = api.draftCheck(source, draft({ areas: [{ label: 'Area 2', points: rect }] }), size);
+  assert.deepEqual(plain([areaClash.problem, areaClash.invalidIds]), ['Give each area its own label.', ['cal-saved-area-0', 'cal-area-0']]);
+  const replaced = api.draftCheck(source, draft({ references: [{ label: 'Gate', pixel: { x: 1, y: 1 } }], saved: { references: { Gate: { label: 'Gate', removed: true } }, areas: {} } }), size);
+  assert.equal(replaced.problem, '', 'a removed label is free again');
+  assert.deepEqual(payload(replaced).removeReferences, ['Gate']);
+  const unscaled = api.draftCheck(source, draft({ distanceText: '3 m' }), size);
+  assert.equal(unscaled.markProblem, false, 'a scale line problem is not a mark problem');
+  assert.deepEqual(plain(unscaled.invalidIds), []);
+
+  // A rename removes the old label and adds the mark, where it was recorded, under the new one.
+  const renamed = api.draftCheck(source, draft({ saved: { references: { 'Point 1': { label: ' NE corner ', removed: false } }, areas: { 'Area 2': { label: 'Bed', removed: false } } } }), size);
+  assert.equal(renamed.problem, '');
+  const body = payload(renamed);
+  assert.deepEqual(body.removeReferences, ['Point 1']);
+  assert.deepEqual(body.references, [{ label: 'NE corner', pixel: { x: 10.25, y: 20.5 } }], 'the recorded pixel is sent as stored');
+  assert.deepEqual(body.removeAreas, ['Area 2']);
+  assert.deepEqual(body.areas, [{ label: 'Bed', points: rect }]);
+  assert.deepEqual(Object.keys(body).slice(-4), ['removeReferences', 'removeAreas', 'references', 'areas'], 'removals come first');
+  const same = api.draftCheck(source, draft({ saved: { references: { 'Point 1': { label: ' Point 1 ', removed: false } }, areas: {} } }), size);
+  assert.equal(same.input, null, 'a label typed back to the recorded one is no change');
+
+  // A removal alone is a valid payload.
+  const removed = api.draftCheck(source, draft({ saved: { references: { Gate: { label: 'Gate', removed: true } }, areas: {} } }), size);
+  const removal = payload(removed);
+  assert.deepEqual(removal.removeReferences, ['Gate']);
+  for (const key of ['calibration', 'references', 'areas', 'removeAreas']) assert.equal(key in removal, false, `no ${key}`);
+  const text = api.calibrationPayload(source, removed.input);
+  assert.deepEqual(JSON.parse(text.slice(text.indexOf('{'))), removal, 'Copy calibration carries the same removal');
+  const fresh = payload(api.draftCheck(source, draft({ references: [{ label: 'Point 2', pixel: { x: 1.04, y: 1 } }] }), size));
+  assert.equal('removeReferences' in fresh || 'removeAreas' in fresh, false, 'the removal lists appear only when non-empty');
+  assert.deepEqual(fresh.references, [{ label: 'Point 2', pixel: { x: 1, y: 1 } }]);
+
+  // Save closes an outline of 3 or more corners under its default label; a shorter one still blocks it.
+  const outlining = draft({ areaPoints: rect });
+  const closed = api.closeOpenArea(source, outlining);
+  assert.notEqual(closed, outlining);
+  assert.deepEqual(plain(closed.areas), [{ label: 'Area 1', points: rect }]);
+  assert.deepEqual(plain(closed.areaPoints), []);
+  assert.equal(outlining.areaPoints.length, 3, 'the draft itself is not changed');
+  const two = draft({ areaPoints: rect.slice(0, 2) }), line = draft({ areaPoints: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 0 }] });
+  assert.equal(api.closeOpenArea(source, two), two);
+  assert.equal(api.closeOpenArea(source, line), line, 'points on one line are not closed');
+  const open = api.draftCheck(source, outlining, size);
+  assert.equal(open.problem, '');
+  assert.deepEqual(payload(open).areas, [{ label: 'Area 1', points: rect }]);
+  const short = api.draftCheck(source, two, size);
+  assert.deepEqual(plain([short.problem, short.markProblem, short.invalidIds, short.input]), ['Finish or cancel the area you are outlining.', true, [], null]);
+});
+
+test('a manual distance that disagrees with the estimate warns before copying', () => {
+  const { api } = loadStudio();
+  const source = testSource([cal('cal-1', 'scale-bar', 10, 0.01)]);
+  const draft = text => ({ from: { x: 0, y: 0 }, to: { x: 3000, y: 0 }, fromU: 0.5, toU: 0.5, distanceText: text, references: [] });
+  const size = { width: 4000, height: 3000 };
+  assert.equal(api.draftCheck(source, draft('30 m'), size).distanceWarning, '', 'agreeing with the scale bar');
+  const wrong = api.draftCheck(source, draft('20 m'), size);
+  assert.match(wrong.distanceWarning, /^This overrides the scale bar estimate, which makes this line about 98'-5 1\/8" \(50% different\)\.$/);
+  assert.ok(wrong.input, 'a warning never blocks copying');
+  const manualOnly = testSource([cal('cal-1', 'manual', 10, 0.01)]);
+  assert.equal(api.draftCheck(manualOnly, draft('20 m'), size).distanceWarning, '', 'only automatic estimates are compared');
+});
+
+test('underlays map image pixels through the plan and site sheet maps', () => {
+  const { api } = loadStudio();
+  const pixels = { width: 4000, height: 3000 };
+  // One pair and north: theta = north.deg - trueNorthDeg.
+  const plan = cloneFixture(), planTransform = placementTransform(5, 35 - plan.project.coordinates.trueNorthDeg, -2000, 16000);
+  const underlay = transform => [{ href: 'blob:underlay', ...pixels, transform, opacity: 0.4 }];
+  const planSheet = api.renderPlanSheet(plan, 'level-ground', { underlays: underlay(planTransform) });
+  const planClip = assertUnderlayGeometry(planSheet, planTransform, plan, pixels);
+  for (const key of ['x0', 'y0', 'x1', 'y1']) near(planClip[key], planSheet.frame.clip[key], 1e-6, `plan clip ${key}`);
+  const area = api.drawingArea(api.profileFor(plan));
+  assert.deepEqual(plain(planSheet.frame.clip), { x0: area.x0, y0: area.y0, x1: area.x1, y1: area.y1 });
+  const layers = [...planSheet.svg.matchAll(/data-layer="([^"]+)"/g)].map(match => match[1]);
+  assert.equal(layers[0], 'underlay', 'the underlay sits beneath all linework');
+  const systems = api.renderPlanSheet(plan, 'level-ground', { systems: new Set(['plumbing']), underlays: underlay(planTransform) });
+  assertUnderlayGeometry(systems, planTransform, plan, pixels);
+
+  const site = structuredClone(siteFixture), siteTransform = placementTransform(40, 200 - site.project.coordinates.trueNorthDeg, -30000, 60000);
+  const siteSheet = api.renderSitePlanSheet(site, { underlays: underlay(siteTransform) });
+  const siteClip = assertUnderlayGeometry(siteSheet, siteTransform, site, pixels);
+  const siteArea = api.drawingArea(api.profileFor(site));
+  assert.ok(api.plantSchedule(site).length, 'the fixture has a plant schedule');
+  near(siteClip.x1, siteArea.x1 - 96, 1e-6, 'the clip stops short of the schedule column');
+  const scheduleX = Number(siteSheet.svg.match(/<g data-role="plant-schedule"><text[^>]*\sx="([\d.]+)"/)[1]);
+  assert.ok(scheduleX >= siteClip.x1, 'the plant schedule lies outside the underlay clip');
+
+  // The frame is the map the sheet draws with: the site model's plan clips its site layer to it.
+  const hillsidePlan = api.renderPlanSheet(site, 'level-ground');
+  const { place, ext, ratio } = hillsidePlan.frame, a = { x: place.x, y: place.y }, b = { x: place.x + (ext.maxX - ext.minX) / ratio, y: place.y + (ext.maxY - ext.minY) / ratio };
+  const frameClip = hillsidePlan.svg.match(/<clipPath id="plan-frame-level-ground"><polygon points="([^"]+)"/)[1].split(' ').map(pair => pair.split(',').map(Number));
+  near(frameClip[0][0], a.x, 0.01, 'frame x0'); near(frameClip[0][1], a.y, 0.01, 'frame y0');
+  near(frameClip[2][0], b.x, 0.01, 'frame x1'); near(frameClip[2][1], b.y, 0.01, 'frame y1');
+});
+
+test('underlays never reach exported drawings', () => {
+  const { api } = loadStudio();
+  const model = cloneFixture();
+  const bare = api.renderPlanSheet(model, 'level-ground');
+  const withUnderlay = api.renderPlanSheet(model, 'level-ground', { underlays: [{ href: 'blob:x', width: 10, height: 10, transform: placementTransform(1, 0, 0, 0), opacity: 0.5 }] });
+  assert.equal(withUnderlay.svg.replace(/<g data-layer="underlay"[\s\S]*?<\/g><\/g>/, ''), bare.svg, 'the underlay adds one group and changes nothing else');
+  assert.equal(api.renderPlanSheet(model, 'level-ground', { underlays: [] }).svg, bare.svg);
+
+  const before = buildDrawingSet(html, model).sheets.map(sheet => sheet.svg);
+  api.state.model = model;
+  api.state.underlay = true;
+  api.state.sources = { status: 'loaded', data: { schemaVersion: '1.0.0', sources: [testSource([], { placement: { view: 'level-ground', pairs: [], mmPerPx: 1, rotationDeg: 0, transform: placementTransform(1, 0, 0, 0), residualsMm: [], calibrationRevision: 3, sourceRevision: 2, createdAt: '2026-10-01T00:00:00Z' } })] } };
+  assert.deepEqual(plain(api.renderDrawingSet(model).map(sheet => sheet.svg)), plain(before));
+  assert.ok(before.every(svg => !svg.includes('data-layer="underlay"')));
+});
+
+test('sources manifests are checked before use', () => {
+  const { api } = loadStudio();
+  assert.equal(api.sourcesProblem({ schemaVersion: '1.0.0', sources: [testSource()] }), null);
+  assert.match(api.sourcesProblem({ schemaVersion: '2.0.0', sources: [] }), /reads 1\.0\.0/);
+  assert.match(api.sourcesProblem({ schemaVersion: '1.0.0', sources: [testSource([], { path: '../models/building.json' })] }), /entry 1 \(survey-plat\) is malformed/);
+  assert.match(api.sourcesProblem({ schemaVersion: '1.0.0', sources: [testSource([], { path: 'sources/..' })] }), /malformed/);
+  const placed = testSource([], { placement: { sourceRevision: 2, calibrationRevision: 3 } });
+  assert.equal(api.placementStale(placed), false);
+  assert.equal(api.placementStale({ ...placed, calibrationRevision: 4 }), true);
+  assert.equal(api.placementStale({ ...placed, revision: 3 }), true);
+
+  // A north-derived placement records the trueNorthDeg it used; moving the model's true north stales it.
+  const northPlaced = testSource([], { placement: { sourceRevision: 2, calibrationRevision: 3, usesNorth: true, trueNorthDeg: 18 } });
+  const model = cloneFixture();
+  model.project.coordinates.trueNorthDeg = 18;
+  assert.equal(api.placementStale(northPlaced, model), false);
+  model.project.coordinates.trueNorthDeg = 20;
+  assert.equal(api.placementStale(northPlaced, model), true);
+  api.state.model = model;
+  assert.equal(api.placementStale(northPlaced), true, 'the viewer checks against the loaded model by default');
+  assert.equal(api.placementStale(placed, model), false, 'a placement fitted from pairs does not depend on true north');
+});
+
+// A browser stand-in just large enough to run start(): elements are inert records, fetch serves a
+// fixed set of project files, and the clipboard is captured. `token` plays scripts/serve.mjs's write
+// token; `post` answers its POST requests; timers, reloads, and history URLs are captured, not run.
+function startHarness({ files, search = '', token = '', protocol = 'http:', post = null }) {
+  const elements = new Map(), listeners = [];
+  class Element {
+    constructor(attrs = {}) { Object.assign(this, { innerHTML: '', textContent: '', value: '', hidden: false, disabled: false, style: {}, dataset: {}, options: [], attributes: {}, listeners: {} }, attrs); const set = new Set(); this.classList = { add: c => set.add(c), remove: c => set.delete(c), contains: c => set.has(c), toggle: (c, on = !set.has(c)) => (on ? set.add(c) : set.delete(c), on) }; }
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+    getAttribute(name) { return this.attributes[name] ?? null; }
+    addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); listeners.push(type); }
+    dispatch(type, event = {}) { for (const fn of [...(this.listeners[type] ?? [])]) fn({ preventDefault() {}, stopPropagation() {}, target: this, ...event }); }
+    querySelector(selector) { return element(`${selector}@child`); }
+    querySelectorAll() { return []; }
+    contains() { return false; }
+    focus() {}
+    select() {}
+    setPointerCapture() {}
+    getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 600 }; }
+  }
+  const element = selector => { if (!elements.has(selector)) elements.set(selector, new Element()); return elements.get(selector); };
+  const tabs = [...html.matchAll(/<button class="tab" role="tab" id="(tab-[a-z]+)" data-view="([a-z]+)"[^>]*?( hidden)?>/g)].map(([, id, view, hidden]) => {
+    const tab = element(`#${id}`); Object.assign(tab, { id, dataset: { view }, hidden: Boolean(hidden) }); return tab;
+  });
+  const tools = [...html.matchAll(/data-tool="([a-z]+)"/g)].map(([, tool]) => Object.assign(element(`tool-${tool}`), { dataset: { tool } }));
+  const clipboard = [], posts = [], timers = [], reloads = [], urls = [], session = new Map();
+  if (token) element('meta[name="architecture-studio-write"]').content = token;
+  const response = (body, status = 200) => ({ ok: status === 200, status, json: async () => JSON.parse(body), arrayBuffer: async () => new Uint8Array(body).buffer });
+  let api;
+  const context = vm.createContext({
+    console, structuredClone, TextEncoder, URLSearchParams, Blob, crypto: globalThis.crypto,
+    URL: { createObjectURL: () => 'blob:source' },
+    Image: class { set src(value) { this.url = value; } async decode() { this.naturalWidth = 400; this.naturalHeight = 300; } },
+    CSS: { escape: value => value },
+    navigator: { clipboard: { writeText: async text => { clipboard.push(text); } } },
+    location: { search, pathname: '/', hash: '', protocol, reload: () => reloads.push(true) },
+    history: { replaceState: (_state, _title, url) => urls.push(url) },
+    window: { addEventListener() {} },
+    setTimeout: (fn, ms) => timers.push({ fn, ms }),
+    sessionStorage: { getItem: key => session.get(key) ?? null, setItem: (key, value) => session.set(key, String(value)), removeItem: key => session.delete(key) },
+    fetch: async (url, init = {}) => {
+      if (init.method === 'POST') {
+        posts.push({ url, ...init });
+        const [status, body] = await post(url, init);
+        return { ok: status === 200, status, json: async () => body };
+      }
+      return files[url] === undefined ? response('', 404) : response(files[url]);
+    },
+    document: { querySelector: element, getElementById: id => element(`#${id}`), activeElement: null, querySelectorAll: selector => selector === '.tab' ? tabs : selector === '.source-tool' ? tools : [] },
+    __ARCHITECTURE_STUDIO_API__(value) { api = value; }
+  });
+  vm.runInContext(extractStudioScript(html), context);
+  const settle = () => api.sourcesChecked();
+  return { api, element, tabs, tools, clipboard, settle, posts, timers, reloads, urls, session };
+}
+const imageBytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);
+const sourcesJson = (overrides = {}) => JSON.stringify({ schemaVersion: '1.0.0', sources: [testSource([], { pixels: { width: 400, height: 300 }, contentHash: `sha256:${crypto.createHash('sha256').update(imageBytes).digest('hex')}`, ...overrides })] });
+
+test('without a valid model the Sources view still calibrates', async () => {
+  const { api, element, tabs, tools, clipboard, settle } = startHarness({ files: { './sources/sources.json': sourcesJson(), './sources/survey-plat.png': imageBytes }, search: '?view=sources' });
+  await api.start();
+  await settle();
+  assert.equal(api.state.blocked.title, 'Model unavailable');
+  assert.equal(api.state.view, 'sources');
+  assert.equal(element('#tab-sources').hidden, false);
+  assert.match(element('#sheet-stage').innerHTML, /<img class="source-image" src="blob:source" width="400" height="300"/);
+  assert.ok(element('#stage-status').classList.contains('hidden-view'));
+  assert.match(element('#inspector').innerHTML, /survey-plat/);
+  assert.doesNotMatch(element('#inspector').innerHTML, /Not verified|Stale/, 'the file hash and size match');
+
+  // Fit puts the 400 x 300 image in an 800 x 600 viewport at zoom 1.92, offset (16, 12).
+  const click = (x, y) => {
+    const at = { clientX: 16 + x * 1.92, clientY: 12 + y * 1.92, pointerId: 1 };
+    element('#sheet-viewport').dispatch('pointerdown', at);
+    element('#sheet-viewport').dispatch('pointerup', at);
+  };
+  tools[0].dispatch('click');
+  assert.equal(api.state.tool, 'line');
+  click(10, 20);
+  click(390, 20);
+  Object.assign(element('#cal-distance'), { value: '3810' }).dispatch('input');
+  assert.match(element('#cal-distance-note').textContent, /Add a unit/);
+  assert.equal(element('#copy-calibration').disabled, true);
+  Object.assign(element('#cal-distance'), { value: `12'-6"` }).dispatch('input');
+  assert.equal(element('#copy-calibration').disabled, false);
+  element('#copy-calibration').dispatch('click');
+  await settle();
+  const payload = JSON.parse(clipboard.at(-1).slice(clipboard.at(-1).indexOf('{')));
+  assert.deepEqual(payload.calibration, { from: { x: 10, y: 20 }, to: { x: 390, y: 20 }, distanceMm: 3810, entered: `12'-6"`, uncertaintyPx: 0.5 });
+
+  tabs.find(tab => tab.dataset.view === 'plan').dispatch('click');
+  assert.match(element('#stage-status').innerHTML, /Model unavailable/);
+  assert.match(element('#inspector').innerHTML, /Model unavailable/);
+  assert.equal(element('#stage-status').classList.contains('hidden-view'), false);
+});
+
+test('the Area tool outlines, closes, and copies a labelled area', async () => {
+  const files = { './sources/sources.json': sourcesJson({ calibrations: [cal('cal-1', 'scale-bar', 10, 0.01)] }), './sources/survey-plat.png': imageBytes };
+  const { api, element, tools, clipboard, settle } = startHarness({ files, search: '?view=sources' });
+  await api.start();
+  await settle();
+  const viewport = element('#sheet-viewport');
+  const click = (x, y) => {
+    const at = { clientX: 16 + x * 1.92, clientY: 12 + y * 1.92, pointerId: 1 };
+    viewport.dispatch('pointerdown', at);
+    viewport.dispatch('pointerup', at);
+  };
+  const area = tools.find(tool => tool.dataset.tool === 'area');
+  area.dispatch('click');
+  assert.equal(api.state.tool, 'area');
+  assert.equal(area.attributes['aria-pressed'], 'true');
+
+  click(10, 10);
+  viewport.dispatch('keydown', { key: 'Escape' });
+  assert.equal(api.state.draft.areaPoints.length, 0, 'Escape cancels the area in progress');
+  assert.equal(api.state.tool, 'area');
+
+  click(50, 50); click(350, 50); click(200, 200);
+  viewport.dispatch('keydown', { key: 'Backspace' });
+  assert.deepEqual(plain(api.state.draft.areaPoints), [{ x: 50, y: 50 }, { x: 350, y: 50 }], 'Backspace removes the last point');
+  click(350, 250); click(50, 250);
+  assert.match(element('#inspector').innerHTML, /id="cal-area-finish">Finish area/);
+  assert.match(element('.source-overlay@child').innerHTML, /<polyline class="ov-draft"|<polygon class="ov-draft"/);
+  click(50.5, 50.5);
+  assert.equal(api.state.draft.areaPoints.length, 0, 'clicking the first point closes the area');
+  assert.equal(api.state.draft.areas.length, 1);
+  // 300 x 200 px at the 10 mm/px scale bar.
+  assert.equal(element('#cal-area-0-size').textContent, `64.6 sq ft ± 1.3 sq ft, perimeter 32'-9 3/4", estimated`);
+  assert.equal(api.state.draft.areas[0].label, 'Area 1', 'a closed area takes the next free default label');
+  assert.match(element('#inspector').innerHTML, /<input id="cal-area-0" data-area-index="0" type="text" autocomplete="off" value="Area 1"[^>]*><\/td><td class="marks-where">4 corners<span class="marks-new">New<\/span><\/td>/);
+  assert.equal(element('#cal-problem').textContent, '');
+  assert.equal(element('#copy-calibration').disabled, false);
+
+  // A cleared label is flagged on its input and under the table, as well as by the button.
+  const refresh = () => element('#cal-distance').dispatch('input');
+  api.state.draft.areas[0].label = ' ';
+  refresh();
+  assert.equal(element('#cal-problem').textContent, 'Label every area.');
+  assert.equal(element('#marks-problem').textContent, 'Label every area.');
+  assert.equal(element('#cal-area-0').attributes['aria-invalid'], 'true');
+  assert.equal(element('#cal-area-0').attributes['aria-describedby'], 'cal-area-0-size marks-problem');
+  assert.equal(element('#copy-calibration').disabled, true);
+
+  api.state.draft.areas[0].label = ' Garden bed ';
+  refresh();
+  assert.equal(element('#marks-problem').textContent, '');
+  assert.equal(element('#cal-area-0').attributes['aria-invalid'], 'false');
+  assert.equal(element('#cal-area-0').attributes['aria-describedby'], 'cal-area-0-size');
+  element('#copy-calibration').dispatch('click');
+  await settle();
+  const payload = JSON.parse(clipboard.at(-1).slice(clipboard.at(-1).indexOf('{')));
+  assert.equal(payload.calibration, undefined);
+  assert.deepEqual(payload.areas, [{ label: 'Garden bed', points: [{ x: 50, y: 50 }, { x: 350, y: 50 }, { x: 350, y: 250 }, { x: 50, y: 250 }] }]);
+
+  // An outline of 2 corners blocks copying; from 3 corners Copy closes it under its default label.
+  click(100, 100); click(300, 100);
+  assert.equal(element('#marks-problem').textContent, 'Finish or cancel the area you are outlining.');
+  assert.equal(element('#copy-calibration').disabled, true);
+  click(200, 200);
+  assert.equal(element('#marks-problem').textContent, '');
+  assert.equal(element('#copy-calibration').disabled, false);
+  element('#copy-calibration').dispatch('click');
+  await settle();
+  assert.equal(api.state.draft.areaPoints.length, 0);
+  assert.deepEqual(plain(api.state.draft.areas.map(item => item.label.trim())), ['Garden bed', 'Area 1']);
+  assert.deepEqual(JSON.parse(clipboard.at(-1).slice(clipboard.at(-1).indexOf('{'))).areas.map(item => item.label), ['Garden bed', 'Area 1']);
+});
+
+test('an image has one scale: no scale region tool, and a disagreement suggests cropping', async () => {
+  assert.deepEqual([...html.matchAll(/data-tool="([a-z]+)"/g)].map(([, tool]) => tool), ['line', 'point', 'area']);
+  assert.doesNotMatch(html, /Scale region|Whole image/);
+  const files = { './sources/sources.json': sourcesJson({ calibrations: [cal('cal-1', 'printed-dimension', 10, 0.01), cal('cal-2', 'scale-bar', 2, 0.01)] }), './sources/survey-plat.png': imageBytes };
+  const { api, element, settle } = startHarness({ files, search: '?view=sources' });
+  await api.start();
+  await settle();
+  const inspector = element('#inspector').innerHTML;
+  assert.match(inspector, /<h4 class="entity-subhead">Scale<\/h4><p class="entity-context">10 mm\/px ± 1%, printed dimension, estimated <b>\(disagree\)<\/b><\/p>/);
+  assert.match(inspector, /Calibrations disagree<\/b>: resolve them, or crop each part of a mixed-scale sheet into its own image/);
+  assert.match(inspector, /If the sheet mixes scales, such as an enlarged detail or a location map, crop each part into its own image and import it separately\./);
+  assert.match(api.state.sourceFindings.map(item => item.message).join('\n'), /crop each part into its own image and import it separately/);
+});
+
+test('start keeps the old blocked page when there are no sources, and flags stale files', async () => {
+  const blocked = startHarness({ files: {} });
+  await blocked.api.start();
+  assert.equal(blocked.element('#tab-sources').hidden, true);
+  assert.match(blocked.element('#stage-status').innerHTML, /Model unavailable/);
+  assert.equal(blocked.tabs[0].listeners.click, undefined, 'no tabs are wired');
+
+  const invalid = cloneFixture();
+  invalid.openings[0].widthMm = -100;
+  const errors = startHarness({ files: { './models/building.json': JSON.stringify(invalid), './sources/sources.json': sourcesJson({ contentHash: HASH }), './sources/survey-plat.png': imageBytes }, search: '?view=sources' });
+  await errors.api.start();
+  await errors.settle();
+  assert.equal(errors.api.state.blocked.title, 'Resolve model errors');
+  assert.match(errors.element('#inspector').innerHTML, /Stale<\/b>: re-import with add --replace/);
+  assert.match(errors.element('#inspector').innerHTML, /Calibration is off/);
+  assert.equal(errors.tools[0].disabled, true);
+
+  const malformed = startHarness({ files: { './sources/sources.json': '{"schemaVersion":"1.0.0"' }, search: '?view=sources' });
+  await malformed.api.start();
+  assert.equal(malformed.api.state.view, 'sources');
+  assert.match(malformed.element('#stage-status').innerHTML, /not valid JSON/);
+});
+
+test('the viewer draws current placements under the plan and honours ?underlay=0', async () => {
+  const placement = (extra = {}) => ({ placement: { view: 'level-ground', pairs: [{ pixel: { x: 0, y: 0 }, model: { x: 0, y: 0 } }], usesNorth: true, mmPerPx: 30, rotationDeg: 0, transform: placementTransform(30, 0, -1000, 9000), residualsMm: [0], calibrationRevision: 3, sourceRevision: 2, createdAt: '2026-10-01T00:00:00Z', ...extra } });
+  const files = sources => ({ './models/building.json': JSON.stringify(fixture), './sources/sources.json': sources, './sources/survey-plat.png': imageBytes });
+  const shown = startHarness({ files: files(sourcesJson(placement())), search: '?view=plan&level=level-ground' });
+  await shown.api.start();
+  await shown.settle();
+  assert.match(shown.element('#sheet-stage').innerHTML, /<g data-layer="underlay"[^>]*>[\s\S]*href="blob:source"/);
+  assert.equal(shown.element('#underlay-controls').classList.contains('hidden-view'), false);
+  shown.element('#underlay-toggle').dispatch('click');
+  assert.doesNotMatch(shown.element('#sheet-stage').innerHTML, /data-layer="underlay"/);
+  assert.equal(shown.element('#underlay-toggle').attributes['aria-pressed'], 'false');
+
+  const hidden = startHarness({ files: files(sourcesJson(placement())), search: '?view=plan&underlay=0' });
+  await hidden.api.start();
+  await hidden.settle();
+  assert.doesNotMatch(hidden.element('#sheet-stage').innerHTML, /data-layer="underlay"/);
+
+  const stale = startHarness({ files: files(sourcesJson(placement({ calibrationRevision: 2 }))), search: '?view=plan' });
+  await stale.api.start();
+  await stale.settle();
+  assert.doesNotMatch(stale.element('#sheet-stage').innerHTML, /data-layer="underlay"/);
+  assert.equal(stale.element('#underlay-controls').classList.contains('hidden-view'), true);
+  assert.match(stale.element('#inspector').innerHTML, /Source image[\s\S]*placement predates/);
+});
+
+// ---------------------------------------------------------------- writing through scripts/serve.mjs
+
+const tick = () => new Promise(resolve => setImmediate(resolve));
+const FLASH_KEY = 'architecture-studio:sources-flash';
+const sourceFiles = (extra = {}) => ({ './models/building.json': JSON.stringify(fixture), './sources/sources.json': sourcesJson(), './sources/survey-plat.png': imageBytes, ...extra });
+// Marks a 380 px scale line on the 400 x 300 test image and types its length.
+function markLine({ element, tools }) {
+  const click = (x, y) => {
+    const at = { clientX: 16 + x * 1.92, clientY: 12 + y * 1.92, pointerId: 1 };
+    element('#sheet-viewport').dispatch('pointerdown', at);
+    element('#sheet-viewport').dispatch('pointerup', at);
+  };
+  tools[0].dispatch('click');
+  click(10, 20);
+  click(390, 20);
+  Object.assign(element('#cal-distance'), { value: `12'-6"` }).dispatch('input');
+}
+
+test('the page writes only when serve.mjs served it with a token over http', () => {
+  const { api } = loadStudio();
+  const doc = content => ({ querySelector: selector => (selector === 'meta[name="architecture-studio-write"]' && content !== null ? { content } : null) });
+  assert.equal(api.sourcesWritable(doc('t0k3n'), { protocol: 'http:' }), true);
+  assert.equal(api.sourcesWritable(doc('t0k3n'), { protocol: 'https:' }), true);
+  assert.equal(api.sourcesWritable(doc('t0k3n'), { protocol: 'file:' }), false, 'a saved copy opened from disk');
+  assert.equal(api.sourcesWritable(doc(''), { protocol: 'http:' }), false);
+  assert.equal(api.sourcesWritable(doc(null), { protocol: 'http:' }), false, 'a bundle, the preview, or a plain static server');
+  assert.doesNotMatch(html, /<meta name="architecture-studio-write"/, 'the template never carries a token');
+  assert.doesNotMatch(expectedPreview(), /<meta name="architecture-studio-write"/);
+
+  assert.equal(api.uploadFileProblem({ name: 'plat.png', type: 'image/png' }), '');
+  assert.equal(api.uploadFileProblem({ name: 'IMG_1001.JPG', type: '' }), '', 'a missing type falls back to the extension');
+  assert.equal(api.uploadFileProblem({ name: 'plat.pdf', type: 'application/pdf' }), 'plat.pdf is not a PNG, JPEG, or WebP image. Export a PDF, HEIC, or TIFF as PNG or JPEG first, then add that file.');
+  assert.match(api.uploadFileProblem({ name: 'IMG_1002.HEIC', type: 'image/heic' }), /is not a PNG, JPEG, or WebP image/);
+  assert.equal(api.formatBytes(2_400_000), '2.3 MB');
+  assert.equal(api.formatBytes(51_200), '50 KB');
+});
+
+test('the saved payload is the object inside the copied text', () => {
+  const { api } = loadStudio();
+  const source = testSource();
+  const input = {
+    calibration: { from: { x: 100.04, y: 200.06 }, to: { x: 3100.16, y: 200 }, distanceMm: 3810, entered: ` 12'-6" `, uncertaintyPx: 0.3 },
+    references: [{ label: 'NE house corner', pixel: { x: 12.34, y: 6.78 } }],
+    areas: [{ label: 'Bed', points: [{ x: 1, y: 1 }, { x: 50, y: 1 }, { x: 50, y: 40 }] }]
+  };
+  const text = api.calibrationPayload(source, input);
+  assert.deepEqual(plain(api.calibrationPayloadObject(source, input)), JSON.parse(text.slice(text.indexOf('{'))));
+  assert.throws(() => api.calibrationPayloadObject(source, {}), /a scale line, a labelled reference point, or a labelled area/);
+});
+
+test('with a write token the Sources tab shows before any image, as the uploader', async () => {
+  const model = JSON.stringify(fixture);
+  const plainPage = startHarness({ files: { './models/building.json': model }, search: '?view=sources' });
+  await plainPage.api.start();
+  assert.equal(plainPage.element('#tab-sources').hidden, true);
+  assert.equal(plainPage.api.state.view, 'plan');
+  assert.equal(plainPage.element('#add-image').classList.contains('hidden-view'), true);
+
+  const served = startHarness({ files: { './models/building.json': model }, token: 'abc', search: '?view=sources' });
+  await served.api.start();
+  assert.equal(served.api.state.writable, true);
+  assert.equal(served.element('#tab-sources').hidden, false);
+  assert.equal(served.api.state.view, 'sources');
+  const inspector = served.element('#inspector').innerHTML;
+  assert.match(inspector, /<h2 id="upload-title">Source images<\/h2><p>Add a survey, plan, aerial view, or photo\./);
+  assert.match(inspector, /<button type="button" class="drop-zone" id="upload-drop"[^>]*><b>Drop an image here<\/b>/);
+  assert.match(inspector, /<input type="file" id="upload-file" accept="image\/png,image\/jpeg,image\/webp" hidden>/);
+  assert.match(inspector, /<select id="upload-kind" required aria-required="true"><option value="">Choose a type<\/option><option value="satellite">Satellite<\/option>[\s\S]*<option value="other">Other<\/option><\/select>/);
+  assert.doesNotMatch(inspector, /id="upload-cancel"/, 'the first image has nothing to cancel back to');
+  assert.match(served.element('#stage-status').innerHTML, /No source images<\/strong><span>Drop an image here, or choose Add image in the toolbar\./);
+  assert.equal(served.element('#add-image').classList.contains('hidden-view'), false);
+  assert.equal(served.element('#source-control').classList.contains('hidden-view'), true, 'no empty Image select');
+
+  const noModel = startHarness({ files: {}, token: 'abc' });
+  await noModel.api.start();
+  assert.equal(noModel.element('#tab-sources').hidden, false, 'images can be added before the model exists');
+  assert.ok(noModel.tabs[0].listeners.click, 'the tabs are wired');
+
+  const fromDisk = startHarness({ files: {}, token: 'abc', protocol: 'file:' });
+  await fromDisk.api.start();
+  assert.equal(fromDisk.element('#tab-sources').hidden, true);
+});
+
+test('Add image shows only on the Sources view of a writable page', async () => {
+  const served = startHarness({ files: sourceFiles(), token: 'abc', search: '?view=plan' });
+  await served.api.start();
+  await served.settle();
+  assert.equal(served.element('#add-image').classList.contains('hidden-view'), true);
+  served.tabs.find(tab => tab.dataset.view === 'sources').dispatch('click');
+  assert.equal(served.element('#add-image').classList.contains('hidden-view'), false);
+  assert.equal(served.element('#add-image').attributes['aria-expanded'], 'false');
+  assert.match(html, /<button type="button" class="tool add-image hidden-view" id="add-image" aria-controls="inspector" aria-expanded="false"><svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"/);
+  assert.ok(html.indexOf('id="add-image"') > html.indexOf('id="source-control"') && html.indexOf('id="add-image"') < html.indexOf('id="level-control"'), 'right after the Image select');
+
+  const plainPage = startHarness({ files: sourceFiles(), search: '?view=sources' });
+  await plainPage.api.start();
+  await plainPage.settle();
+  assert.equal(plainPage.api.state.view, 'sources');
+  assert.equal(plainPage.element('#add-image').classList.contains('hidden-view'), true);
+  const transfer = { types: ['Files'], files: [{ name: 'plan.png', type: 'image/png', size: 10 }] };
+  plainPage.element('.canvas-wrap').dispatch('drop', { dataTransfer: transfer });
+  assert.equal(plainPage.api.state.upload, null, 'a page that cannot write ignores dropped files');
+});
+
+test('served by serve.mjs, step 3 saves the calibration instead of copying it', async () => {
+  const notes = ['Note: cal-1 (manual, 10 mm/px) overrides the scale-bar estimate (cal-0, 9 mm/px), a 11% difference.'];
+  let reply = [200, { ok: true, source: { id: 'survey-plat', kind: 'survey', path: 'sources/survey-plat.png', pixels: { width: 400, height: 300 }, revision: 2, calibrationRevision: 4 }, messages: ['Added cal-4 (manual).'], warnings: notes }];
+  const h = startHarness({ files: sourceFiles(), token: 'abc', search: '?view=sources', post: async () => reply });
+  await h.api.start();
+  await h.settle();
+  const before = h.element('#inspector').innerHTML;
+  assert.match(before, /<li><b>Save it for your agent<\/b><p id="cal-copy-help">Saves to sources\/sources\.json\. Your agent reads it from there\.<\/p>/);
+  assert.match(before, /<button type="button" class="tool primary" id="save-calibration" aria-describedby="cal-copy-help">Save calibration<\/button><button type="button" class="tool" id="cal-reset">Start over<\/button>/);
+  assert.doesNotMatch(before, /Copy calibration|copy-calibration|Copy it for your agent|Paste it to your agent/);
+
+  assert.equal(h.element('#save-calibration').disabled, true);
+  markLine(h);
+  assert.equal(h.element('#save-calibration').disabled, false);
+  h.element('#save-calibration').dispatch('click');
+  assert.match(h.element('#inspector').innerHTML, /<p id="cal-saving" class="field-note">Saving\.\.\.<\/p>/);
+  assert.equal(h.element('#save-calibration').disabled, true, 'one save at a time');
+  assert.equal(h.element('#source-live').textContent, 'Saving...');
+  await tick();
+  assert.equal(h.posts.length, 1);
+  const [sent] = h.posts;
+  assert.equal(sent.url, '/__architecture-studio/calibration');
+  assert.deepEqual(plain(sent.headers), { 'Content-Type': 'application/json', 'X-Architecture-Studio-Token': 'abc' });
+  const body = JSON.parse(sent.body);
+  assert.equal(body.type, 'architecture-studio/source-calibration');
+  assert.deepEqual(body.calibration, { from: { x: 10, y: 20 }, to: { x: 390, y: 20 }, distanceMm: 3810, entered: `12'-6"`, uncertaintyPx: 0.5 });
+  assert.equal(h.clipboard.length, 0, 'nothing is copied');
+
+  assert.match(h.element('#inspector').innerHTML, /Saved\. Reloading\.\.\./);
+  assert.equal(h.api.state.draft.from, null, 'the draft is cleared');
+  assert.deepEqual(JSON.parse(h.session.get(FLASH_KEY)), { ...JSON.parse(h.session.get(FLASH_KEY)), text: 'Saved.', sourceId: 'survey-plat', warnings: notes });
+  assert.equal(h.reloads.length, 0, 'live reload gets the first chance');
+  const fallback = h.timers.find(timer => timer.ms === 1500);
+  fallback.fn();
+  assert.equal(h.reloads.length, 1);
+
+  // After the reload the head says Saved., with the server's notes.
+  const after = startHarness({ files: sourceFiles(), token: 'abc', search: '?view=sources&source=survey-plat' });
+  after.session.set(FLASH_KEY, h.session.get(FLASH_KEY));
+  await after.api.start();
+  await after.settle();
+  assert.match(after.element('#inspector').innerHTML, /<\/div><div class="src-flash" id="src-flash"><p class="field-note">Saved\.<\/p><p class="field-note field-note--warning">Note: cal-1 \(manual, 10 mm\/px\) overrides/);
+  assert.equal(after.element('#source-live').textContent, 'Saved.');
+  markLine(after);
+  assert.doesNotMatch(after.element('#inspector').innerHTML, /src-flash/, 'marking again clears it');
+
+  // A stale save asks for a reload; another refusal shows the server's message.
+  reply = [409, { ok: false, error: 'The pasted calibration is stale.', code: 'stale', id: 'survey-plat' }];
+  const stale = startHarness({ files: sourceFiles(), token: 'abc', search: '?view=sources', post: async () => reply });
+  await stale.api.start();
+  await stale.settle();
+  markLine(stale);
+  stale.element('#save-calibration').dispatch('click');
+  await tick();
+  assert.match(stale.element('#inspector').innerHTML, /<div id="cal-save-error"><p class="field-note field-note--error">This image changed since the page loaded\. Reload and mark it again\.<\/p><div class="calibrate-actions"><button type="button" class="tool" id="cal-reload">Reload<\/button>/);
+  assert.equal(stale.api.state.draft.to.x, 390, 'the marks stay until the reload');
+  stale.element('#cal-reload').dispatch('click');
+  assert.ok(stale.reloads.length >= 1);
+  reply = [400, { ok: false, error: 'Area "Bed" has no area: its points lie on one line.', code: 'invalid' }];
+  stale.element('#save-calibration').dispatch('click');
+  await tick();
+  assert.match(stale.element('#inspector').innerHTML, /<p id="cal-save-error" class="field-note field-note--error">Area &quot;Bed&quot; has no area: its points lie on one line\.<\/p>/);
+  assert.equal(stale.element('#save-calibration').disabled, false);
+
+  // Without a token the copy flow is unchanged.
+  const plainPage = startHarness({ files: sourceFiles(), search: '?view=sources' });
+  await plainPage.api.start();
+  await plainPage.settle();
+  assert.match(plainPage.element('#inspector').innerHTML, /<li><b>Copy it for your agent<\/b>[\s\S]*id="copy-calibration"/);
+  assert.doesNotMatch(plainPage.element('#inspector').innerHTML, /save-calibration|Save it for your agent/);
+});
+
+test('Named features lists the recorded marks first, and saves new, renamed, and removed ones', async () => {
+  const bed = [{ x: 50, y: 50 }, { x: 150, y: 50 }, { x: 150, y: 150 }];
+  const files = sourceFiles({ './sources/sources.json': sourcesJson({ calibrations: [cal('cal-1', 'scale-bar', 10, 0.01)], references: [{ label: 'Gate', pixel: { x: 5.25, y: 6 } }], areas: [{ label: 'Bed', points: bed }] }) });
+  const h = startHarness({ files, token: 'abc', search: '?view=sources', post: async () => [200, { ok: true, source: {}, messages: [], warnings: [] }] });
+  await h.api.start();
+  await h.settle();
+  let inspector = h.element('#inspector').innerHTML;
+  assert.match(inspector, /<h4>Named features<\/h4><span aria-label="2 named features">2<\/span>/);
+  assert.match(inspector, /<tbody><tr><td><svg[^]*?<\/svg><\/td><td><input id="cal-saved-ref-0" data-saved-ref-index="0" type="text" autocomplete="off" value="Gate" placeholder="Name it" aria-label="Label for reference point at 5\.25, 6"><\/td><td class="marks-where" title="5\.25, 6">5, 6<\/td><td><button type="button" class="marks-x" data-saved-ref-remove="0" aria-label="Remove Gate">&times;<\/button>/);
+  assert.match(inspector, /<input id="cal-saved-area-0" data-saved-area-index="0" type="text" autocomplete="off" value="Bed" placeholder="Name it" aria-label="Label for area Bed" aria-describedby="cal-saved-area-0-size"><\/td><td class="marks-where">3 corners<\/td>/);
+  assert.match(inspector, /<p id="marks-problem" class="field-note field-note--error"><\/p>/);
+  assert.match(h.element('#cal-saved-area-0-size').textContent, /^5\.4 sq ft ± /, 'the recorded area is measured from the current scale');
+  assert.equal(h.element('#save-calibration').disabled, true, 'recorded marks alone are nothing to save');
+
+  // A new point takes the next free label and is tagged New, after the recorded marks.
+  const click = (x, y) => {
+    const at = { clientX: 16 + x * 1.92, clientY: 12 + y * 1.92, pointerId: 1 };
+    h.element('#sheet-viewport').dispatch('pointerdown', at);
+    h.element('#sheet-viewport').dispatch('pointerup', at);
+  };
+  const point = h.tools.find(tool => tool.dataset.tool === 'point');
+  point.dispatch('click');
+  click(200, 100);
+  assert.deepEqual(plain(h.api.state.draft.references), [{ label: 'Point 1', pixel: { x: 200, y: 100 }, fresh: true }]);
+  inspector = h.element('#inspector').innerHTML;
+  assert.match(inspector, /<span aria-label="3 named features">3<\/span>/);
+  assert.match(inspector, /value="Bed"[^]*<input id="cal-ref-0" data-ref-index="0" type="text" autocomplete="off" value="Point 1"[^>]*><\/td><td class="marks-where" title="200, 100">200, 100<span class="marks-new">New<\/span>/);
+  assert.match(h.element('.source-overlay@child').innerHTML, />Point 1<\/text>/);
+  assert.equal(h.element('#save-calibration').disabled, false);
+
+  // Removing a recorded mark strikes it through until Save; Undo keeps it.
+  h.api.state.draft.saved.references.Gate = { label: 'Gate', removed: true };
+  h.api.state.draft.saved.areas.Bed = { label: 'Garden bed', removed: false };
+  point.dispatch('click');
+  inspector = h.element('#inspector').innerHTML;
+  assert.match(inspector, /<tr class="marks-removed"><td><svg[^]*?<\/svg><\/td><td><span class="marks-gone">Gate<\/span><\/td><td class="marks-where">Removed on save<\/td><td><button type="button" class="marks-undo" data-saved-ref-keep="0" aria-label="Keep Gate">Undo<\/button><\/td><\/tr>/);
+  assert.match(inspector, /<span aria-label="2 named features">2<\/span>/);
+  assert.doesNotMatch(h.element('.source-overlay@child').innerHTML, />Gate<\/text>/, 'a removed mark is not drawn');
+  assert.match(h.element('.source-overlay@child').innerHTML, />Garden bed<\/text>/, 'a renamed mark shows its new label');
+
+  h.element('#save-calibration').dispatch('click');
+  await tick();
+  const body = JSON.parse(h.posts[0].body);
+  assert.deepEqual(body.removeReferences, ['Gate']);
+  assert.deepEqual(body.removeAreas, ['Bed']);
+  assert.deepEqual(body.references, [{ label: 'Point 1', pixel: { x: 200, y: 100 } }]);
+  assert.deepEqual(body.areas, [{ label: 'Garden bed', points: bed }]);
+  assert.deepEqual(plain(h.api.state.draft.saved), { references: {}, areas: {} }, 'the edits are cleared once saved');
+
+  // Start over drops the draft marks and the edits to recorded ones.
+  const again = startHarness({ files, token: 'abc', search: '?view=sources' });
+  await again.api.start();
+  await again.settle();
+  again.api.state.draft.saved.references.Gate = { label: 'Gate', removed: true };
+  again.element('#cal-reset').dispatch('click');
+  assert.deepEqual(plain(again.api.state.draft.saved), { references: {}, areas: {} });
+  assert.match(again.element('#inspector').innerHTML, /value="Gate"/);
+});
+
+test('Add image imports a dropped or chosen file, offers to replace an existing id, and opens the new image', async () => {
+  const replies = [];
+  const h = startHarness({ files: sourceFiles(), token: 'abc', search: '?view=sources&level=level-ground', post: async () => replies.shift() });
+  await h.api.start();
+  await h.settle();
+
+  h.element('#add-image').dispatch('click');
+  assert.equal(h.element('#add-image').attributes['aria-expanded'], 'true');
+  assert.match(h.element('#inspector').innerHTML, /<h2 id="upload-title">Add an image<\/h2>[\s\S]*No image chosen\.[\s\S]*id="upload-cancel">Cancel<\/button>/);
+  Object.assign(h.element('#upload-file'), { files: [{ name: 'plat.pdf', type: 'application/pdf', size: 1000 }] }).dispatch('change');
+  assert.match(h.element('#inspector').innerHTML, /<p id="upload-problem" class="field-note field-note--error">plat\.pdf is not a PNG, JPEG, or WebP image\. Export a PDF, HEIC, or TIFF as PNG or JPEG first, then add that file\.<\/p>/);
+  assert.equal(h.api.state.upload.file, null);
+  h.element('#upload-cancel').dispatch('click');
+  assert.equal(h.api.state.upload, null);
+  assert.equal(h.element('#add-image').attributes['aria-expanded'], 'false');
+  assert.match(h.element('#inspector').innerHTML, /<h2>survey-plat<\/h2>/);
+
+  // Dropping an image on the stage opens the form with it.
+  const file = { name: 'Site Plan.png', type: 'image/png', size: 2_400_000 };
+  const transfer = { types: ['Files'], files: [file], dropEffect: 'none' };
+  const wrap = h.element('.canvas-wrap');
+  wrap.dispatch('dragover', { dataTransfer: transfer });
+  assert.ok(wrap.classList.contains('is-drop-target'));
+  assert.equal(transfer.dropEffect, 'copy');
+  wrap.dispatch('drop', { dataTransfer: transfer });
+  assert.equal(wrap.classList.contains('is-drop-target'), false);
+  assert.equal(h.api.state.upload.file, file);
+  assert.match(h.element('#inspector').innerHTML, /<p class="upload-file" id="upload-chosen">Site Plan\.png, 2\.3 MB<\/p>/);
+  assert.equal(h.element('#upload-submit').disabled, true);
+  assert.equal(h.element('#upload-hint').textContent, 'Choose its type.');
+  Object.assign(h.element('#upload-kind'), { value: 'site-plan' }).dispatch('change');
+  assert.equal(h.element('#upload-submit').disabled, false);
+  Object.assign(h.element('#upload-id'), { value: ' Lot plan ' }).dispatch('input');
+
+  replies.push([409, { ok: false, error: 'A source with id "lot-plan" already exists.', code: 'exists', id: 'lot-plan' }]);
+  h.element('#upload-form').dispatch('submit');
+  assert.match(h.element('#inspector').innerHTML, /<p class="field-note" id="upload-status">Importing\.\.\.<\/p>/);
+  assert.equal(h.element('#upload-submit').disabled, true);
+  await tick();
+  assert.equal(h.posts.length, 1);
+  assert.equal(h.posts[0].url, '/__architecture-studio/sources?kind=site-plan&name=Site+Plan.png&id=Lot+plan');
+  assert.equal(h.posts[0].body, file);
+  assert.deepEqual(plain(h.posts[0].headers), { 'Content-Type': 'image/png', 'X-Architecture-Studio-Token': 'abc' });
+  assert.match(h.element('#inspector').innerHTML, /An image named lot-plan already exists\.<\/p><div class="calibrate-actions"><button type="button" class="tool" id="upload-replace">Replace it<\/button>/);
+
+  replies.push([200, { ok: true, source: { id: 'lot-plan', kind: 'site-plan', path: 'sources/lot-plan.png', pixels: { width: 400, height: 300 }, revision: 2, calibrationRevision: 3 }, messages: ['Replaced lot-plan.'], warnings: [] }]);
+  h.element('#upload-replace').dispatch('click');
+  await tick();
+  assert.equal(h.posts.length, 2);
+  assert.equal(h.posts[1].url, '/__architecture-studio/sources?kind=site-plan&name=Site+Plan.png&id=Lot+plan&replace=1');
+  assert.equal(h.element('#source-live').textContent, 'Imported lot-plan.');
+  assert.equal(h.urls.at(-1), '/?view=sources&level=level-ground&source=lot-plan', 'the reload lands on the new image, keeping the other parameters');
+  assert.equal(JSON.parse(h.session.get(FLASH_KEY)).text, 'Imported lot-plan.');
+  assert.ok(h.timers.some(timer => timer.ms === 1500));
+
+  // A server error shows its message.
+  const failing = startHarness({ files: sourceFiles(), token: 'abc', search: '?view=sources', post: async () => [400, { ok: false, error: 'PDF files are not supported: only PNG, JPEG, and WebP images can be imported.', code: 'invalid' }] });
+  await failing.api.start();
+  await failing.settle();
+  failing.element('.canvas-wrap').dispatch('drop', { dataTransfer: { types: ['Files'], files: [{ name: 'scan.png', type: 'image/png', size: 10 }] } });
+  Object.assign(failing.element('#upload-kind'), { value: 'survey' }).dispatch('change');
+  failing.element('#upload-form').dispatch('submit');
+  await tick();
+  assert.match(failing.element('#inspector').innerHTML, /<p id="upload-problem" class="field-note field-note--error">PDF files are not supported/);
+  assert.equal(failing.element('#upload-submit').disabled, false, 'it can be tried again');
+});
+test('Structure only leaves plants, fixtures and equipment, and site surfaces out of elevations and sections', () => {
+  const { api } = loadStudio();
+  const model = structuredClone(siteFixture);
+  const surfaceIds = model.surfaces.map(item => item.id), plantingIds = model.plantings.map(item => item.id);
+  const has = (svg, ids) => ids.filter(id => svg.includes(`data-entity="${id}"`));
+  assert.equal(api.hasNonStructural(model), true);
+
+  const full = api.renderSectionSheet(model, 'section-aa').svg, bare = api.renderSectionSheet(model, 'section-aa', { structureOnly: true }).svg;
+  assert.match(full, /data-role="plants"/);
+  assert.ok(has(full, surfaceIds).length > 0, 'the full section cuts a site surface');
+  assert.doesNotMatch(bare, /data-role="plants"/);
+  assert.deepEqual(has(bare, surfaceIds), []);
+  assert.equal(svgAttr(bare, 'data-scale'), svgAttr(full, 'data-scale'), 'hiding never changes the scale');
+  for (const id of model.walls.map(item => item.id)) assert.equal(bare.includes(`data-entity="${id}"`), full.includes(`data-entity="${id}"`), `${id} is structure`);
+
+  const sides = ['north', 'east', 'south', 'west'];
+  const shown = sides.flatMap(side => has(api.renderElevationSheet(model, side).svg, plantingIds));
+  assert.ok(shown.length > 0, 'some elevation shows a plant');
+  for (const side of sides) {
+    const elevation = api.renderElevationSheet(model, side, { structureOnly: true }).svg;
+    assert.deepEqual(has(elevation, plantingIds), [], side);
+    assert.equal(svgAttr(elevation, 'data-scale'), svgAttr(api.renderElevationSheet(model, side).svg, 'data-scale'));
+  }
+
+  const objects = structuredClone(fixture), objectIds = [...objects.fixtures, ...objects.equipment].map(item => item.id);
+  for (const section of objects.sections ?? []) assert.deepEqual(has(api.renderSectionSheet(objects, section.id, { structureOnly: true }).svg, objectIds), [], section.id);
+  assert.equal(api.hasNonStructural({ ...structuredClone(fixture), fixtures: [], equipment: [], surfaces: [], plantings: [] }), false);
+});
+test('elevations share one scale set by the building; plants are drawn but clipped at the drawing edge', () => {
+  const { api } = loadStudio();
+  const model = structuredClone(siteFixture), bare = { ...structuredClone(siteFixture), plantings: [] };
+  const sides = ['north', 'east', 'south', 'west'];
+  const sheets = Object.fromEntries(sides.map(side => [side, api.renderElevationSheet(model, side)]));
+  for (const side of sides) {
+    assert.equal(sheets[side].scaleLabel, '1/4" = 1\'-0"', side);
+    const without = api.renderElevationSheet(bare, side);
+    assert.equal(without.scaleLabel, sheets[side].scaleLabel, `${side}: plants never change the scale`);
+    assert.deepEqual(without.frame.extent, sheets[side].frame.extent, `${side}: plants never change the extent`);
+  }
+  const plantingIds = model.plantings.map(item => item.id), datumZ = model.project.coordinates.siteDatumMm ?? 0;
+  for (const side of ['east', 'south']) {
+    const { svg, frame } = sheets[side], clipStart = svg.indexOf(`<g clip-path="url(#clip-elev-plants-${side})">`);
+    const shown = plantingIds.filter(id => svg.includes(`data-entity="${id}"`));
+    assert.ok(shown.length > 0, `${side} shows a plant`);
+    assert.ok(clipStart > 0 && svg.includes(`<clipPath id="clip-elev-plants-${side}">`), `${side} clips its plants`);
+    for (const id of shown) assert.ok(svg.indexOf(`data-entity="${id}"`) > clipStart && groupDepth(svg.slice(clipStart, svg.indexOf(`data-entity="${id}"`))) > 0, `${side}: ${id} is inside the clip`);
+    // The clip spans the frame's width and the drawing area's height, clear of the title block.
+    const xs = pointXs(svg.slice(svg.indexOf(`<clipPath id="clip-elev-plants-${side}">`)).match(/<clipPath[^>]*>(.*?)<\/clipPath>/)[1]);
+    near(Math.min(...xs), frame.place.x, 0.01, `${side} clip left`);
+    near(Math.max(...xs), frame.place.x + frame.place.w, 0.01, `${side} clip right`);
+    assert.ok(Math.max(...xs) < 431.8 - 10 - 64, `${side}: the clip stays off the title block`);
+    const height = id => { const planting = model.plantings.find(item => item.id === id); return planting.heightMm ?? model.plants.find(plant => plant.id === planting.plantId).matureHeightMm; };
+    assert.ok(shown.some(id => datumZ + height(id) > frame.extent.maxZ), `${side}: a tree rises past the building and is clipped, not fitted`);
+  }
+  assert.doesNotMatch(api.renderElevationSheet(model, 'east', { structureOnly: true }).svg, /clip-elev-plants/);
+  assert.doesNotMatch(api.renderElevationSheet(bare, 'east').svg, /clip-elev-plants/, 'no clip without plants');
+});
+test('sections frame the building plus 3000 mm of site; plants and ground beyond are clipped', () => {
+  const { api } = loadStudio();
+  const model = structuredClone(siteFixture);
+  // Scales before the building framed the sections: 1/16" (1:192) and 1/8" (1:96).
+  const before = { 'section-aa': 192, 'section-bb': 96 };
+  for (const section of model.sections) {
+    const sheet = api.renderSectionSheet(model, section.id), geometry = api.sectionGeometry(model, section);
+    assert.ok(sheet.ratio <= before[section.id], `${section.id} is no smaller than before`);
+    assert.equal(svgAttr(sheet.svg, 'data-scale'), `1:${sheet.ratio}`);
+    const span = item => item.profile ? item.profile.map(p => p.h) : item.hull ? item.hull.map(p => p.x) : item.shape ? [item.hc - item.shape.widthMm / 2, item.hc + item.shape.widthMm / 2] : [item.h0, item.h1];
+    const hs = [...geometry.cut.filter(item => item.kind !== 'surface'), ...geometry.beyond.filter(item => item.kind !== 'object'), ...geometry.members].flatMap(span)
+      .concat(geometry.roofCut.flatMap(piece => piece.points.map(p => p.h)));
+    const ground = geometry.ground.map(p => p.h);
+    near(sheet.frame.extent.minH, Math.max(Math.min(...hs) - 3000, Math.min(...ground)), 1, `${section.id} left edge`);
+    near(sheet.frame.extent.maxH, Math.min(Math.max(...hs) + 3000, Math.max(...ground)), 1, `${section.id} right edge`);
+    assert.ok(sheet.frame.extent.maxH - sheet.frame.extent.minH < Math.max(...ground) - Math.min(...ground), `${section.id} no longer spans the whole cut line`);
+    // The section body is clipped; datums and dimensions stay outside the clip.
+    const clipStart = sheet.svg.indexOf(`<g clip-path="url(#clip-section-${section.id})">`), datumAt = sheet.svg.indexOf('<g data-role="datum"');
+    assert.ok(clipStart > 0, `${section.id} clips its body`);
+    for (const role of ['plants', 'ground', 'earth']) {
+      const at = sheet.svg.indexOf(`<g data-role="${role}"`);
+      if (at >= 0) assert.ok(at > clipStart && groupDepth(sheet.svg.slice(clipStart, at)) > 0, `${section.id}: ${role} is inside the clip`);
+    }
+    assert.ok(datumAt > clipStart && groupDepth(sheet.svg.slice(clipStart, datumAt)) === 0, `${section.id}: datums are outside the clip`);
+    const bare = api.renderSectionSheet(model, section.id, { structureOnly: true });
+    assert.deepEqual(bare.frame.extent, sheet.frame.extent, `${section.id}: Structure only keeps the frame`);
+  }
+  // Plants beyond do not set the scale.
+  const noPlants = { ...structuredClone(siteFixture), plantings: [] };
+  for (const section of model.sections) assert.equal(api.renderSectionSheet(noPlants, section.id).ratio, api.renderSectionSheet(model, section.id).ratio, section.id);
+});
+test('a section that meets no building element keeps the whole cut line', () => {
+  const { api } = loadStudio();
+  const model = structuredClone(siteFixture);
+  // Along the front lawn, looking away from the house: only site surfaces, ground, and plants.
+  model.sections.push({ id: 'section-site', name: 'Site section', start: { x: 0, y: 1500 }, end: { x: 20000, y: 1500 }, lookDirection: 'right' });
+  const section = model.sections.at(-1), geometry = api.sectionGeometry(model, section);
+  assert.equal(geometry.cut.filter(item => item.kind !== 'surface').length + geometry.beyond.filter(item => item.kind !== 'object').length + geometry.members.length + geometry.roofCut.length, 0, 'the plane meets no building element');
+  const sheet = api.renderSectionSheet(model, section.id);
+  assert.ok(Object.values(sheet.frame.extent).every(Number.isFinite), 'the frame is finite');
+  const ground = geometry.ground.map(p => p.h);
+  near(sheet.frame.extent.minH, Math.min(...ground), 1, 'left edge');
+  near(sheet.frame.extent.maxH, Math.max(...ground), 1, 'right edge');
+  assert.equal(sheet.warnings.some(item => item.code === 'section.empty'), geometry.cut.length + geometry.roofCut.length + geometry.members.length === 0, 'section.empty follows what the plane cuts');
+  assert.doesNotMatch(sheet.svg, /NaN|Infinity/);
+  // Off the site, looking away: nothing is cut, and the sheet still draws with the empty warning.
+  model.sections.push({ id: 'section-void', name: 'Void section', start: { x: 0, y: -5000 }, end: { x: 20000, y: -5000 }, lookDirection: 'right' });
+  const empty = api.renderSectionSheet(model, 'section-void');
+  assert.ok(empty.warnings.some(item => item.code === 'section.empty'));
+  assert.ok(Object.values(empty.frame.extent).every(Number.isFinite));
+  assert.doesNotMatch(empty.svg, /NaN|Infinity/);
+});
+test('the viewer applies Structure only to the drawn sheet, from the toggle and from ?structure=1', async () => {
+  const files = { './models/building.json': JSON.stringify(siteFixture) };
+  const h = startHarness({ files, search: '?view=section&section=section-aa' });
+  await h.api.start();
+  await h.settle();
+  assert.equal(h.element('#structure-toggle').classList.contains('hidden-view'), false);
+  assert.match(h.element('#sheet-stage').innerHTML, /data-role="plants"/);
+  h.element('#structure-toggle').dispatch('click');
+  assert.equal(h.element('#structure-toggle').attributes['aria-pressed'], 'true');
+  assert.doesNotMatch(h.element('#sheet-stage').innerHTML, /data-role="plants"/);
+
+  const start = startHarness({ files, search: '?view=elevation&elevation=south&structure=1' });
+  await start.api.start();
+  await start.settle();
+  assert.equal(start.element('#structure-toggle').attributes['aria-pressed'], 'true');
+  for (const planting of siteFixture.plantings) assert.doesNotMatch(start.element('#sheet-stage').innerHTML, new RegExp(`data-entity="${planting.id}"`));
+
+  const plan = startHarness({ files, search: '?view=plan' });
+  await plan.api.start();
+  await plan.settle();
+  assert.equal(plan.element('#structure-toggle').classList.contains('hidden-view'), true, 'only on elevations and sections');
 });

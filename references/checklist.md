@@ -22,6 +22,10 @@
 - [ ] `exports/` was written by `export-drawings.mjs` after the last model
       change: `exports/manifest.json` lists every sheet and its model fingerprint
       matches the active model. No SVG was hand-written or edited.
+- [ ] When the project has images, `import-image.mjs check <project>` reports
+      nothing to resolve: no stale source, no entity whose
+      `evidence.reference` predates its source, and no placement built on an
+      old calibration.
 
 ## P1: Interaction and Legibility
 
@@ -53,6 +57,10 @@
       heuristics, code sources, and generated choices.
 - [ ] `HANDOFF.md` identifies the selected concept, rejected alternatives,
       unresolved decisions, code coverage, and questions by discipline.
+- [ ] `HANDOFF.md` lists every image-derived dimension with its source image,
+      its method (printed, manual, control points, or an estimated scale bar,
+      dimension, stated scale, or map metadata), and its ± uncertainty, and
+      marks which are estimated.
 - [ ] Survey, zoning/site, structural, envelope/energy, fire/life safety,
       accessibility, plumbing, electrical, and mechanical follow-up is explicit.
 - [ ] The package never describes itself as permit ready, engineered,
