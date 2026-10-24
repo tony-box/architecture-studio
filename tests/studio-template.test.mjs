@@ -151,6 +151,8 @@ const svgAttr = (svg, name) => svg.match(new RegExp(`<svg[^>]*\\s${name}="([^"]*
 const entityGroup = (svg, id) => svg.match(new RegExp(`<g data-entity="${id}">([\\s\\S]*?)</g>`))?.[1] ?? '';
 const numbersIn = (markup, attr) => [...markup.matchAll(new RegExp(`\\s${attr}="(-?[\\d.]+)"`, 'g'))].map(match => Number(match[1]));
 const pointXs = markup => [...markup.matchAll(/points="([^"]+)"/g)].flatMap(match => match[1].split(' ').map(pair => Number(pair.split(',')[0])));
+// Open <g> groups left at the end of a markup slice.
+const groupDepth = markup => (markup.match(/<g[\s>]/g) ?? []).length - (markup.match(/<\/g>/g) ?? []).length;
 
 test('sheets follow the drafting profile selected by display units', () => {
   const { api } = loadStudio();
@@ -1571,6 +1573,87 @@ test('Structure only leaves plants, fixtures and equipment, and site surfaces ou
   const objects = structuredClone(fixture), objectIds = [...objects.fixtures, ...objects.equipment].map(item => item.id);
   for (const section of objects.sections ?? []) assert.deepEqual(has(api.renderSectionSheet(objects, section.id, { structureOnly: true }).svg, objectIds), [], section.id);
   assert.equal(api.hasNonStructural({ ...structuredClone(fixture), fixtures: [], equipment: [], surfaces: [], plantings: [] }), false);
+});
+test('elevations share one scale set by the building; plants are drawn but clipped at the drawing edge', () => {
+  const { api } = loadStudio();
+  const model = structuredClone(siteFixture), bare = { ...structuredClone(siteFixture), plantings: [] };
+  const sides = ['north', 'east', 'south', 'west'];
+  const sheets = Object.fromEntries(sides.map(side => [side, api.renderElevationSheet(model, side)]));
+  for (const side of sides) {
+    assert.equal(sheets[side].scaleLabel, '1/4" = 1\'-0"', side);
+    const without = api.renderElevationSheet(bare, side);
+    assert.equal(without.scaleLabel, sheets[side].scaleLabel, `${side}: plants never change the scale`);
+    assert.deepEqual(without.frame.extent, sheets[side].frame.extent, `${side}: plants never change the extent`);
+  }
+  const plantingIds = model.plantings.map(item => item.id), datumZ = model.project.coordinates.siteDatumMm ?? 0;
+  for (const side of ['east', 'south']) {
+    const { svg, frame } = sheets[side], clipStart = svg.indexOf(`<g clip-path="url(#clip-elev-plants-${side})">`);
+    const shown = plantingIds.filter(id => svg.includes(`data-entity="${id}"`));
+    assert.ok(shown.length > 0, `${side} shows a plant`);
+    assert.ok(clipStart > 0 && svg.includes(`<clipPath id="clip-elev-plants-${side}">`), `${side} clips its plants`);
+    for (const id of shown) assert.ok(svg.indexOf(`data-entity="${id}"`) > clipStart && groupDepth(svg.slice(clipStart, svg.indexOf(`data-entity="${id}"`))) > 0, `${side}: ${id} is inside the clip`);
+    // The clip spans the frame's width and the drawing area's height, clear of the title block.
+    const xs = pointXs(svg.slice(svg.indexOf(`<clipPath id="clip-elev-plants-${side}">`)).match(/<clipPath[^>]*>(.*?)<\/clipPath>/)[1]);
+    near(Math.min(...xs), frame.place.x, 0.01, `${side} clip left`);
+    near(Math.max(...xs), frame.place.x + frame.place.w, 0.01, `${side} clip right`);
+    assert.ok(Math.max(...xs) < 431.8 - 10 - 64, `${side}: the clip stays off the title block`);
+    const height = id => { const planting = model.plantings.find(item => item.id === id); return planting.heightMm ?? model.plants.find(plant => plant.id === planting.plantId).matureHeightMm; };
+    assert.ok(shown.some(id => datumZ + height(id) > frame.extent.maxZ), `${side}: a tree rises past the building and is clipped, not fitted`);
+  }
+  assert.doesNotMatch(api.renderElevationSheet(model, 'east', { structureOnly: true }).svg, /clip-elev-plants/);
+  assert.doesNotMatch(api.renderElevationSheet(bare, 'east').svg, /clip-elev-plants/, 'no clip without plants');
+});
+test('sections frame the building plus 3000 mm of site; plants and ground beyond are clipped', () => {
+  const { api } = loadStudio();
+  const model = structuredClone(siteFixture);
+  // Scales before the building framed the sections: 1/16" (1:192) and 1/8" (1:96).
+  const before = { 'section-aa': 192, 'section-bb': 96 };
+  for (const section of model.sections) {
+    const sheet = api.renderSectionSheet(model, section.id), geometry = api.sectionGeometry(model, section);
+    assert.ok(sheet.ratio <= before[section.id], `${section.id} is no smaller than before`);
+    assert.equal(svgAttr(sheet.svg, 'data-scale'), `1:${sheet.ratio}`);
+    const span = item => item.profile ? item.profile.map(p => p.h) : item.hull ? item.hull.map(p => p.x) : item.shape ? [item.hc - item.shape.widthMm / 2, item.hc + item.shape.widthMm / 2] : [item.h0, item.h1];
+    const hs = [...geometry.cut.filter(item => item.kind !== 'surface'), ...geometry.beyond.filter(item => item.kind !== 'object'), ...geometry.members].flatMap(span)
+      .concat(geometry.roofCut.flatMap(piece => piece.points.map(p => p.h)));
+    const ground = geometry.ground.map(p => p.h);
+    near(sheet.frame.extent.minH, Math.max(Math.min(...hs) - 3000, Math.min(...ground)), 1, `${section.id} left edge`);
+    near(sheet.frame.extent.maxH, Math.min(Math.max(...hs) + 3000, Math.max(...ground)), 1, `${section.id} right edge`);
+    assert.ok(sheet.frame.extent.maxH - sheet.frame.extent.minH < Math.max(...ground) - Math.min(...ground), `${section.id} no longer spans the whole cut line`);
+    // The section body is clipped; datums and dimensions stay outside the clip.
+    const clipStart = sheet.svg.indexOf(`<g clip-path="url(#clip-section-${section.id})">`), datumAt = sheet.svg.indexOf('<g data-role="datum"');
+    assert.ok(clipStart > 0, `${section.id} clips its body`);
+    for (const role of ['plants', 'ground', 'earth']) {
+      const at = sheet.svg.indexOf(`<g data-role="${role}"`);
+      if (at >= 0) assert.ok(at > clipStart && groupDepth(sheet.svg.slice(clipStart, at)) > 0, `${section.id}: ${role} is inside the clip`);
+    }
+    assert.ok(datumAt > clipStart && groupDepth(sheet.svg.slice(clipStart, datumAt)) === 0, `${section.id}: datums are outside the clip`);
+    const bare = api.renderSectionSheet(model, section.id, { structureOnly: true });
+    assert.deepEqual(bare.frame.extent, sheet.frame.extent, `${section.id}: Structure only keeps the frame`);
+  }
+  // Plants beyond do not set the scale.
+  const noPlants = { ...structuredClone(siteFixture), plantings: [] };
+  for (const section of model.sections) assert.equal(api.renderSectionSheet(noPlants, section.id).ratio, api.renderSectionSheet(model, section.id).ratio, section.id);
+});
+test('a section that meets no building element keeps the whole cut line', () => {
+  const { api } = loadStudio();
+  const model = structuredClone(siteFixture);
+  // Along the front lawn, looking away from the house: only site surfaces, ground, and plants.
+  model.sections.push({ id: 'section-site', name: 'Site section', start: { x: 0, y: 1500 }, end: { x: 20000, y: 1500 }, lookDirection: 'right' });
+  const section = model.sections.at(-1), geometry = api.sectionGeometry(model, section);
+  assert.equal(geometry.cut.filter(item => item.kind !== 'surface').length + geometry.beyond.filter(item => item.kind !== 'object').length + geometry.members.length + geometry.roofCut.length, 0, 'the plane meets no building element');
+  const sheet = api.renderSectionSheet(model, section.id);
+  assert.ok(Object.values(sheet.frame.extent).every(Number.isFinite), 'the frame is finite');
+  const ground = geometry.ground.map(p => p.h);
+  near(sheet.frame.extent.minH, Math.min(...ground), 1, 'left edge');
+  near(sheet.frame.extent.maxH, Math.max(...ground), 1, 'right edge');
+  assert.equal(sheet.warnings.some(item => item.code === 'section.empty'), geometry.cut.length + geometry.roofCut.length + geometry.members.length === 0, 'section.empty follows what the plane cuts');
+  assert.doesNotMatch(sheet.svg, /NaN|Infinity/);
+  // Off the site, looking away: nothing is cut, and the sheet still draws with the empty warning.
+  model.sections.push({ id: 'section-void', name: 'Void section', start: { x: 0, y: -5000 }, end: { x: 20000, y: -5000 }, lookDirection: 'right' });
+  const empty = api.renderSectionSheet(model, 'section-void');
+  assert.ok(empty.warnings.some(item => item.code === 'section.empty'));
+  assert.ok(Object.values(empty.frame.extent).every(Number.isFinite));
+  assert.doesNotMatch(empty.svg, /NaN|Infinity/);
 });
 test('the viewer applies Structure only to the drawn sheet, from the toggle and from ?structure=1', async () => {
   const files = { './models/building.json': JSON.stringify(siteFixture) };

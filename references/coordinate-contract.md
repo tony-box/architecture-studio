@@ -208,12 +208,17 @@ A section definition is a vertical cutting plane through `start` and `end`.
   along their length, are drawn as beyond elements at depth 0. Plants beyond
   the plane, up to 9 m away, are drawn in outline at full height.
 - Every level contributes a datum line. Without terrain, the ground line runs
-  across the full drawing at `z = siteDatumMm`. With terrain, the drawing
-  spans the whole cut line and the ground line follows the proposed ground,
-  broken under the lowest level's slabs, where the ground meets the slab
-  underside; existing ground is drawn dashed where it differs from proposed
-  ground by more than 30 mm. With `site.groundMaterialId`, earth is hatched
-  below the ground line.
+  across the full drawing at `z = siteDatumMm`. With terrain, the ground line
+  follows the proposed ground, broken under the lowest level's slabs, where
+  the ground meets the slab underside; existing ground is drawn dashed where
+  it differs from proposed ground by more than 30 mm. With
+  `site.groundMaterialId`, earth is hatched below the ground line.
+- The drawing spans the building plus 3000 mm of site each side along the
+  cut, no wider than everything the section draws. The building is every cut
+  or beyond element except site surfaces and fixtures or equipment. Ground,
+  plants, and other drawing past that span stop at the drawing's edge and
+  never set the scale (`drafting-standard.md`, Scales). A section that meets
+  no building element spans the whole cut line.
 
 ## Precision
 

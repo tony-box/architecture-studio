@@ -2578,6 +2578,9 @@
   const plantTop = (model, planting, base = plantBase(model, planting)) => base + (planting.heightMm ?? plantOf(model, planting).matureHeightMm);
   // Elevations and sections show plants up to this far in front of the face or beyond the cut.
   const PLANT_VIEW_DEPTH_MM = 9000;
+  // A section frames the building plus this much site each side along the cut; ground, plants, and site
+  // farther out stop at the drawing's edge instead of shrinking the scale.
+  const SECTION_SITE_MARGIN_MM = 3000;
 
   function elevationBasis(side, bounds) {
     const definitions = {
@@ -2590,19 +2593,27 @@
   }
 
   function renderVerticalSheet(model, view, meta, build) {
-    // Shared frame for elevations and sections: build(hz) returns { minH, maxH, minZ, maxZ, draw(map, ratio, placer) }.
+    // Shared frame for elevations and sections. build.extent is { minH, maxH, minZ, maxZ } in model mm;
+    // build.scale, when given, is a { ratio, label } that replaces the sheet's own scale selection;
+    // build.draw(ctx) returns the body.
     const profile = profileFor(model), area = drawingArea(profile);
     const extent = build.extent;
     const extra = VERTICAL_EXTRA;
     const width = extent.maxH - extent.minH, height = extent.maxZ - extent.minZ;
-    const { ratio, label: scaleLabel } = selectScale(profile, width, height, area, extra);
+    const { ratio, label: scaleLabel } = build.scale ?? selectScale(profile, width, height, area, extra);
     const place = placeExtent(area, ratio, width, height, extra);
     const map = (h, z) => ({ x: place.x + (h - extent.minH) / ratio, y: place.y + (extent.maxZ - z) / ratio });
     const placer = createPlacer(area), warnings = [];
-    const ctx = { map, ratio, profile, placer, warnings, place, materials: null };
+    // Plants and site beyond the building stop at this paper rectangle instead of enlarging the extent.
+    // Its sides are the frame's own sides: the band to the left carries elevation dimensions and the one
+    // to the right the datum symbols and labels. Nothing is annotated above the drawing, so it reaches up
+    // to the top of the drawing area; the view title and title block lie outside the area.
+    const clip = { x0: place.x, y0: area.y0, x1: place.x + place.w, y1: area.y1 };
+    const clipped = (id, markup) => `<clipPath id="${escapeHtml(id)}">${svgRect(clip.x0, clip.y0, clip.x1 - clip.x0, clip.y1 - clip.y0, { width: 0 })}</clipPath><g clip-path="url(#${escapeHtml(id)})">${markup}</g>`;
+    const ctx = { map, ratio, profile, placer, warnings, place, clipped, materials: null };
     const body = build.draw(ctx);
     const svg = sheetSvg(model, profile, { ...meta, scaleLabel, ratio, area, view, materialContext: ctx.materials, warnings }, body);
-    return { svg, sheetId: meta.sheetId, title: meta.title, view, ratio, scaleLabel, warnings };
+    return { svg, sheetId: meta.sheetId, title: meta.title, view, ratio, scaleLabel, warnings, frame: { place, extent: { ...extent }, ratio, clip } };
   }
 
   function verticalAnnotations(model, ctx, minH, maxH, roof, options = {}) {
@@ -2621,14 +2632,33 @@
     return parts.join('');
   }
 
-  function renderElevationSheet(model, side, options = {}) {
-    const bounds = modelBounds(model), roof = model.roofs[0], basis = elevationBasis(side, bounds);
+  // The building as one elevation sees it, in (h, z) model millimetres: the walls' projected extent plus
+  // the roof overhang, from the lower of zero and the site datum to the top of walls, eave, or ridge.
+  // Plants and site are left out, so only the building sets the scale.
+  function elevationExtent(model, side) {
+    const roof = model.roofs[0], basis = elevationBasis(side, modelBounds(model));
     const wallBox = boundsOf(model.walls.flatMap(wallPoints));
     const projected = [{ x: wallBox.x0, y: wallBox.y0 }, { x: wallBox.x1, y: wallBox.y0 }, { x: wallBox.x1, y: wallBox.y1 }, { x: wallBox.x0, y: wallBox.y1 }].map(basis.project);
     const wallMin = Math.min(...projected), wallMax = Math.max(...projected), ov = roof?.overhangMm ?? 0;
-    const minH = wallMin - ov, maxH = wallMax + ov;
     const wallTop = Math.max(...model.walls.map(wall => (model.levels.find(level => level.id === wall.levelId)?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0) + wall.heightMm));
     const ridge = roof?.ridgeElevationMm ?? wallTop, eave = roof?.eaveElevationMm ?? wallTop;
+    return {
+      minH: wallMin - ov, maxH: wallMax + ov, minZ: Math.min(0, model.project.coordinates.siteDatumMm ?? 0), maxZ: Math.max(ridge, eave, wallTop),
+      basis, wallBox, wallMin, wallMax, wallTop, ridge, eave
+    };
+  }
+  // All four elevations share one scale: the largest standard scale at which every face fits.
+  function elevationScale(model) {
+    const profile = profileFor(model), area = drawingArea(profile);
+    return ['north', 'east', 'south', 'west'].map(side => {
+      const e = elevationExtent(model, side);
+      return selectScale(profile, e.maxH - e.minH, e.maxZ - e.minZ, area, VERTICAL_EXTRA);
+    }).reduce((smallest, scale) => scale.ratio > smallest.ratio ? scale : smallest);
+  }
+
+  function renderElevationSheet(model, side, options = {}) {
+    const roof = model.roofs[0], frame = elevationExtent(model, side);
+    const { basis, wallBox, wallMin, wallMax, wallTop, ridge, eave, minH, maxH } = frame;
     const gable = roof ? ((side === 'north' || side === 'south') ? roof.ridgeAxis === 'y' : roof.ridgeAxis === 'x') : false;
     const isVisibleWall = wall => Math.abs(wall.start[basis.axis] - basis.face) < 3 && Math.abs(wall.end[basis.axis] - basis.face) < 3;
     // An arc wall shows an opening when the wall faces the viewer there; its jambs project to their true
@@ -2640,13 +2670,14 @@
       return wall.kind === 'exterior' && dot2(outward, viewDir) > 0.5;
     };
     const showsOpening = (wall, opening) => wall.bulge ? facesViewer(wall, opening.offsetMm + opening.widthMm / 2) : isVisibleWall(wall);
-    const baseMinZ = Math.min(0, model.project.coordinates.siteDatumMm ?? 0), baseMaxZ = Math.max(ridge, eave, wallTop), datumZ = model.project.coordinates.siteDatumMm ?? 0;
+    const datumZ = model.project.coordinates.siteDatumMm ?? 0;
     // Plants in front of the face, within the view depth, draw over the building in outline and stand on
-    // the elevation's ground line.
+    // the elevation's ground line. They do not enlarge the extent; a tall tree stops at the sheet's clip.
     const outward = (side === 'north' || side === 'east') ? 1 : -1;
     const plants = standingPlants(model).filter(item => { const h = basis.project(item.position), depth = outward * (item.position[basis.axis] - basis.face); return h >= minH && h <= maxH && depth > 0 && depth <= PLANT_VIEW_DEPTH_MM; });
     return renderVerticalSheet(model, 'elevation', { sheetId: ELEVATION_SHEETS[side], title: `${basis.label} elevation` }, {
-      extent: { minH, maxH, minZ: baseMinZ, maxZ: Math.max(baseMaxZ, ...plants.map(item => plantTop(model, item, datumZ))) },
+      extent: { minH, maxH, minZ: frame.minZ, maxZ: frame.maxZ },
+      scale: elevationScale(model),
       draw(ctx) {
         const { map, profile } = ctx, P = profile.pens, parts = [];
         const silhouette = !roof
@@ -2679,7 +2710,7 @@
           }
           parts.push(`<g data-entity="${escapeHtml(opening.id)}">${svgPoly(box, { fill: DRAFT.paper, width: P.medium })}${inner.join('')}</g>`);
         }
-        if (!options.structureOnly) parts.push(plants.map(item => plantProfileSvg(model, item, map, basis.project(item.position), datumZ, P)).join(''));
+        if (!options.structureOnly && plants.length) parts.push(ctx.clipped(`clip-elev-plants-${side}`, plants.map(item => plantProfileSvg(model, item, map, basis.project(item.position), datumZ, P)).join('')));
         parts.push(verticalAnnotations(model, ctx, minH, maxH, roof));
         return parts.join('');
       }
@@ -2943,28 +2974,47 @@
     if (!section) return null;
     const geometry = sectionGeometry(model, section), roof = model.roofs[0];
     const ground = model.project.coordinates.siteDatumMm ?? 0;
-    const hs = [], zs = [ground];
-    for (const item of [...geometry.cut, ...geometry.beyond, ...geometry.members]) {
-      if (item.profile) { hs.push(...item.profile.map(p => p.h)); zs.push(...item.profile.map(p => p.z)); }
-      else if (item.hull) { hs.push(...item.hull.map(p => p.x)); zs.push(...item.hull.map(p => p.y)); }
-      else if (item.shape) { hs.push(item.hc - item.shape.widthMm / 2, item.hc + item.shape.widthMm / 2); zs.push(item.z0, item.z0 + item.shape.depthMm); }
-      else { hs.push(item.h0, item.h1); zs.push(item.z0, item.z1); }
-    }
-    for (const piece of geometry.roofCut) { hs.push(...piece.points.map(p => p.h)); zs.push(...piece.points.map(p => p.z)); }
-    // With terrain the drawing spans the whole cut line, so the ground reads across the site.
+    const span = item => item.profile ? { hs: item.profile.map(p => p.h), zs: item.profile.map(p => p.z) }
+      : item.hull ? { hs: item.hull.map(p => p.x), zs: item.hull.map(p => p.y) }
+      : item.shape ? { hs: [item.hc - item.shape.widthMm / 2, item.hc + item.shape.widthMm / 2], zs: [item.z0, item.z0 + item.shape.depthMm] }
+      : { hs: [item.h0, item.h1], zs: [item.z0, item.z1] };
+    // Everything the plane meets, and the building alone: site surfaces cut and fixtures or equipment
+    // beyond are not building.
+    const all = { hs: [], zs: [ground] }, building = { hs: [], zs: [ground] };
+    const add = (target, { hs, zs }) => { target.hs.push(...hs); target.zs.push(...zs); };
+    for (const item of geometry.cut) { add(all, span(item)); if (item.kind !== 'surface') add(building, span(item)); }
+    for (const item of geometry.beyond) { add(all, span(item)); if (item.kind !== 'object') add(building, span(item)); }
+    for (const item of geometry.members) { add(all, span(item)); add(building, span(item)); }
+    for (const piece of geometry.roofCut) for (const target of [all, building]) add(target, { hs: piece.points.map(p => p.h), zs: piece.points.map(p => p.z) });
     const groundProfile = geometry.ground;
-    if (groundProfile) { hs.push(...groundProfile.map(p => p.h)); zs.push(...groundProfile.map(p => p.z), ...groundProfile.map(p => p.existing)); }
+    if (groundProfile) add(all, { hs: groundProfile.map(p => p.h), zs: [...groundProfile.map(p => p.z), ...groundProfile.map(p => p.existing)] });
+    const fullMin = Math.min(...all.hs), fullMax = Math.max(...all.hs);
+    // The building sets the extent: it spans the building plus SECTION_SITE_MARGIN_MM of site each side,
+    // within what the plane meets. Ground, plants, and site beyond stop at the frame's edge. A section
+    // that meets no building element keeps the whole cut line and everything on it.
+    const framed = building.hs.length > 0;
+    const minH = framed ? Math.max(fullMin, Math.min(...building.hs) - SECTION_SITE_MARGIN_MM) : fullMin;
+    const maxH = framed ? Math.min(fullMax, Math.max(...building.hs) + SECTION_SITE_MARGIN_MM) : fullMax;
+    const inWindow = h => h >= minH && h <= maxH;
+    const zs = framed ? building.zs : all.zs;
+    const windowGround = groundProfile?.filter(p => inWindow(p.h)) ?? [];
+    if (framed) for (const p of windowGround) zs.push(p.z, p.existing, ...(p.under == null ? [] : [p.under]));
+    // The ground drawn runs one sample past each side of the frame, so the clip ends it at the edge.
+    const first = groundProfile?.findIndex(p => p.h >= minH) ?? -1, last = groundProfile?.findLastIndex(p => p.h <= maxH) ?? -1;
+    const drawnGround = first >= 0 && last >= first ? groundProfile.slice(Math.max(0, first - 1), last + 2) : null;
+    // Plants within the frame's width are drawn beyond the cut, at full height; only without a building
+    // do they join the extent.
+    const sectionPlants = geometry.plants.filter(item => inWindow(item.h));
+    if (!framed) for (const item of sectionPlants) zs.push(plantBase(model, item.planting), plantTop(model, item.planting));
     // With a site ground material the section shows earth below the ground line, to 300 mm under the
     // deepest cut element (at least 600 mm). The earth only joins the extent when the sheet would still
     // carry material detail with it, so it never shrinks the scale for a band it cannot draw.
-    const minH = Math.min(...hs), maxH = Math.max(...hs);
-    // Plants within the drawing's width are drawn beyond the cut, at full height.
-    const sectionPlants = geometry.plants.filter(item => item.h >= minH && item.h <= maxH);
-    for (const item of sectionPlants) zs.push(plantBase(model, item.planting), plantTop(model, item.planting));
-    const earthBottom = Math.min((groundProfile ? Math.min(...groundProfile.map(p => p.under ?? p.z)) : ground) - 600, Math.min(...zs) - 300);
+    const earthBottom = Math.min((windowGround.length ? Math.min(...windowGround.map(p => p.under ?? p.z)) : ground) - 600, Math.min(...zs) - 300);
     const fitsDetail = minZ => materialsActive(model, selectScale(profileFor(model), maxH - minH, Math.max(...zs) - minZ, drawingArea(profileFor(model)), VERTICAL_EXTRA).ratio);
     const earthId = model.site?.groundMaterialId && fitsDetail(earthBottom) ? model.site.groundMaterialId : null;
     if (earthId) zs.push(earthBottom);
+    // Without plants or trimmed site, everything drawn lies inside the extent and the clip is left out.
+    const clipBody = minH > fullMin || maxH < fullMax || sectionPlants.length > 0;
     const letter = sectionLetter(model, section.id);
     return renderVerticalSheet(model, 'section', { sheetId: sectionSheetId(model, section.id), title: section.name || `Section ${letter}-${letter}` }, {
       extent: { minH, maxH, minZ: Math.min(...zs), maxZ: Math.max(...zs) },
@@ -2987,8 +3037,8 @@
         if (mats.active && earthId) {
           const box = { h0: minH, h1: maxH, z0: earthBottom, z1: ground };
           // With terrain the earth follows the ground profile, up to the slab underside under the building.
-          const points = groundProfile ? [...groundProfile.map(p => map(p.h, p.under ?? p.z)), map(groundProfile.at(-1).h, earthBottom), map(groundProfile[0].h, earthBottom)] : rect(box);
-          parts.push(`<g data-role="earth" pointer-events="none">${mats.region(points, frameOf(box), mats.resolve(earthId), groundProfile ? `clip-earth-${section.id}` : null)}</g>`);
+          const points = drawnGround ? [...drawnGround.map(p => map(p.h, p.under ?? p.z)), map(drawnGround.at(-1).h, earthBottom), map(drawnGround[0].h, earthBottom)] : rect(box);
+          parts.push(`<g data-role="earth" pointer-events="none">${mats.region(points, frameOf(box), mats.resolve(earthId), drawnGround ? `clip-earth-${section.id}` : null)}</g>`);
         }
         if (sectionPlants.length && !options.structureOnly) parts.push(`<g data-role="plants">${sectionPlants.map(item => plantProfileSvg(model, item.planting, map, item.h, plantBase(model, item.planting), P)).join('')}</g>`);
         for (const item of [...geometry.beyond].filter(item => !(options.structureOnly && item.kind === 'object')).sort((a, b) => b.depth - a.depth)) {
@@ -3062,11 +3112,11 @@
         }
         for (const piece of geometry.roofCut) parts.push(`<g data-entity="${escapeHtml(piece.id)}">${svgPoly(piece.points.map(p => map(p.h, p.z)), { open: true, width: P.cut, join: 'miter' })}</g>`);
         if (!geometry.cut.length && !geometry.roofCut.length && !geometry.members.length) warnings.push({ severity: 'warning', code: 'section.empty', message: `${section.name} does not cut any modelled element.`, entityId: section.id });
-        if (groundProfile) {
+        if (drawnGround) {
           // Finished grade at the ground pen, broken where the building stands; existing grade dashed where it differs.
           const runs = [], existingRuns = [];
           let run = [], prior = [];
-          for (const p of groundProfile) {
+          for (const p of drawnGround) {
             if (p.under == null) run.push(map(p.h, p.z)); else { if (run.length > 1) runs.push(run); run = []; }
             if (Math.abs(p.existing - p.z) > 30) prior.push(map(p.h, p.existing)); else { if (prior.length > 1) existingRuns.push(prior); prior = []; }
           }
@@ -3074,8 +3124,8 @@
           if (prior.length > 1) existingRuns.push(prior);
           parts.push(`<g data-role="ground">${runs.map(points => svgPoly(points, { open: true, width: P.ground, join: 'round' })).join('')}${existingRuns.map(points => svgPoly(points, { open: true, width: P.fine, dash: '3 1.5' })).join('')}</g>`);
         }
-        parts.push(verticalAnnotations(model, ctx, minH, maxH, roof, { groundLine: !groundProfile }));
-        return parts.join('');
+        const body = parts.join('');
+        return (clipBody ? ctx.clipped(`clip-section-${section.id}`, body) : body) + verticalAnnotations(model, ctx, minH, maxH, roof, { groundLine: !drawnGround });
       }
     });
   }

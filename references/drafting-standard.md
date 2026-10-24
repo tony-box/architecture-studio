@@ -37,6 +37,22 @@ zoom never changes paper sizes, pen widths, or the stated scale.
 Pick the largest standard scale at which the view, plus its annotation band,
 fits the drawing area.
 
+- Elevations share one scale: the largest at which every face fits, so the
+  four faces compare directly. Each face is still centred on its own sheet.
+- The building sets the scale of elevations and sections. An elevation's
+  extent is the walls plus the roof overhang, from the lower of zero and the
+  site datum to the top of walls, eave, or ridge. A section's extent is the
+  building elements it cuts or sees beyond (walls, slabs, foundations,
+  stairs, beams, columns, roof) plus 3000 mm of site each side along the cut,
+  no wider than everything the section draws; vertically it is the
+  building, the ground inside that span, the site datum, and any earth band
+  (Materials, Site). Plants, ground,
+  and site surfaces beyond that frame are clipped at the drawing's edge
+  instead of shrinking the drawing: at the sides of the frame, so they stay
+  clear of the dimensions to the left and the datum labels to the right, and
+  at the top and bottom of the drawing area. A section that meets no building
+  element spans the whole cut line and everything on it.
+
 - Imperial ladder (architect's scales): 1" = 1'-0" (1:12), 3/4" (1:16),
   1/2" (1:24), 3/8" (1:32), 1/4" (1:48), 3/16" (1:64), 1/8" (1:96),
   3/32" (1:128), 1/16" (1:192), 1/32" (1:384).
@@ -347,7 +363,8 @@ face, standing on the elevation ground line, and sections show plants up to
 9 m beyond the cut, on the ground: trunk lines and a canopy outline (a lobed
 ellipse, or a triangle for evergreens) at `thin`, with no fill, so the building
 behind stays legible. Plants marked for removal are left out. Both views use
-the plant's `heightMm` or mature height, so tall trees may lower the scale.
+the plant's `heightMm` or mature height. Plants never set the scale: a tall
+tree is clipped at the drawing's edge (Scales).
 
 ## Symbols
 
