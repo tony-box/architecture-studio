@@ -59,6 +59,8 @@ before writing `models/building.json`, save it to `brief.json` (validated by
 | `preferences.heating` | How should it be heated and cooled? | Heat pump, furnace, radiant, wood, undecided. |
 | `preferences.water` | Water heating preference? | Tank, tankless, heat pump, undecided. |
 | `preferences.accessibility` | Any accessibility needs? | Step-free entry, main-level bedroom, wider doors. |
+| `preferences.appliances` | Which major appliances, and gas or electric? | Range or cooktop, wall oven, dryer, water heater, EV charger, hot tub, shop tools, generator, solar. Sets dedicated circuits, gas lines, and vents per `mep-placement-guide.md`. |
+| `preferences.lighting` | Any lighting or control preferences? | Recessed or surface lights, pendants, ceiling fans, dimming, smart switches, switched receptacles in living rooms. Default: design practice in `mep-placement-guide.md`. |
 
 ## Round 5: Sources and research
 

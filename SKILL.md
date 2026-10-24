@@ -92,7 +92,10 @@ survey accurate, or professionally engineered.
    code finding.
 7. **Lay out systems.** Stabilize the architectural envelope, then place and
    route conceptual plumbing, electrical, and mechanical systems according to
-   `references/mep-concept-rules.md`.
+   `references/mep-concept-rules.md`. Place fixtures, receptacles, switches,
+   lights, alarms, and HVAC terminals with `references/mep-placement-guide.md`,
+   and read it again whenever the user asks to add or move one. Code findings
+   for the jurisdiction override its model-code baselines.
 8. **Show the studio.** Start the viewer as a background process, because it
    keeps running: `node <skill>/scripts/serve.mjs <project>`. It opens the
    user's default browser and prints the URL; always pass the URL on to the

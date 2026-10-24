@@ -396,6 +396,91 @@ tree is clipped at the drawing's edge (Scales).
   a 4 mm quartered circle at the right end, the level name above and its
   elevation below.
 
+## Systems Symbols
+
+Systems sheets (M-1xx) draw each device as a symbol in its system's
+discipline colour (see Colour). The symbol follows the node's `kind`; the
+vocabulary is the one in `mep-placement-guide.md`, Modeling Devices. Kinds
+not listed here, such as `panel`, `circuit-end`, `fixture-connection`, and
+`vertical-stack`, keep the plain 2.2 mm node dot.
+
+**Size and pen.** Symbols are a fixed paper size at every scale: a 2.8 mm
+circle for most devices, 3.4 mm for two-letter lettered circles, 3.6 mm for
+ceiling lights, at the `thin` pen. Tags are 1.8 mm bold lettering beyond the
+symbol. Floor plans (A-1xx) draw no device symbols.
+
+**Mounting.** A `wall` or `any` device whose position lies within 300 mm of a
+wall face on its level sits on that wall: the symbol grows from the device
+position into the room, square to the wall, and follows arc walls. A `wall`
+device with no wall in reach is drawn free-standing. `ceiling` and `floor`
+devices are centred on their position. Place wall devices at the finished
+face (`mep-placement-guide.md`).
+
+| Kind | Symbol | Tag | Mount |
+|---|---|---|---|
+| `receptacle` | Circle with two parallel lines square to the wall | | wall |
+| `receptacle-gfci` | Duplex receptacle | `GFCI` | wall |
+| `receptacle-weather` | Duplex receptacle | `WP` | wall |
+| `receptacle-dedicated` | Duplex receptacle | `DED` | wall |
+| `receptacle-240v` | Circle, the half toward the wall filled | `240V` | wall |
+| `floor-receptacle` | Duplex receptacle inside a square | | floor |
+| `future-receptacle` | Duplex receptacle, dashed | `FUT` | any |
+| `switch`, `switch-3way`, `switch-4way`, `dimmer` | Letter `S`, subscript `3`, `4`, or `D` | | wall |
+| `light-ceiling` | Circle with a cross through it | | ceiling |
+| `light-recessed`, `light-pendant` | Circle lettered `R` or `P` | | ceiling |
+| `light-wall` | Crossed circle on a stem from the wall | | wall |
+| `light-exterior` | Wall light | `WP` | wall |
+| `light-undercabinet` | Strip along the wall | `UC` | wall |
+| `ceiling-fan` | Filled hub with four blades | | ceiling |
+| `smoke-alarm`, `co-alarm`, `smoke-co-alarm` | Circle lettered `SD`, `CO`, or `SC` | | ceiling |
+| `junction-box` | Circle lettered `J` | | any |
+| `thermostat` | Circle lettered `T` | | wall |
+| `supply-register` | Rectangle with both diagonals | | any |
+| `return-grille` | Rectangle with one diagonal | | any |
+| `transfer-grille` | Return grille | `TG` | any |
+| `exhaust-fan` | Square with an inscribed circle | `EF` | ceiling |
+| `range-hood` | Dashed (overhead) rectangle lettered `RH` | | any |
+| `dryer-exhaust` | Circle lettered `DV` | | any |
+| `exhaust-termination` | Arrow out of the wall | `EX` | wall |
+| `outdoor-air-intake` | Arrow into the wall | `OA` | wall |
+| `ductless-head` | Strip along the wall | `DH` | wall |
+| `cleanout` | Circle with a filled centre | `CO` | any |
+| `floor-drain` | Circle with a cross | `FD` | floor |
+| `hose-bibb` | Valve on a stem through the wall | `HB` | wall |
+| `main-shutoff`, `gas-shutoff` | Valve: two triangles tip to tip | `MAIN`, `G` | any |
+| `fixture-shutoff` | Valve | | any |
+| `vent-terminal` | Small circle | `VTR` | ceiling |
+
+`SD` (smoke alarm, lettered circle) and `S` subscript `D` (dimmer, no circle)
+differ by the circle; `CO` lettered in a circle is a CO alarm, and a `CO` tag
+beside a dotted circle is a cleanout. The symbol key spells each one out.
+
+**Equipment tags.** On systems sheets, equipment of these kinds carries a tag
+in its discipline colour, inside the outline when it fits clear of system
+points and otherwise on the first clear side: `electrical-panel` `EP` (with
+the panelboard symbol, the outline half filled along a diagonal), `meter` `M`,
+`service-disconnect` `DS`, `ev-charger` `EV`, `water-heater` `WH`,
+`sump-pump` `SP`, `furnace` `F`, `boiler` `B`, `air-handler` `AHU`,
+`heat-pump` `HP`, `outdoor-unit` `CU`, `erv` `ERV`. A tag shows only when its
+discipline is shown.
+
+**Symbol key.** The title block lists, under Symbols, every device symbol and
+equipment tag the sheet draws and nothing else, in the table's order, with
+icons at 80%. When one column cannot hold them it wraps into two. Rows that
+still do not fit are counted on the sheet and raise `symbol.key-overflow`.
+
+**3D.** Each device with a symbol shows as a 90 mm marker in its discipline
+colour at the same coordinates, so plan and 3D agree.
+
+**Source.** The shapes follow common US residential drafting practice as
+summarised from *Architectural Graphic Standards* and the NCS Uniform Drawing
+System, Module 6 (Symbols) (source C under Materials: the symbol sheets
+themselves were not reviewed). Confidence is medium for the receptacle,
+switch, ceiling light, supply, and return symbols, which are near universal,
+and low for the tags and the 240 V, floor, and ductless shapes, which vary by
+office. The 300 mm mounting reach, the paper sizes, and the tags are studio
+rules. A receiving office may substitute its own symbol legend.
+
 ## Title Block
 
 Fields, top to bottom. Every field comes from the model; nothing is invented.
@@ -405,8 +490,8 @@ Fields, top to bottom. Every field comes from the model; nothing is invented.
 3. Status: `CONCEPT - NOT FOR CONSTRUCTION`.
 4. Drawing title (for example `GROUND FLOOR PLAN`).
 5. Scale, profile, and units.
-6. Legend (systems sheets only) or material key (sheets with material detail,
-   and the site plan when it draws site surfaces).
+6. Legend and symbol key (systems sheets only) or material key (sheets with
+   material detail, and the site plan when it draws site surfaces).
 7. Date: `UNDATED CONCEPT`. The renderer never stamps the current date.
 8. Sheet number.
 

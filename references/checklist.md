@@ -14,6 +14,8 @@
 - [ ] Each system edge connects nodes in its own discipline.
 - [ ] System paths appear at matching coordinates in 2D and 3D.
 - [ ] Plumbing, electrical, and mechanical layers can be isolated.
+- [ ] Every room passes the Room Checklist in `mep-placement-guide.md`, and
+      each placed device's evidence names its rule ID or code finding.
 - [ ] Code findings cite sources or explicitly report research as unavailable.
 - [ ] Diagnostics, Code, Assumptions, and Handoff surfaces all state that the
       work is conceptual and requires professional verification.
