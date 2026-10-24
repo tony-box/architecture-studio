@@ -79,7 +79,9 @@
         "construction": { "$ref": "#/$defs/answer" },
         "heating": { "$ref": "#/$defs/answer" },
         "water": { "$ref": "#/$defs/answer" },
-        "accessibility": { "$ref": "#/$defs/answer" }
+        "accessibility": { "$ref": "#/$defs/answer" },
+        "appliances": { "$ref": "#/$defs/answer" },
+        "lighting": { "$ref": "#/$defs/answer" }
       }
     },
     "sources": {

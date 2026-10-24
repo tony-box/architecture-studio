@@ -71,7 +71,11 @@ The agent then:
    `brief.json`, so a later session resumes where you left off. Nothing is
    modeled until you confirm the brief and every assumption.
 3. **Builds the model**, researches the local code (only with your
-   permission), and lays out conceptual systems.
+   permission), and lays out conceptual systems. Fixtures, receptacles,
+   switches, lights, alarms, and HVAC terminals are placed with
+   [`references/mep-placement-guide.md`](references/mep-placement-guide.md),
+   which keeps US model-code baselines (NEC, IRC, NFPA 72) apart from design
+   practice and lets cited local findings override them.
 4. **Opens the studio in your default browser** (`scripts/serve.mjs`). The
    page reloads itself as the agent edits the model. If the browser cannot
    open (SSH, containers, cloud agents), the agent gives you the URL.
