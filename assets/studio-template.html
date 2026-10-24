@@ -1462,6 +1462,33 @@
       }
       rule();
     }
+    if (meta.symbols?.length) {
+      // The symbol key lists only the device symbols and equipment tags this sheet draws. Icons draw at
+      // 80%; when one column cannot hold every row the key wraps into two narrower columns.
+      const dateField = T.label + 1.2 + T.note * 1.3 + 1.6, bottom = h - b - 6 - T.sheet - 6 - dateField - (T.note + 2) - 6, rowHeight = 4.6;
+      parts.push(svgText(x0 + 4, y, 'Symbols', T.label, { anchor: 'start' }));
+      y += 1.2;
+      const rows = Math.max(0, Math.floor((bottom - y) / rowHeight)), columns = meta.symbols.length > rows ? 2 : 1;
+      const columnWidth = (DRAFT.titleBlockWidth - 8) / columns, labelOffset = columns === 1 ? 14 : 9.5;
+      let shown = 0;
+      for (const item of meta.symbols) {
+        if (shown >= rows * columns) break;
+        const column = columns === 1 ? 0 : Math.floor(shown / rows), row = shown - column * rows;
+        const x = x0 + 4 + column * columnWidth, cy = y + row * rowHeight + rowHeight / 2;
+        const lines = wrapText(item.label, T.label, columnWidth - labelOffset - 1).slice(0, 2), gap = T.label * 1.05;
+        const label = lines.map((line, i) => svgText(x + labelOffset, cy + T.label * 0.36 + (i - (lines.length - 1) / 2) * gap, line, T.label, { anchor: 'start', upper: false })).join('');
+        parts.push(`<g data-legend-symbol="${escapeHtml(item.kind)}"><g transform="translate(${num(x)} ${num(cy)}) scale(0.8)">${symbolLegendIcon(item, 0, 0, profile)}</g>${label}</g>`);
+        shown += 1;
+      }
+      y += Math.min(rows, Math.ceil(meta.symbols.length / columns)) * rowHeight;
+      if (shown < meta.symbols.length) {
+        const missing = meta.symbols.slice(shown).map(item => item.label);
+        parts.push(svgText(x0 + 4, y + T.note, `+${missing.length} drawn but not keyed`, T.note, { anchor: 'start', upper: false })); y += T.note + 2;
+        meta.warnings?.push({ severity: 'warning', code: 'symbol.key-overflow', message: `${meta.sheetId}: the symbol key has no room for ${missing.join(', ')}. Split the systems onto more sheets or reduce the device kinds on this level.`, entityId: null });
+      }
+      y += 1;
+      rule();
+    }
     if (meta.materials?.length) {
       // ISO 128 and NCS both expect a key for material hatching; it lists only what the sheet draws.
       const sheetTop = h - b - 6 - T.sheet - 6, lineGap = T.note * 1.25;
@@ -1983,6 +2010,246 @@
     return fa >= 0 ? [a, p] : [p, b];
   }
 
+  // ---------------------------------------------------------------------------
+  // Systems symbols. Spec: references/drafting-standard.md "Systems Symbols".
+  // A device is a system node whose kind is listed here; other kinds keep the plain node dot. Symbols
+  // are drawn at a fixed paper size so they read at every scale, in the colour of the node's system.
+  // `mount` is where the device lives: `wall` and `any` devices within reach of a wall face sit on it.
+  // ---------------------------------------------------------------------------
+  const SYSTEM_SYMBOLS = {
+    receptacle: { label: 'Duplex receptacle', mount: 'wall', shape: 'duplex' },
+    'receptacle-gfci': { label: 'GFCI receptacle', mount: 'wall', shape: 'duplex', tag: 'GFCI' },
+    'receptacle-weather': { label: 'Weatherproof receptacle', mount: 'wall', shape: 'duplex', tag: 'WP' },
+    'receptacle-dedicated': { label: 'Dedicated receptacle', mount: 'wall', shape: 'duplex', tag: 'DED' },
+    'receptacle-240v': { label: '240 V receptacle', mount: 'wall', shape: 'special', tag: '240V' },
+    'floor-receptacle': { label: 'Floor receptacle', mount: 'floor', shape: 'floor-duplex' },
+    'future-receptacle': { label: 'Future receptacle', mount: 'any', shape: 'duplex', dashed: true, tag: 'FUT' },
+    switch: { label: 'Single-pole switch', mount: 'wall', shape: 'switch' },
+    'switch-3way': { label: 'Three-way switch', mount: 'wall', shape: 'switch', sub: '3' },
+    'switch-4way': { label: 'Four-way switch', mount: 'wall', shape: 'switch', sub: '4' },
+    dimmer: { label: 'Dimmer switch', mount: 'wall', shape: 'switch', sub: 'D' },
+    'light-ceiling': { label: 'Ceiling light', mount: 'ceiling', shape: 'luminaire' },
+    'light-recessed': { label: 'Recessed light', mount: 'ceiling', shape: 'lettered', text: 'R' },
+    'light-pendant': { label: 'Pendant light', mount: 'ceiling', shape: 'lettered', text: 'P' },
+    'light-wall': { label: 'Wall light', mount: 'wall', shape: 'wall-luminaire' },
+    'light-exterior': { label: 'Exterior wall light', mount: 'wall', shape: 'wall-luminaire', tag: 'WP' },
+    'light-undercabinet': { label: 'Under-cabinet light', mount: 'wall', shape: 'strip', tag: 'UC' },
+    'ceiling-fan': { label: 'Ceiling fan', mount: 'ceiling', shape: 'fan' },
+    'smoke-alarm': { label: 'Smoke alarm', mount: 'ceiling', shape: 'lettered', text: 'SD' },
+    'co-alarm': { label: 'CO alarm', mount: 'ceiling', shape: 'lettered', text: 'CO' },
+    'smoke-co-alarm': { label: 'Smoke and CO alarm', mount: 'ceiling', shape: 'lettered', text: 'SC' },
+    'junction-box': { label: 'Junction box', mount: 'any', shape: 'lettered', text: 'J' },
+    thermostat: { label: 'Thermostat', mount: 'wall', shape: 'lettered', text: 'T' },
+    'supply-register': { label: 'Supply register', mount: 'any', shape: 'grille', diagonals: 2 },
+    'return-grille': { label: 'Return grille', mount: 'any', shape: 'grille', diagonals: 1 },
+    'transfer-grille': { label: 'Transfer grille', mount: 'any', shape: 'grille', diagonals: 1, tag: 'TG' },
+    'exhaust-fan': { label: 'Exhaust fan', mount: 'ceiling', shape: 'fan-box', tag: 'EF' },
+    'range-hood': { label: 'Range hood (overhead)', mount: 'any', shape: 'hood', text: 'RH' },
+    'dryer-exhaust': { label: 'Dryer exhaust', mount: 'any', shape: 'lettered', text: 'DV' },
+    'exhaust-termination': { label: 'Exhaust termination', mount: 'wall', shape: 'arrow-out', tag: 'EX' },
+    'outdoor-air-intake': { label: 'Outdoor air intake', mount: 'wall', shape: 'arrow-in', tag: 'OA' },
+    'ductless-head': { label: 'Ductless indoor unit', mount: 'wall', shape: 'strip', tag: 'DH' },
+    cleanout: { label: 'Cleanout', mount: 'any', shape: 'cleanout', tag: 'CO' },
+    'floor-drain': { label: 'Floor drain', mount: 'floor', shape: 'drain', tag: 'FD' },
+    'hose-bibb': { label: 'Hose bibb', mount: 'wall', shape: 'valve', stem: true, tag: 'HB' },
+    'main-shutoff': { label: 'Main shutoff valve', mount: 'any', shape: 'valve', tag: 'MAIN' },
+    'fixture-shutoff': { label: 'Fixture shutoff valve', mount: 'any', shape: 'valve' },
+    'gas-shutoff': { label: 'Gas shutoff valve', mount: 'any', shape: 'valve', tag: 'G' },
+    'vent-terminal': { label: 'Vent through roof', mount: 'ceiling', shape: 'ring', tag: 'VTR' }
+  };
+  // Tags for equipment on systems sheets. The panel also takes the panelboard symbol (half filled).
+  const EQUIPMENT_TAGS = {
+    'electrical-panel': { tag: 'EP', label: 'Electrical panel', discipline: 'electrical', panel: true },
+    meter: { tag: 'M', label: 'Utility meter', discipline: 'electrical' },
+    'service-disconnect': { tag: 'DS', label: 'Service disconnect', discipline: 'electrical' },
+    'ev-charger': { tag: 'EV', label: 'EV charger', discipline: 'electrical' },
+    'water-heater': { tag: 'WH', label: 'Water heater', discipline: 'plumbing' },
+    'sump-pump': { tag: 'SP', label: 'Sump pump', discipline: 'plumbing' },
+    furnace: { tag: 'F', label: 'Furnace', discipline: 'mechanical' },
+    boiler: { tag: 'B', label: 'Boiler', discipline: 'mechanical' },
+    'air-handler': { tag: 'AHU', label: 'Air handler', discipline: 'mechanical' },
+    'heat-pump': { tag: 'HP', label: 'Heat pump', discipline: 'mechanical' },
+    'outdoor-unit': { tag: 'CU', label: 'Outdoor unit', discipline: 'mechanical' },
+    erv: { tag: 'ERV', label: 'ERV or HRV', discipline: 'mechanical' }
+  };
+  const WALL_MOUNT_REACH_MM = 300;
+  const SYMBOL_ORDER = [...Object.keys(SYSTEM_SYMBOLS), ...Object.keys(EQUIPMENT_TAGS)];
+  // Model-space unit normal from the nearest wall face toward a device within reach of it, or null.
+  function hostWallNormal(point, walls) {
+    let best = null;
+    for (const wall of walls) {
+      const g = wallGeometry(wall), along = g.alongOf(point);
+      if (along < -1 || along > g.length + 1) continue;
+      const offset = g.offsetOf(point), gap = Math.abs(offset) - wall.thicknessMm / 2;
+      if (gap > WALL_MOUNT_REACH_MM || (best && gap >= best.gap)) continue;
+      const normal = g.normal(Math.max(0, Math.min(g.length, along)));
+      best = { gap, normal: offset < 0 ? mul(normal, -1) : normal };
+    }
+    return best?.normal ?? null;
+  }
+  // Draws one device symbol in paper millimetres. `anchor` is the device position on paper. A mounted
+  // device grows from the wall face along `n`, the paper direction into the room; an unmounted one is
+  // centred on the anchor. Tags sit beyond the symbol along `tagDir`. Returns the SVG and its bounds.
+  function systemSymbol(kind, anchor, color, profile, { n = { x: 0, y: -1 }, mounted = false, tagDir = n } = {}) {
+    const def = SYSTEM_SYMBOLS[kind];
+    if (!def) return null;
+    const T = profile.text, r = 1.4, t = perp(n), parts = [], keys = [anchor];
+    const pen = { stroke: color, width: profile.pens.thin, ...(def.dashed ? { dash: '0.8 0.5' } : {}) };
+    const at = (out, along = 0) => add(add(anchor, mul(n, out)), mul(t, along));
+    const line = (a, b, o = {}) => { keys.push(a, b); parts.push(svgLine(a, b, { ...pen, ...o })); };
+    const ring = (c, radius, o = {}) => { keys.push(add(c, { x: -radius, y: -radius }), add(c, { x: radius, y: radius })); parts.push(svgCircle(c, radius, { fill: DRAFT.paper, ...pen, ...o })); };
+    const poly = (points, o = {}) => { keys.push(...points); parts.push(svgPoly(points, { fill: DRAFT.paper, ...pen, ...o })); };
+    const text = (c, value, size) => {
+      const w = textWidth(value, size);
+      keys.push({ x: c.x - w / 2, y: c.y - size / 2 }, { x: c.x + w / 2, y: c.y + size / 2 });
+      parts.push(svgText(c.x, c.y + size * 0.36, value, size, { fill: color, weight: 700 }));
+    };
+    // Distance along `dir` from a point to the centre of a w by h box that just clears it.
+    const clear = (dir, w, h) => Math.abs(dir.x) * w / 2 + Math.abs(dir.y) * h / 2;
+    const tagAt = (out, value = def.tag) => {
+      if (!value) return;
+      const size = T.label;
+      text(add(anchor, mul(tagDir, out + 0.6 + clear(tagDir, textWidth(value, size), size))), value, size);
+    };
+    const square = (c, half, u = t, v = n) => [add(add(c, mul(u, -half.u)), mul(v, -half.v)), add(add(c, mul(u, half.u)), mul(v, -half.v)), add(add(c, mul(u, half.u)), mul(v, half.v)), add(add(c, mul(u, -half.u)), mul(v, half.v))];
+    const letters = (c, value, radius) => { ring(c, radius); text(c, value, value.length > 1 ? 1.3 : T.label); };
+    switch (def.shape) {
+      case 'duplex': {
+        const c = mounted ? at(r + 0.4) : anchor, base = mounted ? 0 : -(r + 0.4);
+        ring(c, r);
+        for (const side of [-0.5, 0.5]) line(at(base, side), at(base + 2 * r + 0.8, side));
+        tagAt(mounted ? 2 * r + 0.8 : r + 0.4);
+        break;
+      }
+      case 'special': {
+        const c = mounted ? at(r + 0.4) : anchor;
+        ring(c, r);
+        // The half toward the wall is filled.
+        poly(Array.from({ length: 13 }, (_, i) => add(c, add(mul(t, r * Math.cos(Math.PI * i / 12)), mul(n, -r * Math.sin(Math.PI * i / 12))))), { fill: color, width: 0 });
+        tagAt(mounted ? 2 * r + 0.8 : r);
+        break;
+      }
+      case 'floor-duplex': {
+        poly(square(anchor, { u: r + 0.7, v: r + 0.7 }));
+        ring(anchor, r);
+        for (const side of [-0.5, 0.5]) line(at(-r - 0.4, side), at(r + 0.4, side));
+        break;
+      }
+      case 'switch': {
+        const wS = textWidth('S', T.note), sub = def.sub ? 1.5 : 0, wSub = def.sub ? textWidth(def.sub, sub) + 0.2 : 0, w = wS + wSub;
+        const c = mounted ? at(0.8 + clear(n, w, T.note)) : anchor;
+        keys.push({ x: c.x - w / 2, y: c.y - T.note / 2 }, { x: c.x + w / 2, y: c.y + T.note / 2 + 0.6 });
+        parts.push(svgText(c.x - w / 2 + wS / 2, c.y + T.note * 0.36, 'S', T.note, { fill: color, weight: 700 }));
+        if (def.sub) parts.push(svgText(c.x + w / 2 - wSub / 2 + 0.1, c.y + T.note * 0.36 + 0.6, def.sub, sub, { fill: color, weight: 700 }));
+        break;
+      }
+      case 'luminaire': {
+        ring(anchor, 1.8);
+        line(at(-2.3), at(2.3)); line(at(0, -2.3), at(0, 2.3));
+        tagAt(2.3);
+        break;
+      }
+      case 'wall-luminaire': {
+        const c = mounted ? at(r + 1.2) : anchor;
+        if (mounted) line(at(0), at(1.2));
+        ring(c, r);
+        line(add(c, mul(n, -r)), add(c, mul(n, r))); line(add(c, mul(t, -r)), add(c, mul(t, r)));
+        tagAt(mounted ? 2 * r + 1.2 : r);
+        break;
+      }
+      case 'lettered': {
+        const radius = def.text.length > 1 ? 1.7 : r;
+        letters(mounted ? at(radius + 0.4) : anchor, def.text, radius);
+        break;
+      }
+      case 'strip': {
+        const c = mounted ? at(0.9) : anchor;
+        poly(square(c, { u: 2.6, v: 0.6 }));
+        tagAt(mounted ? 1.5 : 0.6);
+        break;
+      }
+      case 'fan': {
+        ring(anchor, 0.7, { fill: color });
+        for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+          const d = unit2(add(mul(t, a), mul(n, b))), s = perp(d);
+          poly([add(anchor, mul(d, 0.7)), add(add(anchor, mul(d, 2)), mul(s, 0.5)), add(anchor, mul(d, 3.2)), add(add(anchor, mul(d, 2)), mul(s, -0.5))]);
+        }
+        break;
+      }
+      case 'grille': {
+        const half = mounted ? { u: 1.6, v: 1 } : { u: 1.5, v: 1.5 }, c = mounted ? at(1) : anchor, box = square(c, half);
+        poly(box);
+        line(box[0], box[2]);
+        if (def.diagonals === 2) line(box[1], box[3]);
+        tagAt(mounted ? 2 : 1.5);
+        break;
+      }
+      case 'fan-box': {
+        poly(square(anchor, { u: 1.6, v: 1.6 }));
+        ring(anchor, 1.1);
+        tagAt(1.6);
+        break;
+      }
+      case 'hood': {
+        const c = mounted ? at(1.5) : anchor;
+        poly(square(c, { u: 2.6, v: 1.5 }), { dash: '1.2 0.6' });
+        text(c, def.text, T.label);
+        break;
+      }
+      case 'arrow-out':
+      case 'arrow-in': {
+        const out = def.shape === 'arrow-out', tip = out ? at(3.2) : at(0), back = out ? -1 : 1;
+        line(at(0), at(3.2));
+        poly([tip, add(add(tip, mul(n, back)), mul(t, 0.6)), add(add(tip, mul(n, back)), mul(t, -0.6))], { fill: color });
+        tagAt(3.2);
+        break;
+      }
+      case 'cleanout': {
+        const c = mounted ? at(1.5) : anchor;
+        ring(c, 1.1);
+        ring(c, 0.35, { fill: color, width: 0 });
+        tagAt(mounted ? 2.6 : 1.1);
+        break;
+      }
+      case 'drain': {
+        ring(anchor, 1.5);
+        line(at(-1.5), at(1.5)); line(at(0, -1.5), at(0, 1.5));
+        tagAt(1.5);
+        break;
+      }
+      case 'valve': {
+        // Two triangles tip to tip along the pipe: through the wall for a hose bibb, along it otherwise.
+        const axis = mounted ? (def.stem ? n : t) : { x: 1, y: 0 }, side = perp(axis);
+        const c = mounted ? at(def.stem ? 1.9 : 1.2) : anchor;
+        if (mounted && def.stem) line(at(0), at(0.8));
+        for (const k of [-1, 1]) poly([c, add(add(c, mul(axis, 1.1 * k)), mul(side, 0.7)), add(add(c, mul(axis, 1.1 * k)), mul(side, -0.7))]);
+        tagAt(mounted ? (def.stem ? 3 : 1.9) : 1.1);
+        break;
+      }
+      case 'ring': {
+        ring(anchor, 1.1);
+        tagAt(1.1);
+        break;
+      }
+    }
+    return { svg: parts.join(''), box: boundsOf(keys) };
+  }
+  // Legend icon for a device symbol or an equipment tag, drawn in a 12 mm cell starting at x.
+  function symbolLegendIcon(item, x, y, profile) {
+    const P = profile.pens;
+    if (item.equipment) {
+      const box = [{ x, y: y - 1.5 }, { x: x + 9, y: y - 1.5 }, { x: x + 9, y: y + 1.5 }, { x, y: y + 1.5 }];
+      return svgPoly(box, { fill: DRAFT.paper, stroke: DRAFT.screen, width: P.thin })
+        + (item.equipment.panel ? svgPoly([box[0], box[1], box[2]], { fill: item.color, width: 0 }) : svgText(x + 4.5, y + profile.text.label * 0.36, item.equipment.tag, profile.text.label, { fill: item.color, weight: 700 }));
+    }
+    const def = SYSTEM_SYMBOLS[item.kind], wall = def.mount === 'wall';
+    if (wall) {
+      const anchor = { x: x + 1, y };
+      return svgLine({ x: x + 1, y: y - 2.6 }, { x: x + 1, y: y + 2.6 }, { stroke: DRAFT.screen, width: P.medium }) + systemSymbol(item.kind, anchor, item.color, profile, { n: { x: 1, y: 0 }, mounted: true }).svg;
+    }
+    return systemSymbol(item.kind, { x: x + 4, y }, item.color, profile, { tagDir: { x: 1, y: 0 } }).svg;
+  }
+
   function renderPlanSheet(model, levelId, options = {}) {
     const profile = profileFor(model), P = profile.pens, T = profile.text;
     const screened = Boolean(options.systems);
@@ -2313,7 +2580,7 @@
       layers.marks.push(`<g data-entity="${escapeHtml(section.id)}">${parts.join('')}</g>`);
     }
 
-    const legend = [];
+    const legend = [], symbolKey = new Map(), nodeBoxes = [];
     if (screened) {
       const band = levelBand(model, level.id);
       for (const system of model.systems) {
@@ -2332,8 +2599,37 @@
         }
         for (const node of system.nodes) {
           if (node.levelId ? node.levelId !== level.id : node.position.z < band.min || node.position.z >= band.max) continue;
-          layers.systems.push(`<g data-entity="${escapeHtml(node.id)}">${svgCircle(map(node.position), 1.1, { fill: style.color, stroke: DRAFT.paper, width: 0.3 })}</g>`);
+          const def = SYSTEM_SYMBOLS[node.kind];
+          if (!def) {
+            layers.systems.push(`<g data-entity="${escapeHtml(node.id)}">${svgCircle(map(node.position), 1.1, { fill: style.color, stroke: DRAFT.paper, width: 0.3 })}</g>`);
+            nodeBoxes.push(centeredBox(map(node.position), 2.5, 2.5));
+            continue;
+          }
+          const host = def.mount === 'wall' || def.mount === 'any' ? hostWallNormal(node.position, walls) : null;
+          const symbol = systemSymbol(node.kind, map(node.position), style.color, profile, host ? { n: unit2({ x: host.x, y: -host.y }), mounted: true } : {});
+          layers.systems.push(`<g data-entity="${escapeHtml(node.id)}" data-symbol="${escapeHtml(node.kind)}">${symbol.svg}</g>`);
+          placer.reserve(symbol.box);
+          nodeBoxes.push(symbol.box);
+          if (!symbolKey.has(node.kind)) symbolKey.set(node.kind, { kind: node.kind, label: def.label, color: style.color });
         }
+      }
+      const clearOfNodes = box => !nodeBoxes.some(other => box.x0 < other.x1 && box.x1 > other.x0 && box.y0 < other.y1 && box.y1 > other.y0);
+      for (const object of model.equipment.filter(item => item.levelId === level.id)) {
+        const tag = EQUIPMENT_TAGS[object.kind];
+        if (!tag || !options.systems.has(tag.discipline)) continue;
+        const color = DISCIPLINES[tag.discipline].color, corners = rotatedRect(object.position, object.size.x, object.size.y, object.rotationDeg).map(map);
+        const box = boundsOf(corners), size = T.label, w = textWidth(tag.tag, size), c = { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 };
+        const parts = tag.panel ? [svgPoly([corners[0], corners[1], corners[2]], { fill: color, width: 0 })] : [];
+        // The tag sits inside the outline when it fits clear of system points; otherwise on the first clear side.
+        let spot = !tag.panel && w + 0.8 <= box.x1 - box.x0 && size + 0.6 <= box.y1 - box.y0 && clearOfNodes(centeredBox(c, w + 0.4, size + 0.4)) ? c : null;
+        if (!spot) {
+          const sides = [{ x: c.x, y: box.y1 + size / 2 + 0.8 }, { x: c.x, y: box.y0 - size / 2 - 0.8 }, { x: box.x1 + w / 2 + 0.8, y: c.y }, { x: box.x0 - w / 2 - 0.8, y: c.y }];
+          spot = sides.find(p => placer.fits(centeredBox(p, w + 0.4, size + 0.4)) && clearOfNodes(centeredBox(p, w + 0.4, size + 0.4))) ?? sides[0];
+          placer.reserve(centeredBox(spot, w + 0.4, size + 0.4));
+        }
+        parts.push(svgText(spot.x, spot.y + size * 0.36, tag.tag, size, { fill: color, weight: 700 }));
+        layers.systems.push(`<g data-entity="${escapeHtml(object.id)}" data-symbol="${escapeHtml(object.kind)}">${parts.join('')}</g>`);
+        if (!symbolKey.has(object.kind)) symbolKey.set(object.kind, { kind: object.kind, label: `${tag.label} (${tag.tag})`, color, equipment: tag });
       }
     }
 
@@ -2389,7 +2685,7 @@
         }
         return `<g data-layer="${key}"${key === 'wallFill' || key === 'wallLines' ? ' pointer-events="none"' : ''}>${layers[key].join('')}</g>`;
       }).join('');
-    const svg = sheetSvg(model, profile, { sheetId, title, scaleLabel, ratio, area, view: screened ? 'systems' : 'plan', northDeg: model.project.coordinates.trueNorthDeg ?? 0, legend, materialContext: mats.active ? mats : null, warnings }, body);
+    const svg = sheetSvg(model, profile, { sheetId, title, scaleLabel, ratio, area, view: screened ? 'systems' : 'plan', northDeg: model.project.coordinates.trueNorthDeg ?? 0, legend, symbols: [...symbolKey.values()].sort((a, b) => SYMBOL_ORDER.indexOf(a.kind) - SYMBOL_ORDER.indexOf(b.kind)), materialContext: mats.active ? mats : null, warnings }, body);
     return { svg, sheetId, title, view: screened ? 'systems' : 'plan', ratio, scaleLabel, warnings };
   }
 
@@ -3460,7 +3756,9 @@
       dims.push(['Length', L(pathLength(entity.path))], ['Nominal size', entity.nominalSize ?? 'Not set'], ['From', endpoint(entity.from)], ['To', endpoint(entity.to)]);
     } else if (type === 'System point') {
       context = found.system.name;
-      dims.push(['Kind', capitalize(entity.kind.replace(/-/g, ' '))], ['Elevation', L(entity.position.z)]);
+      const symbol = SYSTEM_SYMBOLS[entity.kind], level = model.levels.find(item => item.id === entity.levelId);
+      dims.push(['Kind', symbol?.label ?? capitalize(entity.kind.replace(/-/g, ' '))], ['Elevation', L(entity.position.z)]);
+      if (symbol && level) dims.push(['Mounting height', L(entity.position.z - level.elevationMm)]);
     } else if (type === 'System') {
       context = `${capitalize(entity.discipline)}, ${entity.status}`;
       dims.push(['Routes', String(entity.edges.length)], ['Points', String(entity.nodes.length)], ['Total length', L(entity.edges.reduce((sum, edge) => sum + pathLength(edge.path), 0))]);
@@ -3820,6 +4118,8 @@
       for (const [r, c] of rakes) pushLine(gls.lines, worldPoint(ridge[r]), worldPoint(corners[c]), lineColor);
     }
     for (const system of model.systems) if (state.systems.has(system.discipline)) for (const edge of system.edges) for (let i=1;i<edge.path.length;i++) pushLine(gls.lines,worldPoint(edge.path[i-1]),worldPoint(edge.path[i]),rgb(DISCIPLINES[system.discipline].color));
+    // Devices with a drawn symbol get a small marker at the same coordinates, so plan and 3D agree.
+    for (const system of model.systems) if (state.systems.has(system.discipline)) for (const node of system.nodes) if (SYSTEM_SYMBOLS[node.kind]) pushPrism(gls.triangles, node.position.x/1000, node.position.z/1000, -node.position.y/1000, 0.09, 0.09, 0.09, 0, rgb(DISCIPLINES[system.discipline].color));
   }
 
   function mat4Perspective(fov, aspect, near, far) { const f=1/Math.tan(fov/2),nf=1/(near-far); return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)*nf,-1,0,0,2*far*near*nf,0]); }
@@ -4239,7 +4539,7 @@
   }
 
   const studioApi = {
-    state, PROFILES, DISCIPLINES, MATERIAL_CATEGORIES, HEADER_KINDS, materialContext, materialsActive, wallBands, segmentPolygonIntervals, triangulate, pushExtrusion, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
+    state, PROFILES, DISCIPLINES, SYSTEM_SYMBOLS, EQUIPMENT_TAGS, systemSymbol, MATERIAL_CATEGORIES, HEADER_KINDS, materialContext, materialsActive, wallBands, segmentPolygonIntervals, triangulate, pushExtrusion, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
     bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, centerlineIssues, pathOutline, pathFillets, centerlineLength, outlineOf, anchorPoint, resolvePath, resolveAnchors, polygonArea, pointInPolygon, wallGeometry, wallLength, wallEndClip, terrainOf, siteExtent,
     renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, siteCategories, parseSiteHidden, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport

@@ -96,6 +96,11 @@ air. Local amendments most often change these.
   (for example "kitchen small-appliance circuit 1"), never a breaker size.
 - Name nodes by room and function, such as `e-kitchen-counter-1` or
   `m-bed2-supply`, so diagnostics point at a findable device.
+- Each node kind and equipment kind above has a standard symbol or tag on the
+  systems sheets (`drafting-standard.md`, Systems Symbols). A wall device
+  sits on its wall only when its position is within 300 mm of the wall face,
+  so put it at the finished face. Invent no other kinds: an unlisted kind
+  draws as a plain dot with no key entry.
 
 ## Electrical
 

@@ -75,7 +75,8 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
 ## Warnings
 
 - A sheet's material key has no room for every material the sheet draws
-  (`material.key-overflow`).
+  (`material.key-overflow`), or a systems sheet's symbol key has no room for
+  every symbol it draws (`symbol.key-overflow`).
 - A dimension value has no clear position off walls, openings, hard
   surfaces, and other lettering (`dimension.placement`).
 - The plant schedule on L-101 has no room for every row
