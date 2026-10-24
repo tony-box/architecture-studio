@@ -102,6 +102,11 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
 - Vertical risers intended to align differ by more than 25 mm between levels.
 - A required circulation, egress, fixture, or equipment clearance has not been
   checked against a cited rule.
+- A receptacle, switch, light, or alarm sits inside a door swing, a bathtub or
+  shower wet zone, or an equipment working space (`mep-placement-guide.md`,
+  MEP-E1, MEP-E7, MEP-E17).
+- A room in the placement guide's Room Checklist lacks an item the checklist
+  lists for it, with no note explaining the omission.
 
 ## Advisories
 
@@ -124,6 +129,9 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
   unresolved.
 - Code research is unavailable, uses a secondary source, or has conditional
   applicability.
+- A device was placed from a model-code baseline in `mep-placement-guide.md`
+  that no code finding for the jurisdiction confirms. Its evidence names the
+  rule ID and stays `needs-review`.
 
 ## Cross-View Invariants
 

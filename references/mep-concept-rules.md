@@ -4,6 +4,9 @@ MEP content coordinates space and exposes tradeoffs. It does not calculate
 loads, select final equipment, size systems, design penetrations, or replace
 licensed engineering.
 
+Where each fixture, device, and terminal goes, and which model-code rule or
+design practice puts it there, is in `mep-placement-guide.md`.
+
 ## Sequence
 
 1. Stabilize levels, walls, openings, stairs, shafts, wet spaces, equipment
