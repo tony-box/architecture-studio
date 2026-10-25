@@ -113,6 +113,58 @@
       "items": { "$ref": "#/$defs/viewpoint" },
       "default": []
     },
+    "materials": {
+      "description": "Material catalog. Elements reference entries by id; the category selects the drawn hatch (see drafting-standard.md, Materials).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/material" },
+      "default": []
+    },
+    "site": {
+      "description": "Site context. Any entry other than groundMaterialId makes the model draw a site plan, L-101 (drafting-standard.md, Site and landscape).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "groundMaterialId": { "$ref": "#/$defs/id", "description": "Material drawn below the ground line in sections." },
+        "propertyLine": { "$ref": "#/$defs/siteBoundary", "description": "Lot boundary. Straight edges and arcs only, so every edge has a bearing or a radius." },
+        "setbacks": { "type": "array", "items": { "$ref": "#/$defs/setback" }, "default": [] },
+        "gradingLimit": { "$ref": "#/$defs/siteBoundary", "description": "Limit of grading. Proposed contours and spot elevations lie inside it; outside it the existing ground stays." },
+        "contourIntervalMm": { "type": "number", "exclusiveMinimum": 0, "description": "Contour interval; not necessarily whole millimetres (1 ft is 304.8 mm). Every fifth interval is an index contour." },
+        "contours": { "type": "array", "items": { "$ref": "#/$defs/contour" }, "default": [] },
+        "spotElevations": { "type": "array", "items": { "$ref": "#/$defs/spotElevation" }, "default": [] }
+      }
+    },
+    "plants": {
+      "description": "Plant catalog. Plantings reference entries by id; the key labels plants on the site plan and in the plant schedule.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/plant" },
+      "default": []
+    },
+    "plantings": {
+      "description": "Individual plants (position) and massed plantings (boundary) on the site.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/planting" },
+      "default": []
+    },
+    "beams": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/beam" },
+      "default": []
+    },
+    "columns": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/column" },
+      "default": []
+    },
+    "foundations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/foundation" },
+      "default": []
+    },
+    "surfaces": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/surface" },
+      "default": []
+    },
     "assumptions": {
       "type": "array",
       "items": { "$ref": "#/$defs/assumption" }
@@ -159,6 +211,133 @@
       "minItems": 3,
       "items": { "$ref": "#/$defs/point2" }
     },
+    "curveVertex": {
+      "description": "A vertex and the segment that starts at it: straight by default, a circular arc with bulge (tan(sweep / 4), positive counter-clockwise, as in DXF), or a cubic Bezier with absolute controls c1 and c2. See coordinate-contract.md, Curves.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "bulge": { "type": "number", "description": "Non-zero, at most 3.7 in magnitude (about 299 degrees)." },
+        "c1": { "$ref": "#/$defs/point2" },
+        "c2": { "$ref": "#/$defs/point2" }
+      },
+      "if": { "anyOf": [{ "required": ["c1"] }, { "required": ["c2"] }] },
+      "then": { "required": ["c1", "c2"] },
+      "not": { "required": ["bulge", "c1"] }
+    },
+    "arcVertex": {
+      "description": "A curve vertex limited to straight segments and arcs, for legal lines that need a bearing or a radius.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "bulge": { "type": "number" }
+      }
+    },
+    "curvePolygon": {
+      "description": "Closed boundary of curve vertices. The last vertex describes the closing segment; two arc vertices make a circle.",
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/curveVertex" }
+    },
+    "arcPolygon": {
+      "description": "Closed boundary of straight segments and arcs only.",
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/arcVertex" }
+    },
+    "curvePath": {
+      "description": "Open path of curve vertices. The last vertex carries no curve.",
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/curveVertex" }
+    },
+    "siteBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "boundary", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "boundary": { "$ref": "#/$defs/arcPolygon" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "setback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "edgeIndex", "distanceMm", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "edgeIndex": { "type": "integer", "minimum": 0, "description": "Property line edge, numbered from the segment that starts at vertex 0." },
+        "distanceMm": { "type": "integer", "minimum": 1 },
+        "label": { "type": "string", "description": "For example Front setback." },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "contour": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "elevationMm", "status", "path", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "elevationMm": { "type": "integer" },
+        "status": { "enum": ["existing", "proposed"] },
+        "path": { "$ref": "#/$defs/curvePath" },
+        "closed": { "type": "boolean", "default": false },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "spotElevation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "position", "elevationMm", "status", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "position": { "$ref": "#/$defs/point2" },
+        "elevationMm": { "type": "integer" },
+        "status": { "enum": ["existing", "proposed"] },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "plant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "key", "botanicalName", "commonName", "kind", "matureHeightMm", "matureSpreadMm", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "key": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{0,4}$" },
+        "botanicalName": { "type": "string", "minLength": 1 },
+        "commonName": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["deciduous-tree", "evergreen-tree", "shrub", "groundcover", "perennial", "ornamental-grass"] },
+        "size": { "type": "string", "description": "Planting size as specified, for example 2-1/2\" cal., #5 cont., or C5." },
+        "matureHeightMm": { "type": "integer", "minimum": 1 },
+        "matureSpreadMm": { "type": "integer", "minimum": 1 },
+        "spacingMm": { "type": "integer", "minimum": 1, "description": "On-centre spacing for massed plantings; quantities use triangular spacing." },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "planting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "plantId", "status", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "plantId": { "$ref": "#/$defs/id" },
+        "status": { "enum": ["existing", "proposed", "remove"] },
+        "position": { "$ref": "#/$defs/point2", "description": "One plant." },
+        "boundary": { "$ref": "#/$defs/curvePolygon", "description": "A massed planting." },
+        "canopyDiameterMm": { "type": "integer", "minimum": 1, "description": "Drawn canopy; defaults to the plant's mature spread." },
+        "trunkDiameterMm": { "type": "integer", "minimum": 1 },
+        "heightMm": { "type": "integer", "minimum": 1, "description": "Height in elevations, sections, and 3D; defaults to the plant's mature height." },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "anyOf": [{ "required": ["position"] }, { "required": ["boundary"] }],
+      "not": { "required": ["position", "boundary"] }
+    },
     "level": {
       "type": "object",
       "additionalProperties": false,
@@ -181,7 +360,7 @@
         "levelId": { "$ref": "#/$defs/id" },
         "use": { "type": "string" },
         "occupancy": { "type": "integer", "minimum": 0 },
-        "boundary": { "$ref": "#/$defs/polygon" },
+        "boundary": { "$ref": "#/$defs/curvePolygon" },
         "evidence": { "$ref": "#/$defs/evidence" }
       }
     },
@@ -194,12 +373,204 @@
         "levelId": { "$ref": "#/$defs/id" },
         "start": { "$ref": "#/$defs/point2" },
         "end": { "$ref": "#/$defs/point2" },
+        "bulge": { "type": "number", "description": "Arc wall: the centreline is a circular arc from start to end, tan(sweep / 4), positive counter-clockwise; at most 1 (a semicircle) in magnitude. Openings are measured along the centreline arc." },
         "thicknessMm": { "type": "integer", "minimum": 1 },
         "heightMm": { "type": "integer", "minimum": 1 },
         "baseOffsetMm": { "type": "integer", "default": 0 },
         "kind": { "enum": ["exterior", "interior", "service", "railing"] },
-        "material": { "type": "string" },
+        "material": { "type": "string", "description": "Free-text description. Drawings use materialId or layers." },
+        "materialId": { "$ref": "#/$defs/id" },
+        "layerOrder": {
+          "enum": ["left-to-right", "interior-to-exterior"],
+          "default": "left-to-right",
+          "description": "left-to-right lists layers from the wall's left face, looking from start to end. interior-to-exterior starts at the face toward the centre of the level's walls, so reversing the wall does not flip the assembly."
+        },
+        "layers": {
+          "description": "Assembly in layerOrder. Thicknesses sum to thicknessMm.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/layer" }
+        },
         "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "materialId", "thicknessMm"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id", "description": "Stable within its wall or slab; headers reference it." },
+        "materialId": { "$ref": "#/$defs/id" },
+        "thicknessMm": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "material": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "category"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1, "description": "Shown in the sheet's material key." },
+        "category": {
+          "enum": ["earth", "gravel", "sand", "concrete", "reinforced-concrete", "concrete-masonry", "brick", "steel", "wood-framing", "engineered-wood", "insulation-batt", "insulation-rigid", "gypsum", "generic", "lawn", "mulch", "asphalt", "unit-pavers", "flagstone", "water", "decking"]
+        },
+        "description": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/evidence", "description": "Where the material choice came from. Without it validation raises a material.evidence advisory." }
+      }
+    },
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "depthMm"],
+      "properties": {
+        "kind": { "enum": ["sawn-lumber", "built-up-lumber", "engineered-lumber", "steel-angle", "steel-beam", "concrete-lintel", "masonry-bond-beam"] },
+        "depthMm": { "type": "integer", "minimum": 1 },
+        "layerId": { "$ref": "#/$defs/id", "description": "Wall layer the header sits in. Required when the wall has layers." },
+        "face": { "enum": ["inner", "outer"], "default": "inner", "description": "Steel angles only: the layer face carrying the vertical leg. Two angles on different faces may share a layer." },
+        "widthMm": { "type": "integer", "minimum": 1, "description": "Defaults to the layer thickness. For steel-angle, the horizontal leg." },
+        "bearingMm": { "type": "integer", "minimum": 0, "default": 0, "description": "Run past each jamb." },
+        "plies": { "type": "integer", "minimum": 2, "description": "Required for built-up-lumber." },
+        "legThicknessMm": { "type": "integer", "minimum": 1, "description": "Required for steel-angle." },
+        "flangeThicknessMm": { "type": "integer", "minimum": 1, "description": "Required for steel-beam." },
+        "webThicknessMm": { "type": "integer", "minimum": 1, "description": "Required for steel-beam." },
+        "designation": { "type": "string", "description": "Concept size label, for example 3-2x10 or HEA 160." },
+        "materialId": { "$ref": "#/$defs/id", "description": "Without one the header is unspecified and draws in poché; the kind sets only its shape." }
+      }
+    },
+    "memberShape": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "widthMm", "depthMm"],
+      "properties": {
+        "kind": { "enum": ["rectangular", "wide-flange", "hss"] },
+        "widthMm": { "type": "integer", "minimum": 1 },
+        "depthMm": { "type": "integer", "minimum": 1 },
+        "flangeThicknessMm": { "type": "integer", "minimum": 1, "description": "Required for wide-flange." },
+        "webThicknessMm": { "type": "integer", "minimum": 1, "description": "Required for wide-flange." },
+        "wallThicknessMm": { "type": "integer", "minimum": 1, "description": "Required for hss." }
+      }
+    },
+    "beam": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "levelId", "start", "end", "topElevationMm", "shape", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "levelId": { "$ref": "#/$defs/id", "description": "Plan the beam is drawn on." },
+        "start": { "$ref": "#/$defs/point2" },
+        "end": { "$ref": "#/$defs/point2" },
+        "topElevationMm": { "type": "integer" },
+        "shape": { "$ref": "#/$defs/memberShape" },
+        "materialId": { "$ref": "#/$defs/id" },
+        "designation": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "column": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "levelId", "position", "baseElevationMm", "topElevationMm", "shape", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "levelId": { "$ref": "#/$defs/id" },
+        "position": { "$ref": "#/$defs/point2" },
+        "rotationDeg": { "type": "number", "default": 0 },
+        "baseElevationMm": { "type": "integer" },
+        "topElevationMm": { "type": "integer" },
+        "shape": { "$ref": "#/$defs/memberShape" },
+        "materialId": { "$ref": "#/$defs/id" },
+        "designation": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "foundation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "boundary", "topElevationMm", "depthMm", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["strip-footing", "pad-footing", "stem-wall", "grade-beam", "pier"] },
+        "boundary": { "$ref": "#/$defs/curvePolygon" },
+        "topElevationMm": { "type": "integer" },
+        "depthMm": { "type": "integer", "minimum": 1 },
+        "materialId": { "$ref": "#/$defs/id" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "surface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "levelId", "thicknessMm", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" },
+        "levelId": { "$ref": "#/$defs/id" },
+        "boundary": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/anchoredVertex" }, "description": "Closed outline of curve vertices; any vertex may be anchored to a door, window, or wall." },
+        "path": { "$ref": "#/$defs/surfacePath", "description": "Walks, drives, and paths: a centreline, a width, and corner radii instead of a boundary. Prefer this for anything of constant width (see curves.md)." },
+        "topElevationMm": { "type": "integer", "description": "Flat top. Required unless the surface follows grade." },
+        "thicknessMm": { "type": "integer", "minimum": 1, "description": "Vertical thickness below the top." },
+        "followsGrade": { "type": "boolean", "default": false, "description": "Drape the top on the finished grade (lawn, beds, sloping walks)." },
+        "onFloorPlans": { "type": "boolean", "description": "Draw on floor plans. Defaults to true, except lawn, mulch, and water surfaces in a model with site content, which only the site plan shows." },
+        "gradeOffsetMm": { "type": "integer", "default": 0, "description": "Top above finished grade when the surface follows grade." },
+        "materialId": { "$ref": "#/$defs/id" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "if": { "not": { "required": ["followsGrade"], "properties": { "followsGrade": { "const": true } } } },
+      "then": { "required": ["topElevationMm"] },
+      "oneOf": [{ "required": ["boundary"] }, { "required": ["path"] }]
+    },
+    "centerlinePoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "anchor": { "$ref": "#/$defs/anchor" },
+        "radiusMm": { "type": "integer", "minimum": 0, "description": "Fillet radius at this corner; overrides the path's cornerRadiusMm. 0 is a sharp corner." }
+      },
+      "oneOf": [{ "required": ["x", "y"] }, { "required": ["anchor"] }]
+    },
+    "anchor": {
+      "description": "A point placed from the model instead of fixed coordinates: a door or window (its centre or a jamb) or a distance along a wall, on the wall's exterior or interior face, optionally offset straight out from the face. See coordinate-contract.md, Anchors.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "openingId": { "$ref": "#/$defs/id" },
+        "wallId": { "$ref": "#/$defs/id" },
+        "at": { "enum": ["center", "start", "end"], "default": "center", "description": "Openings only: the centre, or the jamb at the opening's start or end along its wall." },
+        "alongMm": { "type": "integer", "minimum": 0, "description": "Walls only: distance along the wall centreline from its start." },
+        "face": { "enum": ["exterior", "interior"], "default": "exterior" },
+        "offsetMm": { "type": "integer", "default": 0, "description": "Distance straight out from the face." },
+        "matchWidth": { "type": "boolean", "description": "Path ends only, with an opening centre: the path takes the opening's width (omit widthMm)." }
+      },
+      "oneOf": [{ "required": ["openingId"] }, { "required": ["wallId", "alongMm"] }]
+    },
+    "anchoredVertex": {
+      "description": "A surface outline vertex: a curve vertex with fixed coordinates or an anchor.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "anchor": { "$ref": "#/$defs/anchor" },
+        "bulge": { "type": "number" },
+        "c1": { "$ref": "#/$defs/point2" },
+        "c2": { "$ref": "#/$defs/point2" }
+      },
+      "if": { "anyOf": [{ "required": ["c1"] }, { "required": ["c2"] }] },
+      "then": { "required": ["c1", "c2"] },
+      "not": { "required": ["bulge", "c1"] },
+      "oneOf": [{ "required": ["x", "y"] }, { "required": ["anchor"] }]
+    },
+    "surfacePath": {
+      "description": "A constant-width surface along a centreline. Straights between centreline points are joined by circular fillets; ends are square to the centreline. See coordinate-contract.md, Paths.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["centerline"],
+      "properties": {
+        "centerline": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/centerlinePoint" } },
+        "widthMm": { "type": "integer", "minimum": 1, "description": "Required unless an end anchor has matchWidth." },
+        "cornerRadiusMm": { "type": "integer", "minimum": 0, "default": 0, "description": "Fillet radius at every interior point without its own radiusMm. At least half the width." }
       }
     },
     "opening": {
@@ -215,6 +586,11 @@
         "heightMm": { "type": "integer", "minimum": 1 },
         "sillMm": { "type": "integer", "minimum": 0 },
         "swing": { "enum": ["left", "right", "double", "sliding", "none"] },
+        "headers": {
+          "description": "Members over the opening, at most one per wall layer.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/header" }
+        },
         "evidence": { "$ref": "#/$defs/evidence" }
       }
     },
@@ -225,8 +601,15 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "levelId": { "$ref": "#/$defs/id" },
-        "boundary": { "$ref": "#/$defs/polygon" },
+        "boundary": { "$ref": "#/$defs/curvePolygon" },
         "thicknessMm": { "type": "integer", "minimum": 1 },
+        "materialId": { "$ref": "#/$defs/id" },
+        "layers": {
+          "description": "Assembly from top to bottom. Thicknesses sum to thicknessMm.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/layer" }
+        },
         "evidence": { "$ref": "#/$defs/evidence" }
       }
     },
@@ -259,6 +642,7 @@
         "widthMm": { "type": "integer", "minimum": 1 },
         "riserCount": { "type": "integer", "minimum": 1 },
         "treadDepthMm": { "type": "integer", "minimum": 1 },
+        "materialId": { "$ref": "#/$defs/id" },
         "evidence": { "$ref": "#/$defs/evidence" }
       }
     },

@@ -4,7 +4,8 @@ An [Agent Skill](https://agentskills.io) for exploring building concepts with
 the coding agent you already use. Describe a house, workshop, cabin, or studio,
 and your agent builds one real-unit coordinate model that drives:
 
-- drafted floor plans, elevations, sections, and systems sheets,
+- drafted site plans with property lines, setbacks, contours, landscaping, and
+  a plant schedule, plus floor plans, elevations, sections, and systems sheets,
 - an exportable SVG drawing set,
 - conceptual plumbing, electrical, and mechanical layouts,
 - advisory, cited local building-code research,
@@ -52,6 +53,36 @@ git clone https://github.com/tony-box/architecture-studio ~/.claude/skills/archi
 
 Update later with `git pull` (manual install) or `npx skills update`.
 
+### Updating existing projects
+
+When the skill starts, it checks whether a newer skill version is available
+and offers an update for your approval. For an existing project, it also
+checks whether its saved viewer is older than the installed skill. Nothing
+is upgraded without your approval. After updating the installed skill, start
+a new agent session to load its new instructions.
+
+You can also check directly:
+
+```bash
+node <skill>/scripts/check-updates.mjs --project <project>
+```
+
+The check reads the version from `package.json` on this repository's `main`
+branch (the installation source, not a tagged-release feed). It sends no
+project data, waits at most five seconds for the request, and reports failures
+without blocking the skill's normal workflow. `--offline` skips the network
+and checks only the project against the installed skill; `--json` produces
+structured results. Version checks detect version bumps, not changes made
+under the same version number.
+
+With your approval, the agent preserves a backup or version-control
+checkpoint, runs `init.mjs <project> --update`, and regenerates the drawings
+and any shared HTML bundle. The refresh replaces `index.html` and
+`architecture-studio.json`, including any custom edits to those files, but
+does not change the model, brief, images, variants, or reviews. It is a viewer
+upgrade, not an automatic model-schema migration. A newer viewer will not
+invent model data needed by new features.
+
 ## Use
 
 Ask your agent for a building concept, for example:
@@ -70,11 +101,67 @@ The agent then:
    `brief.json`, so a later session resumes where you left off. Nothing is
    modeled until you confirm the brief and every assumption.
 3. **Builds the model**, researches the local code (only with your
-   permission), and lays out conceptual systems.
+   permission), and lays out conceptual systems. Fixtures, receptacles,
+   switches, lights, alarms, and HVAC terminals are placed with
+   [`references/mep-placement-guide.md`](references/mep-placement-guide.md),
+   which keeps US model-code baselines (NEC, IRC, NFPA 72) apart from design
+   practice and lets cited local findings override them.
 4. **Opens the studio in your default browser** (`scripts/serve.mjs`). The
    page reloads itself as the agent edits the model. If the browser cannot
    open (SSH, containers, cloud agents), the agent gives you the URL.
 5. **Exports the drawing set** and writes `ASSUMPTIONS.md` and `HANDOFF.md`.
+
+## Bring your own images
+
+Images help the agent get sizes and positions right. Useful ones:
+
+- satellite or aerial views of the lot,
+- surveys and plats,
+- site plans and floor plans,
+- framing, rafter, or truss plans,
+- elevations,
+- sketches with at least one dimension you trust,
+- photos of the site or an existing building.
+
+The agent imports each image into the project's `sources/` folder
+(`scripts/import-image.mjs`) and reads it. You can also add images yourself
+in the studio's **Sources** tab: drag an image onto it, or click **Add
+image**, choose what kind of image it is, and import it. Numbers printed on a
+drawing are used exactly as written. For anything not dimensioned, the agent
+estimates the image's scale from what is printed on it (a scale bar, a
+dimension string, a stated scale on a scan whose resolution you confirm) and
+tells you the result with its uncertainty, for example "about 48 ft ± 2 ft,
+estimated from the scale bar".
+
+To make it precise, calibrate the image yourself in the studio's **Sources**
+tab, which works before there is a model: click the two ends of a distance you
+know, type the distance, and press **Save calibration**. It is saved to the
+project, where the agent reads it. (A shared single-file bundle cannot save:
+there the button is **Copy calibration**, and you paste the text to the
+agent.) You can also mark labelled points, such as house corners, to help it
+place the image, and outline labelled areas, such as a garden bed, with the
+Area tool: the viewer shows each area's size from the image's scale. Each
+image has one scale. If a sheet mixes scales, such as a plan with an enlarged
+detail or a plat with a vicinity map, crop each part into its own PNG and
+import each separately.
+A calibrated, placed plan or site image can be shown under
+the floor plan or site plan in the viewer, with an Underlay toggle and an
+opacity slider (`?underlay=0` turns it off). The exported drawings never
+include it.
+
+What images can't do:
+
+- Imagery never sets property lines, setbacks, or existing trees. Those come
+  from a survey, a plat, or you. A satellite view can suggest drives and trees
+  for you to confirm.
+- Photos are context only; they are never measured.
+- Elevations give heights only and are not shown as underlays.
+- A car, door, or parking stall is used for scale only if you accept it as an
+  assumption.
+
+Supported formats are PNG, JPEG, and WebP. Export PDFs to PNG, HEIC photos to
+JPEG, and TIFF scans to PNG first, at full resolution and without cropping off
+the scale bar or north arrow.
 
 ## Project folder
 
@@ -84,6 +171,7 @@ my-workshop/
   index.html                 the studio viewer
   brief.json                 your confirmed answers
   sources/                   sketches, photos, and documents you supplied
+  sources/sources.json       scale and placement of each image
   models/building.json       the single source of truth
   models/variants/           complete alternative concepts
   exports/                   SVG drawing set and manifest.json
@@ -101,18 +189,25 @@ All scripts live in `scripts/` and run with plain `node`.
 
 | Command | What it does |
 | --- | --- |
+| `node scripts/check-updates.mjs [--project <project>]` | Check upstream skill and local viewer versions without changing files. Options: `--offline`, `--json`. Failures produce warnings and exit nonzero; an available update is not an error. |
 | `node scripts/init.mjs <project>` | Create a project folder. `--update` replaces only the viewer with this skill's version. |
-| `node scripts/serve.mjs <project>` | Serve the project on `127.0.0.1` and open the default browser. Live reload is on by default. Options: `--port`, `--no-open`, `--no-watch`, `--json`. |
+| `node scripts/serve.mjs <project>` | Serve the project on `127.0.0.1` and open the default browser. Live reload is on by default. The Sources tab imports images and saves calibrations through it; nothing else is written. Options: `--port`, `--no-open`, `--no-watch`, `--json`. |
 | `node scripts/export-drawings.mjs --project <project>` | Validate the model and write `exports/**/*.svg` plus `exports/manifest.json`. Writes nothing while the model has errors. |
+| `node scripts/inspect.mjs --project <project> --id <id>` | Report one element as numbers (size, area, path width and radii, clearance to the building and the lot, its findings), so the agent can check a curve edit without looking at a drawing. For a door or window it lists the jamb and centre points anchors can use. Without `--id` it lists the elements. |
 | `node scripts/bundle.mjs <project>` | Write one self-contained HTML file to `exports/` for sharing. It opens with a double-click and needs no server. |
+| `node scripts/import-image.mjs <command> <project> ...` | Import images into `sources/` and record their scale and placement in `sources/sources.json`: `add`, `calibrate`, `uncalibrate`, `north`, `reference`, `place`, `measure`, `to-model`, `apply` (a calibration pasted from the viewer), `check`, `list`. See [`references/image-intake.md`](references/image-intake.md). |
 
 `serve.mjs` picks a port derived from the project path, so a project always
 opens at the same address and keeps the approvals the viewer stores in the
 browser.
 
 The viewer accepts query parameters: `view` (`plan`, `elevation`, `section`,
-`systems`, `model`, `code`, `assumptions`), `level`, `section`, `elevation`,
-and `model` (a path to an alternative model file).
+`systems`, `site`, `model`, `code`, `assumptions`), `level`, `section`,
+`elevation`, `hide` (site plan layers to hide: `trees`, `plants`, `surfaces`,
+`grading`, `lot`), and `model` (a path to an alternative model file). The Site
+tab appears only for models with site content; its toolbar toggles show or
+hide trees, shrubs and groundcover, surfaces, grading, and property lines in
+the viewer. The exported L-101 always shows everything.
 
 ## Drawings
 
@@ -130,6 +225,37 @@ The profiles are informed by those standards; the drawings never claim
 conformance to them, and every title block reads "Concept - not for
 construction".
 
+When the model has a material catalog, plans and sections at 1/8" = 1'-0"
+(imperial) or 1:100 (metric) and larger hatch every cut element by material,
+with a material key in the title block: wall and slab layers, headers over
+openings (sawn, built-up, and engineered lumber, steel angles and beams,
+concrete lintels, bond beams), steel and timber beams and columns,
+foundations, site surfaces such as gravel and concrete walks, and earth below
+grade. The hatch conventions, their sources, and how confident each one is are
+listed in `references/drafting-standard.md`. Three conventions differ by
+profile (reinforced concrete, rigid insulation, timber end grain); confirm
+those against the licensed standard before relying on them. Without a catalog,
+cut elements stay in solid poché.
+
+When the model records a property line, setbacks, contours, a grading limit,
+or plantings, the set starts with a site plan, L-101, at engineer's scales
+(imperial) or 1:100 to 1:1000 (metric). It shows the lot with bearings and
+distances, setbacks, existing and proposed contours, spot elevations, the
+building footprint, lawn, beds, walks, drives, decks, and water in their
+hatches, trees and shrubs (existing, proposed, or to remove), and a plant
+schedule with derived quantities. Contours build an existing and a proposed
+ground surface: sections cut the terrain, lawns and walks can drape on it,
+and the 3D view shows the ground and the plants. Curved walks, beds, decks,
+and rooms use arc (`bulge`) or Bezier vertices, and walls can curve too. Walks,
+paths, and drives are best drawn as a centreline with a width and corner
+radii; the outline is derived exactly, so asking the agent to "curve the walk
+more" or "move it east" changes a radius or a point, never the width. Points
+can be anchored to a door, window, or wall, so "make the walk as wide as the
+door" or "start the patio edge at the door jamb" lines up exactly and follows
+the door if it moves.
+[`references/curves.md`](references/curves.md) is the agent's guide to
+turning such requests into numbers.
+
 Selecting an element in any drawing opens its review details: key dimensions,
 a small detail drawing for stairs, openings, and roofs, the decisions the
 concept leaves open, and its evidence. You can approve an element there.
@@ -138,9 +264,16 @@ record your sign-off on the concept, not a professional approval.
 
 ## Limits
 
-- Slabs must be axis-aligned rectangles, and a model may contain one
-  axis-aligned rectangular gable roof. The studio blocks unsupported or invalid
-  geometry instead of approximating it.
+- A model may contain one axis-aligned rectangular gable roof; curved roofs
+  are not supported yet. Slabs, foundations, site surfaces, and rooms may be
+  any simple outline, straight or curved, and walls may be straight or arcs.
+  The studio blocks unsupported or invalid geometry instead of approximating
+  it.
+- Property lines, setbacks, and existing trees must come from a survey, a plat,
+  or the user. Terrain is triangulated from the contours you give it and is
+  concept-level; it is not a grading or drainage design.
+- Beam, column, and header sizes are concept placeholders that drive the
+  drawings. They are never structural design.
 - "Close to accurate" means model coordinates are real units and every derived
   view agrees within the declared tolerance. It does not imply structural
   adequacy, engineered system sizing, permit readiness, or construction
@@ -149,15 +282,35 @@ record your sign-off on the concept, not a professional approval.
 ## Development
 
 ```bash
-node --test                            # run the test suite
-node scripts/build-preview.mjs         # regenerate preview/index.html
-node scripts/build-preview.mjs --check # fail if the preview is stale
+node --test                                              # run the test suite
+node scripts/build-preview.mjs                           # regenerate preview/index.html
+node scripts/build-preview.mjs --check                   # fail if the preview is stale
+node examples/build-mixed-material-workshop.mjs          # regenerate both mixed-material examples
+node examples/build-mixed-material-workshop.mjs --check  # fail if either is stale
+node examples/build-hillside-garden-house.mjs            # regenerate both site examples
+node examples/build-hillside-garden-house.mjs --check    # fail if either is stale
 ```
+
+The tests freeze the drawing sets of the four examples that predate site plans
+and curves (`tests/golden/legacy-drawing-sets.json`), and check that no
+lettering on any example sheet overlaps other lettering
+(`tests/legibility.test.mjs`). After an intended change to those drawings,
+rewrite the hashes with
+`UPDATE_GOLDEN=1 node --test tests/legacy-output.test.mjs`.
 
 `preview/index.html` is the studio template with the example model embedded.
 Regenerate it after changing either file. The examples in `examples/` are
 synthetic and contain no private addresses, imagery, or construction
-documents.
+documents:
+
+| Example | Units | Exercises |
+| --- | --- | --- |
+| `lakeside-barn-residence` | feet-inches | The live demo: two levels, stair, systems, sections |
+| `compact-metric-studio` | metric | Crowded labels, an L-shaped room, sections through openings |
+| `mixed-material-workshop` | feet-inches | Material hatching: CMU, brick veneer, wood frame, insulation, steel and glulam members, seven header types, footings, gravel, concrete, an L-shaped walk, earth. Generated by `examples/build-mixed-material-workshop.mjs`; edit the generator, not the JSON |
+| `mixed-material-workshop-metric` | metric | The same layout in metric sizes, from the same generator, for comparing the two hatching profiles |
+| `hillside-garden-house` | feet-inches | Site plan and landscaping: a sloping lot with a curved frontage, setbacks, existing and proposed contours, a graded pad, a curved bay wall, a curved deck, draped lawn, beds, and walks, a pond, trees to keep, remove, and plant, shrubs, and massed plantings. Generated by `examples/build-hillside-garden-house.mjs` |
+| `hillside-garden-house-metric` | metric | The same site on a 300 mm module, from the same generator |
 
 ## License
 

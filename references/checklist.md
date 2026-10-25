@@ -14,12 +14,18 @@
 - [ ] Each system edge connects nodes in its own discipline.
 - [ ] System paths appear at matching coordinates in 2D and 3D.
 - [ ] Plumbing, electrical, and mechanical layers can be isolated.
+- [ ] Every room passes the Room Checklist in `mep-placement-guide.md`, and
+      each placed device's evidence names its rule ID or code finding.
 - [ ] Code findings cite sources or explicitly report research as unavailable.
 - [ ] Diagnostics, Code, Assumptions, and Handoff surfaces all state that the
       work is conceptual and requires professional verification.
 - [ ] `exports/` was written by `export-drawings.mjs` after the last model
       change: `exports/manifest.json` lists every sheet and its model fingerprint
       matches the active model. No SVG was hand-written or edited.
+- [ ] When the project has images, `import-image.mjs check <project>` reports
+      nothing to resolve: no stale source, no entity whose
+      `evidence.reference` predates its source, and no placement built on an
+      old calibration.
 
 ## P1: Interaction and Legibility
 
@@ -34,7 +40,16 @@
       standard scale, pen hierarchy, dimension terminators, title block, and
       no `label.placement` warnings left unresolved.
 - [ ] Every section definition renders a section sheet with cut elements in
-      poché, and its section marks appear on the plans.
+      poché or material hatching, and its section marks appear on the plans.
+- [ ] On sheets with material detail, the material key lists exactly the
+      materials drawn, and no element the brief leaves open carries an
+      invented material.
+- [ ] When the model has site content, L-101 shows the property line with
+      bearings and distances, setbacks, contours, and every planting; its
+      plant schedule shows every row with derived quantities; and the property
+      line and existing trees trace to a survey or the user.
+- [ ] Curved walls, slabs, and surfaces agree in plan, section, elevation, and
+      3D, and no `wall.join-fallback` advisory is left unexplained.
 
 ## Professional Handoff
 
@@ -42,6 +57,10 @@
       heuristics, code sources, and generated choices.
 - [ ] `HANDOFF.md` identifies the selected concept, rejected alternatives,
       unresolved decisions, code coverage, and questions by discipline.
+- [ ] `HANDOFF.md` lists every image-derived dimension with its source image,
+      its method (printed, manual, control points, or an estimated scale bar,
+      dimension, stated scale, or map metadata), and its ± uncertainty, and
+      marks which are estimated.
 - [ ] Survey, zoning/site, structural, envelope/energy, fire/life safety,
       accessibility, plumbing, electrical, and mechanical follow-up is explicit.
 - [ ] The package never describes itself as permit ready, engineered,

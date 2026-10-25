@@ -1,0 +1,2234 @@
+{
+  "schemaVersion": "1.0.0",
+  "project": {
+    "id": "hillside-garden-house",
+    "name": "Hillside Garden House",
+    "status": "study",
+    "description": "Synthetic imperial fixture for site plans: a sloping lot with a curved frontage, setbacks, contours and a graded house pad, a curved bay wall, a curved deck, draped lawn, beds, and walks, a pond, existing and proposed trees, shrubs, and massed plantings.",
+    "coordinates": {
+      "unit": "mm",
+      "origin": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "siteDatumMm": 0,
+      "trueNorthDeg": 12,
+      "toleranceMm": 3,
+      "displayUnits": "feet-inches"
+    },
+    "jurisdiction": {
+      "country": "United States",
+      "stateOrRegion": "Example State",
+      "locality": "Example Township",
+      "codeReviewStatus": "unavailable"
+    }
+  },
+  "materials": [
+    {
+      "id": "mat-earth",
+      "name": "Undisturbed earth",
+      "category": "earth",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-gravel",
+      "name": "Crushed stone base",
+      "category": "gravel",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-concrete",
+      "name": "Concrete",
+      "category": "concrete",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-lumber",
+      "name": "Sawn lumber",
+      "category": "wood-framing",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-batt",
+      "name": "Fiberglass batt insulation",
+      "category": "insulation-batt",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-sheathing",
+      "name": "Plywood sheathing",
+      "category": "engineered-wood",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-cladding",
+      "name": "Cedar board cladding",
+      "category": "wood-framing",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-gypsum",
+      "name": "Gypsum board",
+      "category": "gypsum",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-lawn",
+      "name": "Turf lawn",
+      "category": "lawn",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-mulch",
+      "name": "Shredded hardwood mulch",
+      "category": "mulch",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-asphalt",
+      "name": "Asphalt paving",
+      "category": "asphalt",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-pavers",
+      "name": "Concrete unit pavers",
+      "category": "unit-pavers",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-flagstone",
+      "name": "Bluestone flagging",
+      "category": "flagstone",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-water",
+      "name": "Pond water",
+      "category": "water",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    },
+    {
+      "id": "mat-decking",
+      "name": "Composite decking",
+      "category": "decking",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Synthetic fixture material."
+      }
+    }
+  ],
+  "site": {
+    "groundMaterialId": "mat-earth",
+    "propertyLine": {
+      "id": "site-property-line",
+      "boundary": [
+        {
+          "x": 0,
+          "y": 0,
+          "bulge": 0.06
+        },
+        {
+          "x": 18288,
+          "y": 0
+        },
+        {
+          "x": 18288,
+          "y": 30480
+        },
+        {
+          "x": 0,
+          "y": 30480
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.3,
+        "status": "needs-review",
+        "note": "Synthetic lot for the fixture; not from a survey or plat."
+      }
+    },
+    "setbacks": [
+      {
+        "id": "setback-front",
+        "edgeIndex": 0,
+        "distanceMm": 6096,
+        "label": "Front setback",
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.3,
+          "status": "needs-review",
+          "note": "Assumed zoning setback; verify with the jurisdiction."
+        }
+      },
+      {
+        "id": "setback-east",
+        "edgeIndex": 1,
+        "distanceMm": 1829,
+        "label": "Side setback",
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.3,
+          "status": "needs-review",
+          "note": "Assumed zoning setback; verify with the jurisdiction."
+        }
+      },
+      {
+        "id": "setback-rear",
+        "edgeIndex": 2,
+        "distanceMm": 7620,
+        "label": "Rear setback",
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.3,
+          "status": "needs-review",
+          "note": "Assumed zoning setback; verify with the jurisdiction."
+        }
+      },
+      {
+        "id": "setback-west",
+        "edgeIndex": 3,
+        "distanceMm": 1829,
+        "label": "Side setback",
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.3,
+          "status": "needs-review",
+          "note": "Assumed zoning setback; verify with the jurisdiction."
+        }
+      }
+    ],
+    "gradingLimit": {
+      "id": "site-grading-limit",
+      "boundary": [
+        {
+          "x": 3048,
+          "y": 6706
+        },
+        {
+          "x": 15240,
+          "y": 6706
+        },
+        {
+          "x": 15240,
+          "y": 22555
+        },
+        {
+          "x": 3048,
+          "y": 22555
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept limit of grading around the house pad."
+      }
+    },
+    "contourIntervalMm": 609.6,
+    "contours": [
+      {
+        "id": "contour-ex-m4",
+        "elevationMm": -2438,
+        "status": "existing",
+        "path": [
+          {
+            "x": -1219,
+            "y": 0,
+            "c1": {
+              "x": 2438,
+              "y": 762
+            },
+            "c2": {
+              "x": 6096,
+              "y": 914
+            }
+          },
+          {
+            "x": 9144,
+            "y": 457,
+            "c1": {
+              "x": 12192,
+              "y": 0
+            },
+            "c2": {
+              "x": 15850,
+              "y": -305
+            }
+          },
+          {
+            "x": 19507,
+            "y": 610
+          }
+        ],
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.4,
+          "status": "needs-review",
+          "note": "Concept contour sketched for the fixture; no topographic survey."
+        }
+      },
+      {
+        "id": "contour-ex-m3",
+        "elevationMm": -1829,
+        "status": "existing",
+        "path": [
+          {
+            "x": -1219,
+            "y": 3353,
+            "c1": {
+              "x": 2438,
+              "y": 4115
+            },
+            "c2": {
+              "x": 6096,
+              "y": 4267
+            }
+          },
+          {
+            "x": 9144,
+            "y": 3810,
+            "c1": {
+              "x": 12192,
+              "y": 3353
+            },
+            "c2": {
+              "x": 15850,
+              "y": 3048
+            }
+          },
+          {
+            "x": 19507,
+            "y": 3962
+          }
+        ],
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.4,
+          "status": "needs-review",
+          "note": "Concept contour sketched for the fixture; no topographic survey."
+        }
+      },
+      {
+        "id": "contour-ex-m2",
+        "elevationMm": -1219,
+        "status": "existing",
+        "path": [
+          {
+            "x": -1219,
+            "y": 6706,
+            "c1": {
+              "x": 2438,
+              "y": 7468
+            },
+            "c2": {
+              "x": 6096,
+              "y": 7620
+            }
+          },
+          {
+            "x": 9144,
+            "y": 7163,
+            "c1": {
+              "x": 12192,
+              "y": 6706
+            },
+            "c2": {
+              "x": 15850,
+              "y": 6401
+            }
+          },
+          {
+            "x": 19507,
+            "y": 7315
+          }
+        ],
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.4,
+          "status": "needs-review",
+          "note": "Concept contour sketched for the fixture; no topographic survey."
+        }
+      },
+      {
+        "id": "contour-ex-m1",
+        "elevationMm": -610,
+        "status": "existing",
+        "path": [
+          {
+            "x": -1219,
+            "y": 10058,
+            "c1": {
+              "x": 2438,
+              "y": 10820
+            },
+            "c2": {
+              "x": 6096,
+              "y": 10973
+            }
+          },
+          {
+            "x": 9144,
+            "y": 10516,
+            "c1": {
+              "x": 12192,
+              "y": 10058
+            },
+            "c2": {
+              "x": 15850,
+              "y": 9754
+            }
+          },
+          {
+            "x": 19507,
+            "y": 10668
+          }
+        ],
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.4,
+          "status": "needs-review",
+          "note": "Concept contour sketched for the fixture; no topographic survey."
+        }
+      },
+      {
+        "id": "contour-ex-0",
+        "elevationMm": 0,
+        "status": "existing",
+        "path": [
+          {
+            "x": -1219,
+            "y": 13411,
+            "c1": {
+              "x": 2438,
+              "y": 14173
+            },
+            "c2": {
+              "x": 6096,
+              "y": 14326
+            }
+          },
+          {
+            "x": 9144,
+            "y": 13868,
+            "c1": {
+              "x": 12192,
+              "y": 13411
+            },
+            "c2": {
+              "x": 15850,
+              "y": 13106
+            }
+          },
+          {
+            "x": 19507,
+            "y": 14021
+          }
+        ],
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.4,
+          "status": "needs-review",
+          "note": "Concept contour sketched for the fixture; no topographic survey."
+        }
+      },
+      {
+        "id": "contour-ex-1",
+        "elevationMm": 610,
+        "status": "existing",
+        "path": [
+          {
+            "x": -1219,
+            "y": 16764,
+            "c1": {
+              "x": 2438,
+              "y": 17526
+            },
+            "c2": {
+              "x": 6096,
+              "y": 17678
+            }
+          },
+          {
+            "x": 9144,
+            "y": 17221,
+            "c1": {
+              "x": 12192,
+              "y": 16764
+            },
+            "c2": {
+              "x": 15850,
+              "y": 16459
+            }
+          },
+          {
+            "x": 19507,
+            "y": 17374
+          }
+        ],
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.4,
+          "status": "needs-review",
+          "note": "Concept contour sketched for the fixture; no topographic survey."
+        }
+      },
+      {
+        "id": "contour-ex-2",
+        "elevationMm": 1219,
+        "status": "existing",
+        "path": [
+          {
+            "x": -1219,
+            "y": 20117,
+            "c1": {
+              "x": 2438,
+              "y": 20879
+            },
+            "c2": {
+              "x": 6096,
+              "y": 21031
+            }
+          },
+          {
+            "x": 9144,
+            "y": 20574,
+            "c1": {
+              "x": 12192,
+              "y": 20117
+            },
+            "c2": {
+              "x": 15850,
+              "y": 19812
+            }
+          },
+          {
+            "x": 19507,
+            "y": 20726
+          }
+        ],
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.4,
+          "status": "needs-review",
+          "note": "Concept contour sketched for the fixture; no topographic survey."
+        }
+      },
+      {
+        "id": "contour-ex-3",
+        "elevationMm": 1829,
+        "status": "existing",
+        "path": [
+          {
+            "x": -1219,
+            "y": 23470,
+            "c1": {
+              "x": 2438,
+              "y": 24232
+            },
+            "c2": {
+              "x": 6096,
+              "y": 24384
+            }
+          },
+          {
+            "x": 9144,
+            "y": 23927,
+            "c1": {
+              "x": 12192,
+              "y": 23470
+            },
+            "c2": {
+              "x": 15850,
+              "y": 23165
+            }
+          },
+          {
+            "x": 19507,
+            "y": 24079
+          }
+        ],
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.4,
+          "status": "needs-review",
+          "note": "Concept contour sketched for the fixture; no topographic survey."
+        }
+      },
+      {
+        "id": "contour-ex-4",
+        "elevationMm": 2438,
+        "status": "existing",
+        "path": [
+          {
+            "x": -1219,
+            "y": 26822,
+            "c1": {
+              "x": 2438,
+              "y": 27584
+            },
+            "c2": {
+              "x": 6096,
+              "y": 27737
+            }
+          },
+          {
+            "x": 9144,
+            "y": 27280,
+            "c1": {
+              "x": 12192,
+              "y": 26822
+            },
+            "c2": {
+              "x": 15850,
+              "y": 26518
+            }
+          },
+          {
+            "x": 19507,
+            "y": 27432
+          }
+        ],
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.4,
+          "status": "needs-review",
+          "note": "Concept contour sketched for the fixture; no topographic survey."
+        }
+      },
+      {
+        "id": "contour-pr-0",
+        "elevationMm": 0,
+        "status": "proposed",
+        "path": [
+          {
+            "x": 4572,
+            "y": 8230,
+            "c1": {
+              "x": 7315,
+              "y": 7620
+            },
+            "c2": {
+              "x": 10973,
+              "y": 7620
+            }
+          },
+          {
+            "x": 13716,
+            "y": 8230,
+            "c1": {
+              "x": 14021,
+              "y": 12192
+            },
+            "c2": {
+              "x": 14021,
+              "y": 18288
+            }
+          },
+          {
+            "x": 13716,
+            "y": 21031,
+            "c1": {
+              "x": 10973,
+              "y": 21641
+            },
+            "c2": {
+              "x": 7315,
+              "y": 21641
+            }
+          },
+          {
+            "x": 4572,
+            "y": 21031,
+            "c1": {
+              "x": 4267,
+              "y": 18288
+            },
+            "c2": {
+              "x": 4267,
+              "y": 12192
+            }
+          }
+        ],
+        "closed": true,
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.6,
+          "status": "needs-review",
+          "note": "Concept finished grade around the house pad."
+        }
+      }
+    ],
+    "spotElevations": [
+      {
+        "id": "spot-front-door",
+        "position": {
+          "x": 9144,
+          "y": 8839
+        },
+        "elevationMm": -152,
+        "status": "proposed",
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.6,
+          "status": "needs-review",
+          "note": "Concept landing one step below the floor."
+        }
+      },
+      {
+        "id": "spot-street-west",
+        "position": {
+          "x": 610,
+          "y": 610
+        },
+        "elevationMm": -2499,
+        "status": "existing",
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.4,
+          "status": "needs-review",
+          "note": "Concept street edge elevation."
+        }
+      },
+      {
+        "id": "spot-street-east",
+        "position": {
+          "x": 17678,
+          "y": 610
+        },
+        "elevationMm": -2560,
+        "status": "existing",
+        "evidence": {
+          "source": "generated",
+          "confidence": 0.4,
+          "status": "needs-review",
+          "note": "Concept street edge elevation."
+        }
+      }
+    ]
+  },
+  "levels": [
+    {
+      "id": "level-ground",
+      "name": "Ground Floor",
+      "elevationMm": 0,
+      "floorToFloorMm": 3000,
+      "evidence": {
+        "source": "generated",
+        "confidence": 1,
+        "status": "accepted",
+        "note": "Synthetic fixture datum; finished floor is project zero."
+      }
+    }
+  ],
+  "spaces": [
+    {
+      "id": "space-great-room",
+      "name": "Great Room",
+      "levelId": "level-ground",
+      "use": "living",
+      "boundary": [
+        {
+          "x": 5578,
+          "y": 9236
+        },
+        {
+          "x": 12710,
+          "y": 9236
+        },
+        {
+          "x": 12710,
+          "y": 10973,
+          "bulge": 0.3
+        },
+        {
+          "x": 12710,
+          "y": 14630
+        },
+        {
+          "x": 12710,
+          "y": 15793
+        },
+        {
+          "x": 5578,
+          "y": 15793
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept room; the east side follows the bay."
+      }
+    },
+    {
+      "id": "space-bedroom",
+      "name": "Bedroom",
+      "levelId": "level-ground",
+      "use": "bedroom",
+      "boundary": [
+        {
+          "x": 5578,
+          "y": 15907
+        },
+        {
+          "x": 12710,
+          "y": 15907
+        },
+        {
+          "x": 12710,
+          "y": 18197
+        },
+        {
+          "x": 5578,
+          "y": 18197
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept room."
+      }
+    }
+  ],
+  "walls": [
+    {
+      "id": "wall-south",
+      "levelId": "level-ground",
+      "start": {
+        "x": 5486,
+        "y": 9144
+      },
+      "end": {
+        "x": 12802,
+        "y": 9144
+      },
+      "thicknessMm": 183,
+      "heightMm": 2743,
+      "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 11
+        },
+        {
+          "id": "cladding",
+          "materialId": "mat-cladding",
+          "thicknessMm": 19
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wood-frame wall with board cladding."
+      }
+    },
+    {
+      "id": "wall-east-south",
+      "levelId": "level-ground",
+      "start": {
+        "x": 12802,
+        "y": 9144
+      },
+      "end": {
+        "x": 12802,
+        "y": 10973
+      },
+      "thicknessMm": 183,
+      "heightMm": 2743,
+      "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 11
+        },
+        {
+          "id": "cladding",
+          "materialId": "mat-cladding",
+          "thicknessMm": 19
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wood-frame wall with board cladding."
+      }
+    },
+    {
+      "id": "wall-bay",
+      "levelId": "level-ground",
+      "start": {
+        "x": 12802,
+        "y": 10973
+      },
+      "end": {
+        "x": 12802,
+        "y": 14630
+      },
+      "thicknessMm": 183,
+      "heightMm": 2743,
+      "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 11
+        },
+        {
+          "id": "cladding",
+          "materialId": "mat-cladding",
+          "thicknessMm": 19
+        }
+      ],
+      "bulge": 0.3,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept curved bay wall bowing east; radius follows from the 0.3 bulge."
+      }
+    },
+    {
+      "id": "wall-east-north",
+      "levelId": "level-ground",
+      "start": {
+        "x": 12802,
+        "y": 14630
+      },
+      "end": {
+        "x": 12802,
+        "y": 18288
+      },
+      "thicknessMm": 183,
+      "heightMm": 2743,
+      "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 11
+        },
+        {
+          "id": "cladding",
+          "materialId": "mat-cladding",
+          "thicknessMm": 19
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wood-frame wall with board cladding."
+      }
+    },
+    {
+      "id": "wall-north",
+      "levelId": "level-ground",
+      "start": {
+        "x": 12802,
+        "y": 18288
+      },
+      "end": {
+        "x": 5486,
+        "y": 18288
+      },
+      "thicknessMm": 183,
+      "heightMm": 2743,
+      "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 11
+        },
+        {
+          "id": "cladding",
+          "materialId": "mat-cladding",
+          "thicknessMm": 19
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wood-frame wall with board cladding."
+      }
+    },
+    {
+      "id": "wall-west",
+      "levelId": "level-ground",
+      "start": {
+        "x": 5486,
+        "y": 18288
+      },
+      "end": {
+        "x": 5486,
+        "y": 9144
+      },
+      "thicknessMm": 183,
+      "heightMm": 2743,
+      "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 11
+        },
+        {
+          "id": "cladding",
+          "materialId": "mat-cladding",
+          "thicknessMm": 19
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept wood-frame wall with board cladding."
+      }
+    },
+    {
+      "id": "wall-bedroom",
+      "levelId": "level-ground",
+      "start": {
+        "x": 5486,
+        "y": 15850
+      },
+      "end": {
+        "x": 12802,
+        "y": 15850
+      },
+      "thicknessMm": 114,
+      "heightMm": 2743,
+      "kind": "interior",
+      "materialId": "mat-lumber",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept stud partition."
+      }
+    }
+  ],
+  "openings": [
+    {
+      "id": "opening-front-door",
+      "wallId": "wall-south",
+      "kind": "door",
+      "offsetMm": 3200,
+      "widthMm": 914,
+      "heightMm": 2032,
+      "sillMm": 0,
+      "swing": "left",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept entry door."
+      }
+    },
+    {
+      "id": "opening-living-window",
+      "wallId": "wall-south",
+      "kind": "window",
+      "offsetMm": 914,
+      "widthMm": 1219,
+      "heightMm": 1219,
+      "sillMm": 914,
+      "swing": "none",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept living room window."
+      }
+    },
+    {
+      "id": "opening-bay-window",
+      "wallId": "wall-bay",
+      "kind": "window",
+      "offsetMm": 1067,
+      "widthMm": 1524,
+      "heightMm": 1219,
+      "sillMm": 914,
+      "swing": "none",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept curved bay window, measured along the wall centreline."
+      }
+    },
+    {
+      "id": "opening-deck-door",
+      "wallId": "wall-north",
+      "kind": "door",
+      "offsetMm": 2743,
+      "widthMm": 1829,
+      "heightMm": 2032,
+      "sillMm": 0,
+      "swing": "sliding",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept sliding door to the deck."
+      }
+    },
+    {
+      "id": "opening-bedroom-window",
+      "wallId": "wall-west",
+      "kind": "window",
+      "offsetMm": 762,
+      "widthMm": 1219,
+      "heightMm": 1219,
+      "sillMm": 914,
+      "swing": "none",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept bedroom window."
+      }
+    },
+    {
+      "id": "opening-bedroom-door",
+      "wallId": "wall-bedroom",
+      "kind": "door",
+      "offsetMm": 4877,
+      "widthMm": 914,
+      "heightMm": 2032,
+      "sillMm": 0,
+      "swing": "right",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept bedroom door."
+      }
+    }
+  ],
+  "slabs": [
+    {
+      "id": "slab-ground",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": 5486,
+          "y": 9144
+        },
+        {
+          "x": 12802,
+          "y": 9144
+        },
+        {
+          "x": 12802,
+          "y": 10973,
+          "bulge": 0.3
+        },
+        {
+          "x": 12802,
+          "y": 14630
+        },
+        {
+          "x": 12802,
+          "y": 18288
+        },
+        {
+          "x": 5486,
+          "y": 18288
+        }
+      ],
+      "thicknessMm": 254,
+      "layers": [
+        {
+          "id": "slab",
+          "materialId": "mat-concrete",
+          "thicknessMm": 102
+        },
+        {
+          "id": "base",
+          "materialId": "mat-gravel",
+          "thicknessMm": 152
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept slab on grade; the bay follows the curved wall."
+      }
+    },
+    {
+      "id": "slab-deck",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": 6706,
+          "y": 18380
+        },
+        {
+          "x": 12192,
+          "y": 18380
+        },
+        {
+          "x": 12192,
+          "y": 20117,
+          "bulge": 0.35
+        },
+        {
+          "x": 6706,
+          "y": 20117
+        }
+      ],
+      "thicknessMm": 209,
+      "layers": [
+        {
+          "id": "decking",
+          "materialId": "mat-decking",
+          "thicknessMm": 25
+        },
+        {
+          "id": "joists",
+          "materialId": "mat-lumber",
+          "thicknessMm": 184
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept timber deck with a curved north edge, level with the floor."
+      }
+    }
+  ],
+  "roofs": [
+    {
+      "id": "roof-main",
+      "levelId": "level-ground",
+      "kind": "gable",
+      "footprint": [
+        {
+          "x": 5486,
+          "y": 9144
+        },
+        {
+          "x": 12802,
+          "y": 9144
+        },
+        {
+          "x": 12802,
+          "y": 18288
+        },
+        {
+          "x": 5486,
+          "y": 18288
+        }
+      ],
+      "eaveElevationMm": 2743,
+      "ridgeElevationMm": 4877,
+      "ridgeAxis": "y",
+      "overhangMm": 457,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept gable roof; the bay has its own low roof, not modelled."
+      }
+    }
+  ],
+  "stairs": [],
+  "fixtures": [],
+  "equipment": [],
+  "systems": [],
+  "surfaces": [
+    {
+      "id": "surface-front-lawn",
+      "name": "Front Lawn",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": 305,
+          "y": 1219
+        },
+        {
+          "x": 13716,
+          "y": 1219
+        },
+        {
+          "x": 13716,
+          "y": 8230,
+          "c1": {
+            "x": 10973,
+            "y": 8839
+          },
+          "c2": {
+            "x": 7925,
+            "y": 7620
+          }
+        },
+        {
+          "x": 4877,
+          "y": 8230
+        },
+        {
+          "x": 305,
+          "y": 8230
+        }
+      ],
+      "followsGrade": true,
+      "gradeOffsetMm": 0,
+      "thicknessMm": 102,
+      "materialId": "mat-lawn",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept lawn on the existing slope."
+      }
+    },
+    {
+      "id": "surface-back-lawn",
+      "name": "Back Lawn",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": 305,
+          "y": 21946,
+          "c1": {
+            "x": 6096,
+            "y": 20726
+          },
+          "c2": {
+            "x": 12192,
+            "y": 23165
+          }
+        },
+        {
+          "x": 17983,
+          "y": 21641
+        },
+        {
+          "x": 17983,
+          "y": 30175
+        },
+        {
+          "x": 305,
+          "y": 30175
+        }
+      ],
+      "followsGrade": true,
+      "gradeOffsetMm": 0,
+      "thicknessMm": 102,
+      "materialId": "mat-lawn",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept rear lawn."
+      }
+    },
+    {
+      "id": "surface-front-bed",
+      "name": "Front Planting Bed",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": 5182,
+          "y": 7772,
+          "c1": {
+            "x": 7315,
+            "y": 7010
+          },
+          "c2": {
+            "x": 10973,
+            "y": 7010
+          }
+        },
+        {
+          "x": 13106,
+          "y": 7925
+        },
+        {
+          "x": 13106,
+          "y": 8961
+        },
+        {
+          "x": 5182,
+          "y": 8961
+        }
+      ],
+      "followsGrade": true,
+      "gradeOffsetMm": 0,
+      "thicknessMm": 76,
+      "materialId": "mat-mulch",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept mulch bed along the entry."
+      }
+    },
+    {
+      "id": "surface-walk",
+      "name": "Entry Walk",
+      "levelId": "level-ground",
+      "path": {
+        "centerline": [
+          {
+            "anchor": {
+              "openingId": "opening-front-door",
+              "at": "center",
+              "matchWidth": true
+            }
+          },
+          {
+            "x": 9144,
+            "y": 6096
+          },
+          {
+            "x": 7163,
+            "y": 3962
+          },
+          {
+            "x": 7163,
+            "y": 1219
+          }
+        ],
+        "cornerRadiusMm": 2438
+      },
+      "followsGrade": true,
+      "gradeOffsetMm": 0,
+      "thicknessMm": 102,
+      "materialId": "mat-concrete",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept concrete walk as wide as the front door, from the door to the street on two 8 ft radius curves."
+      }
+    },
+    {
+      "id": "surface-drive",
+      "name": "Driveway",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": 14021,
+          "y": 305
+        },
+        {
+          "x": 17069,
+          "y": 305
+        },
+        {
+          "x": 17069,
+          "y": 10363
+        },
+        {
+          "x": 14021,
+          "y": 10363
+        }
+      ],
+      "followsGrade": true,
+      "gradeOffsetMm": 0,
+      "thicknessMm": 152,
+      "materialId": "mat-asphalt",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept asphalt drive."
+      }
+    },
+    {
+      "id": "surface-patio",
+      "name": "Paver Patio",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": 2438,
+          "y": 10973
+        },
+        {
+          "x": 5304,
+          "y": 10973
+        },
+        {
+          "x": 5304,
+          "y": 14935
+        },
+        {
+          "x": 2438,
+          "y": 14935
+        }
+      ],
+      "topElevationMm": -152,
+      "thicknessMm": 152,
+      "materialId": "mat-pavers",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept paver patio one step below the floor."
+      }
+    },
+    {
+      "id": "surface-stepping-path",
+      "name": "Stepping-Stone Path",
+      "levelId": "level-ground",
+      "path": {
+        "centerline": [
+          {
+            "x": 3505,
+            "y": 14935
+          },
+          {
+            "x": 3505,
+            "y": 17678
+          },
+          {
+            "x": 5944,
+            "y": 21336
+          }
+        ],
+        "widthMm": 914,
+        "cornerRadiusMm": 3048
+      },
+      "followsGrade": true,
+      "gradeOffsetMm": 0,
+      "thicknessMm": 102,
+      "materialId": "mat-flagstone",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept 3 ft flagstone path from the patio to the back lawn, one 10 ft radius curve."
+      }
+    },
+    {
+      "id": "surface-pond",
+      "name": "Pond",
+      "levelId": "level-ground",
+      "boundary": [
+        {
+          "x": 1829,
+          "y": 4267,
+          "bulge": 1
+        },
+        {
+          "x": 4267,
+          "y": 4267,
+          "bulge": 1
+        }
+      ],
+      "topElevationMm": -1800,
+      "thicknessMm": 610,
+      "materialId": "mat-water",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept lined pond; the water level is held flat."
+      }
+    }
+  ],
+  "plants": [
+    {
+      "id": "plant-white-oak",
+      "key": "QA",
+      "botanicalName": "Quercus alba",
+      "commonName": "White oak",
+      "kind": "deciduous-tree",
+      "size": "Existing",
+      "matureHeightMm": 20000,
+      "matureSpreadMm": 15000,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Illustrative plant choice; confirm hardiness and availability."
+      }
+    },
+    {
+      "id": "plant-tree-of-heaven",
+      "key": "AA",
+      "botanicalName": "Ailanthus altissima",
+      "commonName": "Tree of heaven",
+      "kind": "deciduous-tree",
+      "size": "Existing",
+      "matureHeightMm": 15000,
+      "matureSpreadMm": 9000,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Illustrative plant choice; confirm hardiness and availability."
+      }
+    },
+    {
+      "id": "plant-red-maple",
+      "key": "AR",
+      "botanicalName": "Acer rubrum",
+      "commonName": "Red maple",
+      "kind": "deciduous-tree",
+      "size": "2-1/2\" cal.",
+      "matureHeightMm": 15000,
+      "matureSpreadMm": 10000,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Illustrative plant choice; confirm hardiness and availability."
+      }
+    },
+    {
+      "id": "plant-white-pine",
+      "key": "PS",
+      "botanicalName": "Pinus strobus",
+      "commonName": "Eastern white pine",
+      "kind": "evergreen-tree",
+      "size": "6-8' ht.",
+      "matureHeightMm": 18000,
+      "matureSpreadMm": 8000,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Illustrative plant choice; confirm hardiness and availability."
+      }
+    },
+    {
+      "id": "plant-inkberry",
+      "key": "IG",
+      "botanicalName": "Ilex glabra",
+      "commonName": "Inkberry",
+      "kind": "shrub",
+      "size": "#5 cont.",
+      "matureHeightMm": 2000,
+      "matureSpreadMm": 1500,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Illustrative plant choice; confirm hardiness and availability."
+      }
+    },
+    {
+      "id": "plant-oakleaf-hydrangea",
+      "key": "HQ",
+      "botanicalName": "Hydrangea quercifolia",
+      "commonName": "Oakleaf hydrangea",
+      "kind": "shrub",
+      "size": "#5 cont.",
+      "matureHeightMm": 2000,
+      "matureSpreadMm": 2000,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Illustrative plant choice; confirm hardiness and availability."
+      }
+    },
+    {
+      "id": "plant-switchgrass",
+      "key": "PV",
+      "botanicalName": "Panicum virgatum",
+      "commonName": "Switchgrass",
+      "kind": "ornamental-grass",
+      "size": "#1 cont.",
+      "matureHeightMm": 1500,
+      "matureSpreadMm": 900,
+      "spacingMm": 600,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Illustrative plant choice; confirm hardiness and availability."
+      }
+    },
+    {
+      "id": "plant-pachysandra",
+      "key": "PT",
+      "botanicalName": "Pachysandra terminalis",
+      "commonName": "Japanese pachysandra",
+      "kind": "groundcover",
+      "size": "4\" pot",
+      "matureHeightMm": 250,
+      "matureSpreadMm": 450,
+      "spacingMm": 300,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Illustrative plant choice; confirm hardiness and availability."
+      }
+    }
+  ],
+  "plantings": [
+    {
+      "id": "planting-oak",
+      "plantId": "plant-white-oak",
+      "status": "existing",
+      "position": {
+        "x": 3658,
+        "y": 26213
+      },
+      "canopyDiameterMm": 12192,
+      "trunkDiameterMm": 700,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.4,
+        "status": "needs-review",
+        "note": "Approximate location of an existing tree; no tree survey."
+      }
+    },
+    {
+      "id": "planting-ailanthus",
+      "plantId": "plant-tree-of-heaven",
+      "status": "remove",
+      "position": {
+        "x": 15545,
+        "y": 6706
+      },
+      "canopyDiameterMm": 5486,
+      "trunkDiameterMm": 300,
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.4,
+        "status": "needs-review",
+        "note": "Approximate location of an existing tree; no tree survey."
+      }
+    },
+    {
+      "id": "planting-maple-1",
+      "plantId": "plant-red-maple",
+      "status": "proposed",
+      "position": {
+        "x": 2134,
+        "y": 6706
+      },
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept planting location."
+      }
+    },
+    {
+      "id": "planting-maple-2",
+      "plantId": "plant-red-maple",
+      "status": "proposed",
+      "position": {
+        "x": 11582,
+        "y": 3658
+      },
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept planting location."
+      }
+    },
+    {
+      "id": "planting-maple-3",
+      "plantId": "plant-red-maple",
+      "status": "proposed",
+      "position": {
+        "x": 15850,
+        "y": 14021
+      },
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept planting location."
+      }
+    },
+    {
+      "id": "planting-pine-1",
+      "plantId": "plant-white-pine",
+      "status": "proposed",
+      "position": {
+        "x": 15240,
+        "y": 26822
+      },
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept planting location."
+      }
+    },
+    {
+      "id": "planting-pine-2",
+      "plantId": "plant-white-pine",
+      "status": "proposed",
+      "position": {
+        "x": 16459,
+        "y": 23774
+      },
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept planting location."
+      }
+    },
+    {
+      "id": "planting-inkberry-1",
+      "plantId": "plant-inkberry",
+      "status": "proposed",
+      "position": {
+        "x": 5791,
+        "y": 8382
+      },
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept planting location."
+      }
+    },
+    {
+      "id": "planting-inkberry-2",
+      "plantId": "plant-inkberry",
+      "status": "proposed",
+      "position": {
+        "x": 6858,
+        "y": 8382
+      },
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept planting location."
+      }
+    },
+    {
+      "id": "planting-inkberry-3",
+      "plantId": "plant-inkberry",
+      "status": "proposed",
+      "position": {
+        "x": 7925,
+        "y": 8382
+      },
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept planting location."
+      }
+    },
+    {
+      "id": "planting-inkberry-4",
+      "plantId": "plant-inkberry",
+      "status": "proposed",
+      "position": {
+        "x": 10516,
+        "y": 8382
+      },
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept planting location."
+      }
+    },
+    {
+      "id": "planting-inkberry-5",
+      "plantId": "plant-inkberry",
+      "status": "proposed",
+      "position": {
+        "x": 11582,
+        "y": 8382
+      },
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept planting location."
+      }
+    },
+    {
+      "id": "planting-inkberry-6",
+      "plantId": "plant-inkberry",
+      "status": "proposed",
+      "position": {
+        "x": 12649,
+        "y": 8382
+      },
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept planting location."
+      }
+    },
+    {
+      "id": "planting-hydrangea-1",
+      "plantId": "plant-oakleaf-hydrangea",
+      "status": "proposed",
+      "position": {
+        "x": 2134,
+        "y": 15545
+      },
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept planting location."
+      }
+    },
+    {
+      "id": "planting-hydrangea-2",
+      "plantId": "plant-oakleaf-hydrangea",
+      "status": "proposed",
+      "position": {
+        "x": 2134,
+        "y": 10363
+      },
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept planting location."
+      }
+    },
+    {
+      "id": "planting-switchgrass",
+      "plantId": "plant-switchgrass",
+      "status": "proposed",
+      "boundary": [
+        {
+          "x": 914,
+          "y": 5486,
+          "c1": {
+            "x": 914,
+            "y": 7010
+          },
+          "c2": {
+            "x": 2743,
+            "y": 7620
+          }
+        },
+        {
+          "x": 4267,
+          "y": 6401,
+          "c1": {
+            "x": 5486,
+            "y": 5486
+          },
+          "c2": {
+            "x": 5486,
+            "y": 3353
+          }
+        },
+        {
+          "x": 4877,
+          "y": 2743,
+          "c1": {
+            "x": 3658,
+            "y": 2134
+          },
+          "c2": {
+            "x": 914,
+            "y": 3048
+          }
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept massed grass beside the pond."
+      }
+    },
+    {
+      "id": "planting-pachysandra",
+      "plantId": "plant-pachysandra",
+      "status": "proposed",
+      "boundary": [
+        {
+          "x": 2134,
+          "y": 24994,
+          "bulge": 1
+        },
+        {
+          "x": 5182,
+          "y": 24994,
+          "bulge": 1
+        }
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept groundcover ring under the oak."
+      }
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "dimension-width",
+      "kind": "horizontal",
+      "from": {
+        "x": 5486,
+        "y": 9144,
+        "z": 0
+      },
+      "to": {
+        "x": 12802,
+        "y": 9144,
+        "z": 0
+      },
+      "offsetMm": 1524
+    },
+    {
+      "id": "dimension-depth",
+      "kind": "vertical",
+      "from": {
+        "x": 5486,
+        "y": 9144,
+        "z": 0
+      },
+      "to": {
+        "x": 5486,
+        "y": 18288,
+        "z": 0
+      },
+      "offsetMm": 3962
+    }
+  ],
+  "sections": [
+    {
+      "id": "section-aa",
+      "name": "Site Section A-A",
+      "start": {
+        "x": 8230,
+        "y": -914
+      },
+      "end": {
+        "x": 8230,
+        "y": 31394
+      },
+      "lookDirection": "left"
+    },
+    {
+      "id": "section-bb",
+      "name": "Section B-B through the Bay",
+      "start": {
+        "x": 1219,
+        "y": 12802
+      },
+      "end": {
+        "x": 17678,
+        "y": 12802
+      },
+      "lookDirection": "right"
+    }
+  ],
+  "viewpoints": [],
+  "assumptions": [
+    {
+      "id": "assumption-survey",
+      "topic": "site",
+      "statement": "The lot, setbacks, contours, and existing trees are synthetic. A boundary and topographic survey, a tree survey, and the zoning setbacks are required before any site decision.",
+      "impact": "high",
+      "affectedEntityIds": [
+        "site-property-line",
+        "setback-front",
+        "setback-rear",
+        "planting-oak"
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 1,
+        "status": "accepted",
+        "note": "Fixture intentionally excludes survey data."
+      }
+    },
+    {
+      "id": "assumption-grading",
+      "topic": "grading",
+      "statement": "The house pad grading is a concept. Drainage away from the foundation, cut and fill balance, and the drive slope need a civil review.",
+      "impact": "medium",
+      "affectedEntityIds": [
+        "site-grading-limit",
+        "contour-pr-0"
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Concept grading only."
+      }
+    },
+    {
+      "id": "assumption-planting",
+      "topic": "planting",
+      "statement": "Plant choices are illustrative. Confirm hardiness, invasiveness rules, and nursery availability locally.",
+      "impact": "low",
+      "affectedEntityIds": [
+        "plant-white-oak",
+        "plant-tree-of-heaven",
+        "plant-red-maple",
+        "plant-white-pine",
+        "plant-inkberry",
+        "plant-oakleaf-hydrangea",
+        "plant-switchgrass",
+        "plant-pachysandra"
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Illustrative planting."
+      }
+    }
+  ]
+}
