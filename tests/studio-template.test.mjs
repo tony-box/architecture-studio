@@ -80,6 +80,31 @@ test('elevations use project directions and wall base offsets', () => {
   assert.notEqual(api.elevationSvg(), baseline);
 });
 
+for (const source of ['roof', 'space']) {
+  test(`elevation openings use wall faces when the ${source} extends beyond wall centerlines`, () => {
+    const { api } = loadStudio();
+    const model = cloneFixture();
+    const faces = { north: 'south', east: 'east', south: 'north', west: 'west' };
+    model.openings = model.walls.map(wall => ({
+      ...model.openings[0], id: `opening-${wall.id}`, wallId: wall.id,
+      kind: 'window', offsetMm: 500, widthMm: 900, heightMm: 900, sillMm: 1000
+    }));
+    const baseline = Object.fromEntries(Object.keys(faces).map(side => [side, api.renderElevationSheet(model, side).svg]));
+    const boundary = [{ x: -102, y: -102 }, { x: 9702, y: -102 }, { x: 9702, y: 13302 }, { x: -102, y: 13302 }];
+    if (source === 'roof') model.roofs[0].footprint = boundary;
+    else model.spaces[0].boundary = boundary;
+
+    for (const [side, face] of Object.entries(faces)) {
+      const svg = api.renderElevationSheet(model, side).svg;
+      for (const opening of model.openings) {
+        const expected = opening.wallId === `wall-g-${face}` || opening.wallId === `wall-u-${face}`;
+        assert.equal(svg.includes(`data-entity="${opening.id}"`), expected, `${side}: ${opening.id}`);
+      }
+      assert.equal(svg, baseline[side], `${source} bounds must not move or hide ${side} openings`);
+    }
+  });
+}
+
 test('3D prisms face outward and stairs affect scene geometry', () => {
   const { api } = loadStudio();
   const prism = [];

@@ -31,6 +31,14 @@ Drawings then map sheet coordinates onto paper millimetres at a standard plot
 scale (see `drafting-standard.md`). Pen widths and lettering are authored in
 paper millimetres, never in model millimetres.
 
+## Exterior Elevations
+
+Locate each cardinal elevation's visible wall face from the wall centerline
+bounds, not the combined room and roof footprint bounds. Roof edges and room
+boundaries may extend past those centerlines and must not hide hosted doors
+or windows. Project openings from their host wall at the authored offset,
+width, sill, and height, including the level elevation and wall base offset.
+
 ## Section Views
 
 A section definition is a vertical cutting plane through `start` and `end`.

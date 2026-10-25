@@ -981,10 +981,10 @@
 
   function elevationBasis(side, bounds) {
     const definitions = {
-      north: { axis: 'y', face: bounds.maxY, project: point => -point.x, label: 'North' },
-      south: { axis: 'y', face: bounds.minY, project: point => point.x, label: 'South' },
-      east: { axis: 'x', face: bounds.maxX, project: point => point.y, label: 'East' },
-      west: { axis: 'x', face: bounds.minX, project: point => -point.y, label: 'West' }
+      north: { axis: 'y', face: bounds.y1, project: point => -point.x, label: 'North' },
+      south: { axis: 'y', face: bounds.y0, project: point => point.x, label: 'South' },
+      east: { axis: 'x', face: bounds.x1, project: point => point.y, label: 'East' },
+      west: { axis: 'x', face: bounds.x0, project: point => -point.y, label: 'West' }
     };
     return definitions[side];
   }
@@ -1020,8 +1020,9 @@
   }
 
   function renderElevationSheet(model, side) {
-    const bounds = modelBounds(model), roof = model.roofs[0], basis = elevationBasis(side, bounds);
+    const roof = model.roofs[0];
     const wallBox = boundsOf(model.walls.flatMap(wall => [wall.start, wall.end]));
+    const basis = elevationBasis(side, wallBox);
     const projected = [{ x: wallBox.x0, y: wallBox.y0 }, { x: wallBox.x1, y: wallBox.y0 }, { x: wallBox.x1, y: wallBox.y1 }, { x: wallBox.x0, y: wallBox.y1 }].map(basis.project);
     const wallMin = Math.min(...projected), wallMax = Math.max(...projected), ov = roof?.overhangMm ?? 0;
     const minH = wallMin - ov, maxH = wallMax + ov;
