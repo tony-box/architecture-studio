@@ -61,6 +61,7 @@ before writing `models/building.json`, save it to `brief.json` (validated by
 | `preferences.accessibility` | Any accessibility needs? | Step-free entry, main-level bedroom, wider doors. |
 | `preferences.appliances` | Which major appliances, and gas or electric? | Range or cooktop, wall oven, dryer, water heater, EV charger, hot tub, shop tools, generator, solar. Sets dedicated circuits, gas lines, and vents per `mep-placement-guide.md`. |
 | `preferences.lighting` | Any lighting or control preferences? | Recessed or surface lights, pendants, ceiling fans, dimming, smart switches, switched receptacles in living rooms. Default: design practice in `mep-placement-guide.md`. |
+| `preferences.style` | Which look should doors, windows, and fixtures follow? | Symmetric or traditional (mirrored about the centre), balanced or modern (rule of thirds), utilitarian or rhythmic (repeat the structural bays), or no preference. Default: symmetric. Sets `composition.strategy` per `composition-guide.md`; code and function still come first. |
 
 ## Round 5: Sources and research
 

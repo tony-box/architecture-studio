@@ -8,6 +8,9 @@ and your agent builds one real-unit coordinate model that drives:
   a plant schedule, plus floor plans, elevations, sections, and systems sheets,
 - an exportable SVG drawing set,
 - conceptual plumbing, electrical, and mechanical layouts,
+- composed facades and rooms: doors, windows, sinks, and lights follow a
+  symmetric, balanced, or bay-rhythm layout, with exact suggested positions,
+  while code, structure, and function come first,
 - advisory, cited local building-code research,
 - an interactive 3D orbit and walkthrough,
 - an assumptions list and a handoff for your architect and engineers.
@@ -194,6 +197,7 @@ All scripts live in `scripts/` and run with plain `node`.
 | `node scripts/serve.mjs <project>` | Serve the project on `127.0.0.1` and open the default browser. Live reload is on by default. The Sources tab imports images and saves calibrations through it; nothing else is written. Options: `--port`, `--no-open`, `--no-watch`, `--json`. |
 | `node scripts/export-drawings.mjs --project <project>` | Validate the model and write `exports/**/*.svg` plus `exports/manifest.json`. Writes nothing while the model has errors. |
 | `node scripts/inspect.mjs --project <project> --id <id>` | Report one element as numbers (size, area, path width and radii, clearance to the building and the lot, its findings), so the agent can check a curve edit without looking at a drawing. For a door or window it lists the jamb and centre points anchors can use. Without `--id` it lists the elements. |
+| `node scripts/compose.mjs --project <project>` | Report each facade as seen (centreline, third lines, every opening's centre from the left corner), the composition findings, and one proposed layout with exact `offsetMm`, `sillMm`, and fixture or light positions. It never writes the model. `--json` for machine-readable output. |
 | `node scripts/bundle.mjs <project>` | Write one self-contained HTML file to `exports/` for sharing. It opens with a double-click and needs no server. |
 | `node scripts/import-image.mjs <command> <project> ...` | Import images into `sources/` and record their scale and placement in `sources/sources.json`: `add`, `calibrate`, `uncalibrate`, `north`, `reference`, `place`, `measure`, `to-model`, `apply` (a calibration pasted from the viewer), `check`, `list`. See [`references/image-intake.md`](references/image-intake.md). |
 
@@ -261,6 +265,29 @@ a small detail drawing for stairs, openings, and roofs, the decisions the
 concept leaves open, and its evidence. You can approve an element there.
 Approvals are exported as `reviews/approvals.json` with the drawing set; they
 record your sign-off on the concept, not a professional approval.
+
+## Composition
+
+The agent gives you a composed starting point, not a scatter of openings.
+During intake it asks which look you want:
+
+- **Symmetric**: rows of openings mirror about each facade's centre. This is
+  the default when you have no preference.
+- **Balanced**: openings sit on the centre or a third line.
+- **Rhythmic**: openings repeat with the structural bays.
+
+Across every facade, windows stack over the windows below, matching openings
+on opposite facades line up, and heads in a row share one height. Sinks centre
+on the window above them, and ceiling lights sit on an even grid. Hidden
+pipes, wires, and ducts never chase symmetry; they take short runs and shared
+stacks.
+
+`scripts/compose.mjs` turns those rules into exact model values. The studio's
+review queue shows the same findings as notes. When code, structure, or
+function keeps an element off the pattern, such as an overhead door placed for
+a lift bay or an entry facing the house, the model records an exception with
+the reason, and the handoff lists it. See
+[`references/composition-guide.md`](references/composition-guide.md).
 
 ## Limits
 

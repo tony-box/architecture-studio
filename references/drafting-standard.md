@@ -385,6 +385,11 @@ tree is clipped at the drawing's edge (Scales).
   by a hidden line across the opening.
 - **Windows** (plans): jamb lines plus two glazing lines across the wall at
   `thin`.
+- **Stacked openings** (plans): when openings share part of their span in one
+  wall (a clerestory over a window), the plan cuts the one that crosses the
+  cut height (1200 mm above the floor), or else the lowest. Each other one is
+  overhead: a hidden line 150 mm inside the wall's room face across its width,
+  with hidden jamb ticks back to the face.
 - **Stairs** (plans): treads in `thin`, outline in `medium`, a diagonal break
   line where the cut plane (1200 mm above the floor) crosses the run,
   treads above the break hidden, and a direction arrow labelled `UP` from the

@@ -574,8 +574,8 @@
     for (const opening of model.openings ?? []) {
       const wall = walls.get(opening.wallId);
       if (!wall) { add('error', 'reference.wall', `Unknown wall ${opening.wallId}.`, opening.id); continue; }
-      const overlap = (model.openings ?? []).find(other => other !== opening && other.wallId === opening.wallId && other.offsetMm < opening.offsetMm + opening.widthMm && opening.offsetMm < other.offsetMm + other.widthMm && model.openings.indexOf(other) < model.openings.indexOf(opening));
-      if (overlap) add('error', 'opening.overlap', `Opening overlaps ${overlap.id} along their wall.`, opening.id);
+      const overlap = (model.openings ?? []).find(other => other !== opening && other.wallId === opening.wallId && other.offsetMm < opening.offsetMm + opening.widthMm && opening.offsetMm < other.offsetMm + other.widthMm && other.sillMm < opening.sillMm + opening.heightMm && opening.sillMm < other.sillMm + other.heightMm && model.openings.indexOf(other) < model.openings.indexOf(opening));
+      if (overlap) add('error', 'opening.overlap', `Opening overlaps ${overlap.id} in their wall.`, opening.id);
       const length = wallLength(wall);
       if (![opening.offsetMm, opening.widthMm, opening.heightMm, opening.sillMm].every(isFiniteInteger) || opening.offsetMm < 0 || opening.widthMm < 1 || opening.heightMm < 1 || opening.sillMm < 0) add('error', 'opening.geometry', 'Opening offsets and dimensions must be valid non-negative integer millimeters.', opening.id);
       else if (opening.offsetMm + opening.widthMm > length + tolerance || opening.sillMm + opening.heightMm > wall.heightMm + tolerance) add('error', 'opening.fit', 'Opening falls outside its host wall.', opening.id);
@@ -607,8 +607,31 @@
     }
     for (const dimension of model.dimensions ?? []) if (!dimension.from || !dimension.to || samePoint(dimension.from, dimension.to)) add('error', 'dimension.geometry', 'Dimension endpoints must be distinct model points.', dimension.id);
     validateMaterials(model, add, levels, walls, tolerance);
+    validateComposition(model, add);
     if (model.project?.jurisdiction?.codeReviewStatus !== 'researched') add('warning', 'code.status', 'Jurisdiction code review is incomplete or unavailable.', model.project?.id);
+    if (!findings.some(item => item.severity === 'error')) findings.push(...compositionReport(model).findings);
     return findings;
+  }
+
+  // The optional composition block (composition-guide.md). Layout findings themselves come from compositionReport.
+  function validateComposition(model, add) {
+    const c = model.composition;
+    if (c == null) return;
+    const checkStrategy = (value, where) => { if (value != null && !COMPOSITION_STRATEGIES.includes(value)) add('error', 'composition.strategy', `${where} strategy must be one of ${COMPOSITION_STRATEGIES.join(', ')}.`, model.project?.id); };
+    checkStrategy(c.strategy, 'The composition');
+    for (const key of ['toleranceMm', 'minGapMm', 'cornerReturnMm', 'bayMm']) if (c[key] != null && (!isFiniteInteger(c[key]) || c[key] < 0)) add('error', 'composition.value', `composition.${key} must be a non-negative integer.`, model.project?.id);
+    for (const [side, facade] of Object.entries(c.facades ?? {})) {
+      if (!OPPOSITE_FACADE[side]) { add('error', 'composition.facade', `Unknown facade ${side}; use north, east, south, or west.`, model.project?.id); continue; }
+      checkStrategy(facade.strategy, `The ${side} facade`);
+    }
+    for (const side of Object.keys(OPPOSITE_FACADE)) {
+      const strategy = c.facades?.[side]?.strategy ?? c.strategy, bay = c.facades?.[side]?.bayMm ?? c.bayMm;
+      if (strategy === 'rhythm' && !(bay > 0)) add('warning', 'composition.rhythm', `The ${side} facade uses the rhythm strategy without bayMm, so openings are not checked against a bay grid.`, model.project?.id);
+    }
+    for (const item of c.exceptions ?? []) {
+      if (typeof item?.reason !== 'string' || !item.reason.trim()) add('error', 'composition.exception', `The composition exception for ${item?.entityId ?? 'an element'} needs a reason.`, item?.entityId);
+      for (const rule of item?.rules ?? []) if (!COMPOSITION_RULES.includes(rule)) add('error', 'composition.exception', `Unknown composition rule ${rule}.`, item.entityId);
+    }
   }
 
   // Materials, assemblies, headers, members, foundations, and site surfaces. All optional.
@@ -2408,6 +2431,25 @@
     return systemSymbol(item.kind, { x: x + 4, y }, item.color, profile, { tagDir: { x: 1, y: 0 } }).svg;
   }
 
+  // Openings stacked in one wall (a clerestory over a window) share part of their span along it. A plan
+  // cuts the one that crosses the plan cut height, or else the lowest; the others are overhead.
+  function planOpenings(model, wall, level) {
+    const openings = model.openings.filter(item => item.wallId === wall.id).sort((a, b) => a.offsetMm - b.offsetMm);
+    const cutHeight = level.elevationMm + DRAFT.cutHeightMm - ((model.levels.find(item => item.id === wall.levelId)?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0));
+    const clusters = [];
+    for (const opening of openings) {
+      const cluster = clusters.find(list => list.some(other => other.offsetMm < opening.offsetMm + opening.widthMm && opening.offsetMm < other.offsetMm + other.widthMm));
+      if (cluster) cluster.push(opening); else clusters.push([opening]);
+    }
+    const cut = [], overhead = [];
+    for (const cluster of clusters) {
+      const chosen = cluster.length === 1 ? cluster[0] : cluster.find(item => item.sillMm <= cutHeight && item.sillMm + item.heightMm >= cutHeight) ?? [...cluster].sort((a, b) => a.sillMm - b.sillMm)[0];
+      cut.push(chosen);
+      overhead.push(...cluster.filter(item => item !== chosen));
+    }
+    return { cut: cut.sort((a, b) => a.offsetMm - b.offsetMm), overhead };
+  }
+
   function renderPlanSheet(model, levelId, options = {}) {
     const profile = profileFor(model), P = profile.pens, T = profile.text;
     const screened = Boolean(options.systems);
@@ -2537,7 +2579,7 @@
     const clipRuns = (points, keeps) => keeps.reduce((runs, f) => runs.flatMap(run => splitRun(run, f)), [points]);
     const drawArcWall = wall => {
       const g = wallGeometry(wall), L = g.length, t = wall.thicknessMm, inward = dot2(sub(center, g.at(L / 2)), g.normal(L / 2)) >= 0 ? 1 : -1;
-      const openings = model.openings.filter(item => item.wallId === wall.id).sort((a, b) => a.offsetMm - b.offsetMm);
+      const { cut: openings, overhead } = planOpenings(model, wall, level);
       const ends = [wallEndClip(wall, true, walls, tolerance), wallEndClip(wall, false, walls, tolerance)];
       for (const end of ends) if (end.fallback) warnings.push({ severity: 'advisory', code: 'wall.join-fallback', message: `${wall.id} meets ${end.fallback} where the faces have no clean miter; the end is drawn square.`, entityId: wall.id });
       const bands = wallBands(model, wall), strokeParts = [], fillParts = [], lineParts = [], cuts = [];
@@ -2596,6 +2638,10 @@
         }
         layers.openings.push(`<g data-entity="${escapeHtml(opening.id)}">${parts.join('')}</g>`);
       }
+      for (const opening of overhead) {
+        const a = opening.offsetMm, b = a + opening.widthMm, face = inward * t / 2, out = inward * (t / 2 + 150), hidden = { stroke: ink, width: P.thin, dash: '3 1.5' };
+        layers.openings.push(`<g data-entity="${escapeHtml(opening.id)}">${svgPoly(g.points(a, b, out).map(map), { open: true, ...hidden })}${[a, b].map(along => svgLine(map(g.at(along, face)), map(g.at(along, out)), hidden)).join('')}</g>`);
+      }
       // Radius note outside the arc, at the first point along it that clears other annotation and section lines.
       const label = `R ${profile.dimension(g.radius)}`, w = textWidth(label, T.note);
       const cutLines = (model.sections ?? []).map(section => [map(section.start), map(section.end)]);
@@ -2617,7 +2663,7 @@
       if (wall.bulge) { drawArcWall(wall); continue; }
       const L = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y), u = unit2(sub(wall.end, wall.start)), n = perp(u), t = wall.thicknessMm;
       const inward = dot2(sub(center, mul(add(wall.start, wall.end), 0.5)), n) >= 0 ? 1 : -1;
-      const openings = model.openings.filter(item => item.wallId === wall.id).sort((a, b) => a.offsetMm - b.offsetMm);
+      const { cut: openings, overhead } = planOpenings(model, wall, level);
       const p = (along, side) => map(add(add(wall.start, mul(u, along)), mul(n, side)));
       const strokeParts = [], fillParts = [];
       if (mats.active) {
@@ -2696,6 +2742,11 @@
           if (swing !== 'sliding' && swing !== 'none') placer.reserve(boundsOf([p(a, face), p(b, face), p(a, inward * (t / 2 + w)), p(b, inward * (t / 2 + w))]));
         }
         layers.openings.push(`<g data-entity="${escapeHtml(opening.id)}">${parts.join('')}</g>`);
+      }
+      // Overhead openings stacked over a cut one: hidden lines just inside the wall, per drafting-standard.md.
+      for (const opening of overhead) {
+        const a = opening.offsetMm, b = a + opening.widthMm, face = inward * t / 2, out = inward * (t / 2 + 150), hidden = { stroke: ink, width: P.thin, dash: '3 1.5' };
+        layers.openings.push(`<g data-entity="${escapeHtml(opening.id)}">${svgLine(p(a, out), p(b, out), hidden)}${svgLine(p(a, face), p(a, out), hidden)}${svgLine(p(b, face), p(b, out), hidden)}</g>`);
       }
     }
 
@@ -3014,6 +3065,345 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Composition. Spec: references/composition-guide.md.
+  // Checks the layout of what people see (doors, windows, sinks, ceiling lights) and proposes exact
+  // model values that fix it. Findings are advisories: code, structure, and function come first, and
+  // an exception in model.composition records why an element stays where it is.
+  // ---------------------------------------------------------------------------
+  const COMPOSITION_STRATEGIES = ['symmetric', 'balanced', 'rhythm', 'none'];
+  const COMPOSITION_RULES = ['symmetry', 'thirds', 'rhythm', 'stacking', 'cross-facade', 'head-alignment', 'partition-conflict', 'fixture-centering', 'light-grid'];
+  const COMPOSITION_DEFAULTS = { toleranceMm: 13, minGapMm: 400, cornerReturnMm: 600 };
+  const COMPOSITION_SINKS = new Set(['sink', 'kitchen-sink', 'lavatory', 'utility-sink', 'bar-sink']);
+  const COMPOSITION_LIGHTS = new Set(['light-ceiling', 'light-recessed', 'light-pendant', 'ceiling-fan']);
+  const OPPOSITE_FACADE = { north: 'south', south: 'north', east: 'west', west: 'east' };
+
+  function compositionSettings(model) {
+    const c = model.composition ?? {};
+    // An exception without rules fixes the element in place for every rule; with rules it skips only those.
+    const exceptions = new Map();
+    for (const item of c.exceptions ?? []) {
+      if (!item?.entityId) continue;
+      const rules = Array.isArray(item.rules) && item.rules.length ? item.rules : null;
+      const prior = exceptions.get(item.entityId);
+      exceptions.set(item.entityId, prior === null || rules === null ? null : [...(prior ?? []), ...rules]);
+    }
+    const facade = side => {
+      const own = c.facades?.[side] ?? {};
+      return { strategy: own.strategy ?? c.strategy ?? 'symmetric', bayMm: own.bayMm ?? c.bayMm, bayOriginMm: own.bayOriginMm ?? c.bayOriginMm };
+    };
+    return {
+      strategy: c.strategy ?? 'symmetric', facade, exceptions,
+      toleranceMm: c.toleranceMm ?? COMPOSITION_DEFAULTS.toleranceMm,
+      minGapMm: c.minGapMm ?? COMPOSITION_DEFAULTS.minGapMm,
+      cornerReturnMm: c.cornerReturnMm ?? COMPOSITION_DEFAULTS.cornerReturnMm,
+      fixed: id => exceptions.has(id) && exceptions.get(id) === null,
+      exempt: (id, rule) => exceptions.has(id) && (exceptions.get(id) === null || exceptions.get(id).includes(rule))
+    };
+  }
+
+  // Each cardinal facade: its straight exterior walls (the ones its elevation shows), the plan
+  // coordinate `p` that runs along it, and every hosted opening as a horizontal span and a z band.
+  function compositionFacades(model, settings) {
+    const walls = model.walls ?? [];
+    if (!walls.length) return [];
+    const wallBox = boundsOf(walls.flatMap(wallPoints));
+    const baseOf = wall => (model.levels.find(level => level.id === wall.levelId)?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0);
+    return ['north', 'east', 'south', 'west'].map(side => {
+      const basis = elevationBasis(side, wallBox), along = basis.axis === 'y' ? 'x' : 'y';
+      const pMin = along === 'x' ? wallBox.x0 : wallBox.y0, pMax = along === 'x' ? wallBox.x1 : wallBox.y1;
+      const hostWalls = walls.filter(wall => wall.kind === 'exterior' && !wall.bulge && Math.abs(wall.start[basis.axis] - basis.face) < 3 && Math.abs(wall.end[basis.axis] - basis.face) < 3);
+      const hosts = new Map(hostWalls.map(wall => [wall.id, wall]));
+      // +1 when the facade reads left to right in increasing p, as its elevation is drawn.
+      const hSign = Math.sign(basis.project(along === 'x' ? { x: 1, y: 0 } : { x: 0, y: 1 }) - basis.project({ x: 0, y: 0 }));
+      const openings = (model.openings ?? []).filter(item => hosts.has(item.wallId)).map(item => {
+        const wall = hosts.get(item.wallId), a = pointAlongWall(wall, item.offsetMm), b = pointAlongWall(wall, item.offsetMm + item.widthMm), base = baseOf(wall);
+        return { id: item.id, kind: item.kind, wall, base, widthMm: item.widthMm, heightMm: item.heightMm, offsetMm: item.offsetMm, sillMm: item.sillMm, p: (a[along] + b[along]) / 2, fixed: settings.fixed(item.id) };
+      });
+      // Where interior walls meet this facade's walls: an opening must not land on one below its top.
+      // A partition belongs to every host wall at its end whose height range it shares (its own storey).
+      const junctions = [];
+      for (const wall of walls.filter(item => item.kind !== 'exterior')) {
+        const z0 = baseOf(wall), z1 = z0 + wall.heightMm;
+        for (const end of [wall.start, wall.end]) {
+          for (const host of hostWalls.filter(item => Math.abs(end[basis.axis] - item.start[basis.axis]) <= item.thicknessMm / 2 + 25 && end[along] >= Math.min(item.start[along], item.end[along]) - 1 && end[along] <= Math.max(item.start[along], item.end[along]) + 1 && z0 < baseOf(item) + item.heightMm && baseOf(item) < z1)) {
+            junctions.push({ wallId: wall.id, hostId: host.id, p: end[along], half: wall.thicknessMm / 2, z0, z1 });
+          }
+        }
+      }
+      const cfg = settings.facade(side);
+      return { side, label: basis.label, along, pMin, pMax, axisP: (pMin + pMax) / 2, hSign, strategy: cfg.strategy, bayMm: cfg.bayMm, bayOriginMm: cfg.bayOriginMm ?? pMin, hostWalls, openings, junctions };
+    });
+  }
+
+  // Openings whose z bands overlap by at least half the shorter one read as one row.
+  function compositionRows(openings) {
+    const rows = [];
+    for (const item of [...openings].sort((a, b) => a.bottom - b.bottom || a.p - b.p)) {
+      const row = rows.find(members => members.some(other => Math.min(other.top, item.top) - Math.max(other.bottom, item.bottom) >= 0.5 * Math.min(other.top - other.bottom, item.top - item.bottom)));
+      if (row) row.push(item); else rows.push([item]);
+    }
+    for (const row of rows) row.sort((a, b) => a.p - b.p);
+    return rows.sort((a, b) => Math.min(...a.map(item => item.bottom)) - Math.min(...b.map(item => item.bottom)));
+  }
+
+  function compositionReport(model) {
+    const settings = compositionSettings(model), tol = settings.toleranceMm, gap = settings.minGapMm;
+    const units = model.project.coordinates.displayUnits, L = mm => formatLength(mm, units);
+    const findings = [], proposal = new Map();
+    const note = (severity, rule, entityId, message, suggestion) => findings.push({ severity, code: `composition.${rule}`, message, entityId, ...(suggestion ? { suggestion } : {}) });
+    const propose = (entityId, field, from, to, rule, extra = {}) => {
+      const entry = proposal.get(`${entityId}:${field}`) ?? { entityId, field, from, to, rules: [], ...extra };
+      entry.to = to; if (!entry.rules.includes(rule)) entry.rules.push(rule);
+      proposal.set(`${entityId}:${field}`, entry);
+      return entry;
+    };
+    const ids = new Set(allEntityIds(model).map(entity => entity?.id));
+    for (const id of settings.exceptions.keys()) if (!ids.has(id)) note('warning', 'exception', id, `A composition exception names ${id}, which is not in the model.`);
+    if (settings.strategy === 'none') return { settings, facades: [], findings, proposal: [] };
+    const facades = compositionFacades(model, settings);
+    const facadeOf = new Map(facades.flatMap(facade => facade.openings.map(item => [item.id, facade])));
+
+    // Partition junctions inside an opening are a real conflict, whatever the strategy.
+    for (const facade of facades) for (const item of facade.openings) {
+      if (settings.exempt(item.id, 'partition-conflict')) continue;
+      const hit = facade.junctions.find(j => j.hostId === item.wall.id && Math.abs(j.p - item.p) < item.widthMm / 2 + j.half && item.base + item.sillMm < j.z1 && item.base + item.sillMm + item.heightMm > j.z0);
+      if (hit) note('warning', 'partition-conflict', item.id, `${item.id} spans the end of interior wall ${hit.wallId}; move the opening or the wall so the partition meets solid wall.`);
+    }
+
+    // Head alignment: within a row, window heads match the door head (or the most common head).
+    for (const facade of facades) {
+      if (facade.strategy === 'none') continue;
+      for (const item of facade.openings) { item.bottom = item.base + item.sillMm; item.top = item.bottom + item.heightMm; }
+      for (const row of compositionRows(facade.openings)) {
+        const doors = row.filter(item => item.kind === 'door'), pool = doors.length ? doors : row.filter(item => item.kind === 'window');
+        if (pool.length < 1 || row.length < 2) continue;
+        const counts = new Map();
+        for (const item of pool) { const key = Math.round(item.top); counts.set(key, (counts.get(key) ?? 0) + 1); }
+        const head = [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
+        for (const item of row.filter(other => other.kind === 'window' && Math.abs(other.top - head) > tol)) {
+          if (item.fixed || settings.exempt(item.id, 'head-alignment')) continue;
+          const sill = Math.round(head - item.base - item.heightMm);
+          const nb = item.base + sill, nt = nb + item.heightMm;
+          const blocked = sill < 0 || sill + item.heightMm > item.wall.heightMm || facade.openings.some(other => other !== item && !row.includes(other) && Math.abs(other.p - item.p) < (other.widthMm + item.widthMm) / 2 + gap && other.bottom < nt + gap && nb < other.top + gap);
+          if (blocked) { note('advisory', 'head-alignment', item.id, `${item.id} has its head at ${L(item.top - item.base)} while the row's head is at ${L(head - item.base)}; no sill fits, so align it by hand or record an exception.`); continue; }
+          const entry = propose(item.id, 'sillMm', item.sillMm, sill, 'head-alignment', { wallId: item.wall.id });
+          note('advisory', 'head-alignment', item.id, `${item.id} has its head at ${L(item.top - item.base)} while the row's head is at ${L(head - item.base)}. Suggested sillMm ${sill} (${L(sill)}).`, { field: 'sillMm', value: entry.to });
+          item.sillMm = sill; item.bottom = item.base + sill; item.top = item.bottom + item.heightMm;
+        }
+      }
+    }
+
+    // Links between movable openings. Every member of a group sits at p = axis + sign * t for one t:
+    // mirror pairs have opposite signs, stacked and cross-facade pairs the same sign.
+    const nodes = facades.flatMap(facade => facade.strategy === 'none' ? [] : facade.openings.filter(item => !item.fixed));
+    const index = new Map(nodes.map((item, i) => [item.id, i]));
+    const parent = nodes.map((_, i) => i), parity = nodes.map(() => 1), centered = nodes.map(() => false), reasons = nodes.map(() => new Set());
+    const find = i => { if (parent[i] === i) return [i, 1]; const [root, s] = find(parent[i]); parent[i] = root; parity[i] *= s; return [root, parity[i]]; };
+    const link = (a, b, rel, rule, only) => {
+      const [ra, sa] = find(index.get(a.id)), [rb, sb] = find(index.get(b.id));
+      if (ra === rb) { if (sa * rel !== sb) return false; }
+      else { parent[rb] = ra; parity[rb] = sa * rel * sb; centered[ra] = centered[ra] || centered[rb]; }
+      for (const item of only ? [only] : [a, b]) reasons[index.get(item.id)].add(rule);
+      return true;
+    };
+    const rowsOf = new Map(), unmirrored = [];
+    for (const facade of facades) {
+      if (facade.strategy === 'none') continue;
+      const rows = compositionRows(facade.openings);
+      rowsOf.set(facade.side, rows);
+      if (facade.strategy !== 'symmetric') continue;
+      for (const row of rows) {
+        const movable = row.filter(item => !item.fixed && !settings.exempt(item.id, 'symmetry'));
+        if (!movable.length) continue;
+        const n = movable.length, pairs = Array.from({ length: Math.floor(n / 2) }, (_, i) => [movable[i], movable[n - 1 - i]]);
+        if (pairs.some(([a, b]) => Math.abs(a.widthMm - b.widthMm) > tol)) { unmirrored.push(movable); continue; }
+        for (const [a, b] of pairs) link(a, b, -1, 'symmetry');
+        if (n % 2) { const middle = movable[(n - 1) / 2], [root] = find(index.get(middle.id)); centered[root] = true; reasons[index.get(middle.id)].add('symmetry'); }
+      }
+    }
+    // Stacking: an upper row follows the nearest row below that has movable openings.
+    for (const facade of facades) {
+      const rows = (rowsOf.get(facade.side) ?? []).map(row => row.filter(item => !item.fixed && !settings.exempt(item.id, 'stacking'))).filter(row => row.length);
+      for (let r = 1; r < rows.length; r += 1) {
+        const upper = rows[r], top = Math.min(...upper.map(item => item.bottom));
+        const lower = rows.slice(0, r).reverse().find(row => Math.max(...row.map(item => item.top)) <= top + tol);
+        if (!lower) continue;
+        if (upper.length === lower.length && upper.length > 1) upper.forEach((item, i) => link(lower[i], item, 1, 'stacking', item));
+        else for (const item of upper) {
+          const below = lower.filter(other => Math.abs(other.p - item.p) < (other.widthMm + item.widthMm) / 2).sort((a, b) => Math.abs(a.p - item.p) - Math.abs(b.p - item.p))[0];
+          if (below) link(below, item, 1, 'stacking', item);
+        }
+      }
+    }
+    // Cross-facade: the same opening type on opposite facades lines up in plan.
+    for (const side of ['south', 'west']) {
+      const a = facades.find(facade => facade.side === side), b = facades.find(facade => facade.side === OPPOSITE_FACADE[side]);
+      if (!a || !b || a.strategy === 'none' || a.strategy !== b.strategy || Math.abs(a.axisP - b.axisP) > tol) continue;
+      if (a.strategy === 'rhythm' && (a.bayMm !== b.bayMm || a.bayOriginMm !== b.bayOriginMm)) continue;
+      const signature = item => `${item.kind}:${Math.round(item.widthMm / tol)}:${Math.round(item.heightMm / tol)}:${Math.round(item.bottom / tol)}`;
+      const groupsOf = facade => { const map = new Map(); for (const item of facade.openings.filter(other => !other.fixed && !settings.exempt(other.id, 'cross-facade'))) { const key = signature(item); if (!map.has(key)) map.set(key, []); map.get(key).push(item); } return map; };
+      const other = groupsOf(b);
+      for (const [key, list] of groupsOf(a)) {
+        const match = other.get(key);
+        if (!match || match.length !== list.length) continue;
+        const sa = [...list].sort((x, y) => x.p - y.p), sb = [...match].sort((x, y) => x.p - y.p);
+        sa.forEach((item, i) => link(item, sb[i], 1, 'cross-facade'));
+      }
+    }
+
+    // Solve each group for one t, nearest the members' mean, that keeps every member on its wall, clear
+    // of the corner return, fixed openings, already placed openings, and partition junctions.
+    const groups = new Map();
+    nodes.forEach((item, i) => { const [root, sign] = find(i); if (!groups.has(root)) groups.set(root, []); groups.get(root).push({ item, sign }); });
+    const placed = [];
+    const spanOf = (item, p) => ({ p0: p - item.widthMm / 2, p1: p + item.widthMm / 2, z0: item.bottom, z1: item.top, side: facadeOf.get(item.id).side });
+    const clash = (a, b, g) => a.side === b.side && a.p0 < b.p1 + g && b.p0 < a.p1 + g && a.z0 < b.z1 + g && b.z0 < a.z1 + g;
+    const offsetAt = (item, p) => {
+      const facade = facadeOf.get(item.id), dir = Math.sign(item.wall.end[facade.along] - item.wall.start[facade.along]) || 1;
+      return Math.round((p - item.wall.start[facade.along]) * dir - item.widthMm / 2);
+    };
+    const fits = (members, t, g) => {
+      const spans = [];
+      for (const { item, sign } of members) {
+        const facade = facadeOf.get(item.id), p = facade.axisP + sign * t, offset = offsetAt(item, p);
+        if (offset < settings.cornerReturnMm || offset + item.widthMm > wallLength(item.wall) - settings.cornerReturnMm) return null;
+        const span = spanOf(item, p);
+        if (facade.junctions.some(j => j.hostId === item.wall.id && Math.abs(j.p - p) < item.widthMm / 2 + j.half + 50 && item.bottom < j.z1 && item.top > j.z0)) return null;
+        if (spans.some(other => clash(span, other, g)) || placed.some(other => clash(span, other, g))) return null;
+        if (facade.openings.some(other => other.fixed && clash(span, spanOf(other, other.p), g))) return null;
+        spans.push(span);
+      }
+      return spans;
+    };
+    const ordered = [...groups.values()].sort((a, b) => Math.min(...a.map(m => m.item.bottom)) - Math.min(...b.map(m => m.item.bottom)) || b.length - a.length);
+    const phrases = { symmetry: 'mirror about the facade centreline', thirds: 'sit on the facade centreline or a third line', rhythm: 'follow the bay grid', stacking: 'stack over the openings below', 'cross-facade': 'line up with the matching openings on the opposite facade' };
+    // One pass places every group in order. A group that cannot move keeps its current spans, and the
+    // pass reruns with those spans reserved from the start, so no earlier group is proposed onto them.
+    const solvePass = stuck => {
+      placed.length = 0;
+      for (const members of stuck) for (const { item } of members) placed.push(spanOf(item, item.p));
+      return ordered.map(members => {
+        const facade = facadeOf.get(members[0].item.id), [root] = find(index.get(members[0].item.id));
+        const ts = members.map(({ item, sign }) => sign * (item.p - facadeOf.get(item.id).axisP)), mean = ts.reduce((s, v) => s + v, 0) / ts.length;
+        const rules = new Set(members.flatMap(m => [...reasons[index.get(m.item.id)]]));
+        const span = facade.pMax - facade.pMin;
+        const exempt = rule => members.some(m => settings.exempt(m.item.id, rule));
+        const strategyRule = facade.strategy === 'balanced' && !exempt('thirds') ? 'thirds' : facade.strategy === 'rhythm' && facade.bayMm > 0 && !exempt('rhythm') ? 'rhythm' : 'symmetry';
+        let candidates;
+        if (strategyRule === 'thirds') {
+          rules.add('thirds');
+          const lines = [facade.axisP, facade.pMin + span / 3, facade.pMin + 2 * span / 3].map(p => p - facade.axisP);
+          candidates = centered[root] ? [0] : lines.sort((a, b) => Math.abs(a - mean) - Math.abs(b - mean));
+        } else if (strategyRule === 'rhythm') {
+          rules.add('rhythm');
+          const width = Math.max(...members.map(m => m.item.widthMm)), bays = Math.max(1, Math.ceil((width + gap) / facade.bayMm)), shift = bays % 2 ? facade.bayMm / 2 : 0;
+          candidates = [];
+          for (let p = facade.bayOriginMm + shift; p <= facade.pMax; p += facade.bayMm) if (p >= facade.pMin) candidates.push(p - facade.axisP);
+          candidates.sort((a, b) => Math.abs(a - mean) - Math.abs(b - mean));
+        } else if (centered[root]) candidates = [0];
+        else {
+          const start = Math.round(mean * 2) / 2;
+          candidates = [start];
+          for (let k = 1; k <= span / 2; k += 1) candidates.push(start + k, start - k);
+        }
+        // A group already on its targets keeps its exact positions, so applying a proposal is stable.
+        const settled = ts.every(t => Math.abs(t - mean) <= tol) && (strategyRule === 'symmetry' ? !centered[root] || Math.abs(mean) <= tol : candidates.some(c => Math.abs(c - mean) <= tol));
+        let chosen = null;
+        if (!stuck.includes(members)) {
+          if (settled && fits(members, mean, 0)) chosen = mean;
+          else for (const t of candidates) { if (fits(members, t, gap)) { chosen = t; break; } }
+        }
+        const spans = chosen == null ? members.map(({ item }) => spanOf(item, item.p)) : members.map(({ item, sign }) => spanOf(item, settled ? item.p : facadeOf.get(item.id).axisP + sign * chosen));
+        if (!stuck.includes(members)) placed.push(...spans);
+        return { members, chosen, settled, rules, strategyRule };
+      });
+    };
+    const stuck = [];
+    let results = solvePass(stuck);
+    for (let pass = 0; pass < ordered.length; pass += 1) {
+      const fresh = results.filter(result => result.chosen == null && !stuck.includes(result.members));
+      if (!fresh.length) break;
+      stuck.push(...fresh.map(result => result.members));
+      results = solvePass(stuck);
+    }
+    for (const { members, chosen, settled, rules, strategyRule } of results) {
+      if (chosen == null) {
+        if (!settled) note('advisory', strategyRule, members[0].item.id, `${members.map(m => m.item.id).join(', ')} cannot be placed to satisfy ${[...rules].join(', ')} clear of corners, partitions, and fixed openings; arrange them by hand or record an exception.`);
+        continue;
+      }
+      for (const { item, sign } of members) {
+        const own = facadeOf.get(item.id), p = own.axisP + sign * chosen, offset = settled ? item.offsetMm : offsetAt(item, p);
+        if (Math.abs(offset - item.offsetMm) <= Math.max(1, tol / 4)) continue;
+        const mine = reasons[index.get(item.id)], code = mine.has('stacking') ? 'stacking' : mine.has('cross-facade') ? 'cross-facade' : strategyRule;
+        const why = [strategyRule, 'stacking', 'cross-facade'].filter(rule => rules.has(rule)).map(rule => phrases[rule]);
+        const sentence = why.length > 1 ? `${why.slice(0, -1).join(', ')}${why.length > 2 ? ',' : ''} and ${why.at(-1)}` : why[0];
+        const entry = propose(item.id, 'offsetMm', item.offsetMm, offset, code, { wallId: item.wall.id });
+        const fromLeft = own.hSign > 0 ? p - own.pMin : own.pMax - p;
+        note('advisory', code, item.id, `${item.id} on the ${own.label.toLowerCase()} facade should ${sentence}. Suggested offsetMm ${offset} on ${item.wall.id} (centre ${L(fromLeft)} from the left corner as seen).`, { field: 'offsetMm', value: entry.to, wallId: item.wall.id });
+      }
+    }
+    for (const movable of unmirrored) note('advisory', 'symmetry', movable[0].id, `${movable.map(item => item.id).join(', ')} share a row but their widths cannot mirror about the facade centreline; match their sizes or record an exception.`);
+
+    compositionInterior(model, settings, note, propose, L);
+    const report = facades.map(facade => ({
+      side: facade.side, label: facade.label, strategy: facade.strategy, lengthMm: facade.pMax - facade.pMin,
+      centreFromLeftMm: (facade.pMax - facade.pMin) / 2,
+      thirdsFromLeftMm: [(facade.pMax - facade.pMin) / 3, 2 * (facade.pMax - facade.pMin) / 3],
+      bayMm: facade.bayMm ?? null,
+      openings: facade.openings.map(item => {
+        const offset = proposal.get(`${item.id}:offsetMm`)?.to ?? item.offsetMm, sill = proposal.get(`${item.id}:sillMm`)?.to ?? item.sillMm;
+        const dir = Math.sign(item.wall.end[facade.along] - item.wall.start[facade.along]) || 1, p = item.wall.start[facade.along] + dir * (offset + item.widthMm / 2);
+        return { id: item.id, kind: item.kind, wallId: item.wall.id, fixed: item.fixed, widthMm: item.widthMm, heightMm: item.heightMm, offsetMm: offset, sillMm: sill, headMm: sill + item.heightMm, centreFromLeftMm: Math.round(facade.hSign > 0 ? p - facade.pMin : facade.pMax - p) };
+      }).sort((a, b) => a.centreFromLeftMm - b.centreFromLeftMm)
+    }));
+    return { settings: { strategy: settings.strategy, toleranceMm: tol, minGapMm: gap, cornerReturnMm: settings.cornerReturnMm }, facades: report, findings, proposal: [...proposal.values()] };
+  }
+
+  // Interior: sinks centre on the window above them, and ceiling lights sit on an even grid.
+  function compositionInterior(model, settings, note, propose, L) {
+    const tol = settings.toleranceMm;
+    for (const fixture of (model.fixtures ?? []).filter(item => COMPOSITION_SINKS.has(item.kind))) {
+      if (settings.exempt(fixture.id, 'fixture-centering')) continue;
+      const reach = Math.max(fixture.size.x, fixture.size.y) + 300;
+      for (const wall of (model.walls ?? []).filter(item => !item.bulge && item.levelId === fixture.levelId)) {
+        const g = wallGeometry(wall), along = g.alongOf(fixture.position), depth = Math.abs(g.offsetOf(fixture.position));
+        if (depth > wall.thicknessMm / 2 + reach || along < 0 || along > g.length) continue;
+        const half = Math.min(fixture.size.x, fixture.size.y) / 2, level = model.levels.find(item => item.id === wall.levelId), fixtureTop = fixture.position.z + fixture.size.z - (level?.elevationMm ?? 0) - (wall.baseOffsetMm ?? 0);
+        // Only a window that starts within reach above the fixture reads as the window over it.
+        const window = (model.openings ?? []).find(item => item.wallId === wall.id && item.kind === 'window' && item.sillMm <= fixtureTop + 900 && along + half > item.offsetMm && along - half < item.offsetMm + item.widthMm);
+        if (!window) continue;
+        const centre = window.offsetMm + window.widthMm / 2;
+        if (Math.abs(centre - along) <= tol) break;
+        const moved = g.at(centre, g.offsetOf(fixture.position)), value = { x: Math.round(moved.x), y: Math.round(moved.y), z: fixture.position.z };
+        propose(fixture.id, 'position', fixture.position, value, 'fixture-centering');
+        note('advisory', 'fixture-centering', fixture.id, `${fixture.id} sits ${L(Math.abs(centre - along))} off the centre of ${window.id} above it. Suggested position x ${value.x}, y ${value.y}; move its connections with it.`, { field: 'position', value });
+        break;
+      }
+    }
+    const levels = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+    const levelAt = node => node.levelId ?? [...levels].reverse().find(level => node.position.z >= level.elevationMm)?.id;
+    const lights = (model.systems ?? []).filter(system => system.discipline === 'electrical').flatMap(system => system.nodes.filter(node => COMPOSITION_LIGHTS.has(node.kind) && !settings.exempt(node.id, 'light-grid')));
+    for (const space of model.spaces ?? []) {
+      const box = rectangleBounds(space.boundary ?? []);
+      if (!box) continue;
+      const inside = lights.filter(node => levelAt(node) === space.levelId && node.position.x > box.minX && node.position.x < box.maxX && node.position.y > box.minY && node.position.y < box.maxY);
+      if (!inside.length) continue;
+      const W = box.maxX - box.minX, H = box.maxY - box.minY, n = inside.length;
+      const cols = Math.max(1, Math.min(n, Math.round(Math.sqrt(n * W / H)))), rows = Math.ceil(n / cols);
+      if (cols * rows !== n) continue;
+      const sorted = [...inside].sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+      const byRow = Array.from({ length: rows }, (_, r) => sorted.slice(r * cols, (r + 1) * cols).sort((a, b) => a.position.x - b.position.x));
+      byRow.forEach((row, r) => row.forEach((node, c) => {
+        const x = Math.round(box.minX + (c + 0.5) * W / cols), y = Math.round(box.minY + (r + 0.5) * H / rows);
+        if (Math.abs(node.position.x - x) <= tol && Math.abs(node.position.y - y) <= tol) return;
+        const value = { x, y, z: node.position.z };
+        propose(node.id, 'position', node.position, value, 'light-grid');
+        note('advisory', 'light-grid', node.id, `${node.id} is off the even ${cols} by ${rows} light grid for ${space.name}. Suggested position x ${x}, y ${y}; move the ends of its routes with it.`, { field: 'position', value });
+      }));
+    }
+  }
+
   // Sutherland-Hodgman clip of a polygon to the half plane f(p) >= 0.
   function clipHalfPlane(points, f) {
     const out = [];
@@ -3101,8 +3491,11 @@
       for (const crossing of crossings) {
         const [h0, h1] = hRange([at(crossing[0]), at(crossing[1])]);
         const along = arcWall ? arcWall.alongOf(at((crossing[0] + crossing[1]) / 2)) : dot2(sub(at((crossing[0] + crossing[1]) / 2), wall.start), u);
-        const hit = openings.find(item => along >= item.offsetMm && along <= item.offsetMm + item.widthMm);
-        const spans = hit ? [[base, base + hit.sillMm], [base + hit.sillMm + hit.heightMm, base + wall.heightMm]] : [[base, base + wall.heightMm]];
+        const holes = openings.filter(item => along >= item.offsetMm && along <= item.offsetMm + item.widthMm).map(item => [base + item.sillMm, base + item.sillMm + item.heightMm]).sort((a, b) => a[0] - b[0]);
+        // Solid wall between, below, and above every opening the plane passes through (stacked ones too).
+        const spans = []; let solidFrom = base;
+        for (const [z0, z1] of holes) { spans.push([solidFrom, z0]); solidFrom = Math.max(solidFrom, z1); }
+        spans.push([solidFrom, base + wall.heightMm]);
         for (const [z0, z1] of spans) if (z1 - z0 > 1) cut.push({ id: wall.id, kind: 'wall', h0, h1, z0, z1 });
         const bands = wallBands(model, wall);
         const headers = openings.flatMap(opening => (opening.headers ?? []).filter(header => {
@@ -4072,7 +4465,10 @@
     'label.placement': 'Drawing label', 'dimension.placement': 'Dimension placement', 'section.empty': 'Section', 'webgl.unavailable': '3D view', 'structure.review': 'Structure',
     'material.key-overflow': 'Material key', 'material.evidence': 'Material sources', 'material.category-use': 'Material use',
     'site.survey': 'Survey', 'site.schedule-overflow': 'Plant schedule', 'site.outside-lot': 'Outside the lot', 'surface.under-building': 'Surface placement', 'planting.under-building': 'Planting placement', 'surface.path': 'Path geometry', 'surface.anchor': 'Anchor', 'surface.anchor-angle': 'Walk alignment', 'terrain.constraint-failed': 'Terrain', 'terrain.degenerate': 'Terrain', 'scene.reduced-detail': '3D view', 'wall.join-fallback': 'Wall join',
-    'source.stale': 'Source image', 'source.manifest': 'Source images', 'source.disagree': 'Source scale'
+    'source.stale': 'Source image', 'source.manifest': 'Source images', 'source.disagree': 'Source scale',
+    'composition.symmetry': 'Facade symmetry', 'composition.thirds': 'Facade thirds', 'composition.rhythm': 'Bay rhythm', 'composition.stacking': 'Stacked openings',
+    'composition.cross-facade': 'Opposite facades', 'composition.head-alignment': 'Head heights', 'composition.partition-conflict': 'Partition at opening',
+    'composition.fixture-centering': 'Fixture centring', 'composition.light-grid': 'Light layout', 'composition.exception': 'Composition exception'
   };
   // Groups findings by code so repeated notes (one per system, say) read as one entry.
   function reviewQueue(findings) {
@@ -4311,7 +4707,16 @@
       // Arc walls extrude their curved band, so pieces between openings meet without gaps.
       const arcWall = wall.bulge ? wallGeometry(wall) : null, wallBase = (level?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0);
       const addChunk = (from,to,z0,z1) => { if (to-from < 1 || z1-z0 < 1) return; if (arcWall) { pushExtrusion(gls.triangles, wallBand(arcWall, from, to, wall.thicknessMm / 2, -wall.thicknessMm / 2), wallBase + z0, wallBase + z1, color); return; } const offset=(from+to)/2; const x=wall.start.x+unit.x*offset; const y=wall.start.y+unit.y*offset; pushPrism(gls.triangles,x/1000,((level?.elevationMm??0)+(wall.baseOffsetMm??0)+z0+(z1-z0)/2)/1000,-y/1000,(to-from)/1000,(z1-z0)/1000,wall.thicknessMm/1000,angle,color); };
-      let cursor=0; for(const opening of openings){addChunk(cursor,opening.offsetMm,0,wall.heightMm);addChunk(opening.offsetMm,opening.offsetMm+opening.widthMm,0,opening.sillMm);addChunk(opening.offsetMm,opening.offsetMm+opening.widthMm,opening.sillMm+opening.heightMm,wall.heightMm);cursor=opening.offsetMm+opening.widthMm;} addChunk(cursor,length,0,wall.heightMm);
+      // Split the wall at every jamb; each piece is solid except where openings over it are, so openings
+      // stacked in one wall (a clerestory over a window) both stay open.
+      const jambs = [...new Set([0, length, ...openings.flatMap(opening => [opening.offsetMm, opening.offsetMm + opening.widthMm])])].sort((a, b) => a - b);
+      for (let i = 0; i < jambs.length - 1; i += 1) {
+        const from = jambs[i], to = jambs[i + 1], mid = (from + to) / 2;
+        const holes = openings.filter(opening => opening.offsetMm <= mid && mid <= opening.offsetMm + opening.widthMm).map(opening => [opening.sillMm, opening.sillMm + opening.heightMm]).sort((a, b) => a[0] - b[0]);
+        let z = 0;
+        for (const [z0, z1] of holes) { addChunk(from, to, z, z0); z = Math.max(z, z1); }
+        addChunk(from, to, z, wall.heightMm);
+      }
     }
     for (const object of [...model.fixtures, ...model.equipment]) {
       const color = object.kind.includes('panel') ? DISCIPLINES.electrical.color : object.kind.includes('heat') ? DISCIPLINES.mechanical.color : '#c8a46b';
@@ -5872,7 +6277,7 @@
   }
 
   const studioApi = {
-    state, PROFILES, DISCIPLINES, SYSTEM_SYMBOLS, EQUIPMENT_TAGS, systemSymbol, MATERIAL_CATEGORIES, HEADER_KINDS, materialContext, materialsActive, wallBands, segmentPolygonIntervals, triangulate, pushExtrusion, validateModel, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
+    state, PROFILES, DISCIPLINES, SYSTEM_SYMBOLS, EQUIPMENT_TAGS, systemSymbol, MATERIAL_CATEGORIES, HEADER_KINDS, materialContext, materialsActive, wallBands, segmentPolygonIntervals, triangulate, pushExtrusion, validateModel, compositionReport, COMPOSITION_RULES, COMPOSITION_STRATEGIES, profileFor, selectScale, createPlacer, placeExtent, drawingArea,
     bulgeArc, curvePoints, curvePathD, curveLength, ringOf, curveIssues, pathIssues, centerlineIssues, pathOutline, pathFillets, centerlineLength, outlineOf, anchorPoint, resolvePath, resolveAnchors, polygonArea, pointInPolygon, wallGeometry, wallLength, wallEndClip, terrainOf, siteExtent,
     renderPlanSheet, renderElevationSheet, renderSectionSheet, renderSitePlanSheet, hasNonStructural, siteCategories, parseSiteHidden, sectionGeometry, renderDrawingSet, modelFingerprint, hasSiteContent, availableViews, resolveView, plantSchedule, plantingQuantity, bearingLabel,
     planSvg, elevationSvg, sectionSvg, buildScene, pushPrism, rectangleBounds, renderDocument, zipFiles, crc32, formatLength, entityDetails, approvalsExport,

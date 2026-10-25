@@ -21,7 +21,9 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
   above half its thickness.
 - A hosted opening fits within its wall length (the arc length for an arc
   wall) and wall height after sill, width, and head clearance are applied, and
-  does not overlap another opening in the same wall.
+  does not overlap another opening in the same wall. Openings may share part
+  of their span along the wall when one sits wholly above the other (a
+  clerestory over a window).
 - A stair has positive width, connects two existing levels, and its total rise
   equals the level-elevation difference within 3 mm.
 - Every system edge references two nodes in the same system.
@@ -77,6 +79,10 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
 - A sheet's material key has no room for every material the sheet draws
   (`material.key-overflow`), or a systems sheet's symbol key has no room for
   every symbol it draws (`symbol.key-overflow`).
+- An exterior opening spans the end of an interior wall below its head
+  (`composition.partition-conflict`), a composition exception names an
+  element not in the model (`composition.exception`), or a facade uses the
+  rhythm strategy without `bayMm` (`composition.rhythm`).
 - A dimension value has no clear position off walls, openings, hard
   surfaces, and other lettering (`dimension.placement`).
 - The plant schedule on L-101 has no room for every row
@@ -133,6 +139,16 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
 - A device was placed from a model-code baseline in `mep-placement-guide.md`
   that no code finding for the jurisdiction confirms. Its evidence names the
   rule ID and stays `needs-review`.
+- A visible element breaks the composition (`composition-guide.md`): a row
+  does not follow its facade strategy (`composition.symmetry`,
+  `composition.thirds`, `composition.rhythm`), an upper opening does not stack
+  over the one below (`composition.stacking`), matching openings on opposite
+  facades do not line up (`composition.cross-facade`), heads in a row differ
+  (`composition.head-alignment`), a sink is off the centre of the window over
+  it (`composition.fixture-centering`), or ceiling lights are off an even grid
+  (`composition.light-grid`). Each finding carries a suggested model value;
+  `compose.mjs` gathers them into one proposed layout. Elements listed in
+  `composition.exceptions` are skipped.
 
 ## Cross-View Invariants
 

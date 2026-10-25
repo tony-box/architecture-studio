@@ -82,6 +82,20 @@
       ]
     },
     {
+      "id": "composed-facades",
+      "prompt": "Design a 30 by 30 foot insulated shop with a 12 foot overhead door on the east gable, an entry door on the south facing the house, and plenty of daylight from windows and clerestories on the north and south walls. I have no style preference.",
+      "expected_output": "A composed starting layout: symmetric north and south facades with clerestories stacked over windows and aligned across the building, and the doors kept where function puts them.",
+      "assertions": [
+        "brief.json records preferences.style, and the model sets composition.strategy to symmetric because the user has no preference",
+        "The overhead door and the entry door have composition.exceptions entries whose reasons name the driveway approach and the house",
+        "compose.mjs reports no composition findings with a suggestion; every remaining finding has a recorded exception",
+        "North and south windows of the same size mirror about the facade centreline, clerestories stack over them, and matching openings on the north and south facades share plan positions within the tolerance",
+        "Offsets were taken from compose.mjs rather than mirrored by hand, including on the wall that runs right to left",
+        "No exterior opening spans the end of an interior wall, and HANDOFF.md lists each composition exception with its reason",
+        "Plumbing and electrical routes are short and stacked, not arranged for symmetry"
+      ]
+    },
+    {
       "id": "mep-device-placement",
       "prompt": "In the lakeside barn residence, add outlets, light switches, and lights to the upstairs bathroom and great room, and put smoke and CO alarms where they belong. It's in upstate New York and there's a propane range.",
       "expected_output": "Devices placed by rule from mep-placement-guide.md, connected to conceptual circuits, with model-code baselines kept separate from cited findings.",

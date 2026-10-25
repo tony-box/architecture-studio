@@ -81,7 +81,8 @@
         "water": { "$ref": "#/$defs/answer" },
         "accessibility": { "$ref": "#/$defs/answer" },
         "appliances": { "$ref": "#/$defs/answer" },
-        "lighting": { "$ref": "#/$defs/answer" }
+        "lighting": { "$ref": "#/$defs/answer" },
+        "style": { "$ref": "#/$defs/answer", "description": "Design style: symmetric/traditional, balanced/modern, utilitarian/rhythmic, or no preference. Sets composition.strategy (composition-guide.md)." }
       }
     },
     "sources": {

@@ -16,6 +16,10 @@
 - [ ] Plumbing, electrical, and mechanical layers can be isolated.
 - [ ] Every room passes the Room Checklist in `mep-placement-guide.md`, and
       each placed device's evidence names its rule ID or code finding.
+- [ ] `compose.mjs` reports no unresolved composition findings: each was
+      applied or has a `composition.exceptions` entry whose reason names the
+      code, structure, function, or owner choice that wins, and no
+      `composition.partition-conflict` warning remains.
 - [ ] Code findings cite sources or explicitly report research as unavailable.
 - [ ] Diagnostics, Code, Assumptions, and Handoff surfaces all state that the
       work is conceptual and requires professional verification.
@@ -56,7 +60,8 @@
 - [ ] `ASSUMPTIONS.md` separates user facts, calibrated attachments,
       heuristics, code sources, and generated choices.
 - [ ] `HANDOFF.md` identifies the selected concept, rejected alternatives,
-      unresolved decisions, code coverage, and questions by discipline.
+      unresolved decisions, code coverage, and questions by discipline, and
+      lists every composition exception with its reason.
 - [ ] `HANDOFF.md` lists every image-derived dimension with its source image,
       its method (printed, manual, control points, or an estimated scale bar,
       dimension, stated scale, or map metadata), and its ± uncertainty, and

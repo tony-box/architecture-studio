@@ -84,6 +84,23 @@ test('the schema checker rejects malformed models', () => {
   assert.ok(errors.some(error => error.includes('unexpected property extra')));
 });
 
+test('the schema accepts a composition block and rejects malformed ones', () => {
+  const model = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', examples[0], 'building.json'), 'utf8'));
+  model.composition = {
+    strategy: 'symmetric', facades: { east: { strategy: 'rhythm', bayMm: 3048 } }, toleranceMm: 13, minGapMm: 400, cornerReturnMm: 600,
+    exceptions: [{ entityId: 'opening-entry', reason: 'Faces the approach.' }, { entityId: 'opening-entry', rules: ['head-alignment'], reason: 'Standard door height.' }]
+  };
+  assert.deepEqual(check(schema, model), []);
+  model.composition.strategy = 'random';
+  model.composition.facades.up = {};
+  model.composition.exceptions.push({ entityId: 'opening-entry', rules: ['vibes'] });
+  const errors = check(schema, model).join('\n');
+  assert.match(errors, /composition\.strategy: "random" not in enum/);
+  assert.match(errors, /composition\.facades: unexpected property up/);
+  assert.match(errors, /exceptions\[2\]: missing reason/);
+  assert.match(errors, /exceptions\[2\]\.rules\[0\]: "vibes" not in enum/);
+});
+
 test('the schema enforces curve vertices, draped surfaces, and plantings', () => {
   const model = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', 'hillside-garden-house', 'building.json'), 'utf8'));
   const bad = structuredClone(model);

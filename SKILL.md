@@ -4,7 +4,7 @@ description: Brainstorm close-to-accurate building concepts with drafted plans, 
 license: MIT
 metadata:
   author: Tony Box
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # Architecture Studio
@@ -81,7 +81,9 @@ and times out after five seconds. It does not install or replace anything.
 3. **Read the contracts.** Read `references/coordinate-contract.md`,
    `references/building.schema.json`, `references/model-validation.md`, and
    `references/drafting-standard.md` before authoring geometry, and
-   `references/curves.md` before authoring anything curved.
+   `references/curves.md` before authoring anything curved. Read
+   `references/composition-guide.md` before placing doors, windows, walls,
+   counters, fixtures, or any other element people see.
 4. **Write the model.** Write one active model to `models/building.json`.
    Store complete alternative concepts under `models/variants/`; do not
    maintain separate plan, elevation, or 3D geometry sources. Add section
@@ -101,6 +103,12 @@ and times out after five seconds. It does not install or replace anything.
    the model then draws a site plan, L-101. Lot lines, setbacks, and existing
    trees come from a survey or the user, never from imagery or a guess;
    `references/image-intake.md` covers reading surveys and site images.
+   Compose what people see: set `composition.strategy` from the brief's
+   style (symmetric when the user has no preference), and lay out openings
+   and visible items by `references/composition-guide.md`. Code, structure,
+   and function always come first; when one forces an element off the
+   pattern, keep it there and record a `composition.exceptions` entry with
+   the reason.
 5. **Validate.** Check model references, polygons, hosted openings, vertical
    datums, stairs, and system connectivity. `export-drawings.mjs` (step 9)
    prints every validation error and writes nothing until they are fixed.
@@ -110,7 +118,11 @@ and times out after five seconds. It does not install or replace anything.
    and check its width, radii, bounds, and clearances as numbers; never judge a
    curve by guessing how it looks. When the project has images, run
    `node <skill>/scripts/import-image.mjs check <project>` and resolve
-   everything it lists.
+   everything it lists. After placing or moving doors, windows, fixtures, or
+   visible devices, run
+   `node <skill>/scripts/compose.mjs --project <project>` and apply its
+   proposed layout, or record an exception for each finding you keep. Never
+   mirror or align offsets by eye; the script accounts for wall direction.
 6. **Research the code.** If the user allowed network research, research
    adopted building codes and local amendments from official sources
    following `references/code-research.md`. Otherwise inspect user-provided
@@ -119,7 +131,10 @@ and times out after five seconds. It does not install or replace anything.
    code finding.
 7. **Lay out systems.** Stabilize the architectural envelope, then place and
    route conceptual plumbing, electrical, and mechanical systems according to
-   `references/mep-concept-rules.md`. Place fixtures, receptacles, switches,
+   `references/mep-concept-rules.md`. Hidden routes optimize length, bends,
+   and stacking and never chase symmetry; visible devices (lights, registers,
+   ductless heads, sinks) follow the composition guide. Place fixtures,
+   receptacles, switches,
    lights, alarms, and HVAC terminals with `references/mep-placement-guide.md`,
    and read it again whenever the user asks to add or move one. Code findings
    for the jurisdiction override its model-code baselines.
@@ -193,4 +208,6 @@ HANDOFF.md
 
 The handoff must distinguish measured, user-supplied, inferred, researched,
 and generated facts. It must list unresolved code questions and all MEP,
-structural, site, and survey decisions that require professional verification.
+structural, site, and survey decisions that require professional verification,
+and every composition exception with its reason, so the architect can tell
+deliberate asymmetry from open design choices.

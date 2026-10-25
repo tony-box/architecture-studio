@@ -7,6 +7,20 @@ licensed engineering.
 Where each fixture, device, and terminal goes, and which model-code rule or
 design practice puts it there, is in `mep-placement-guide.md`.
 
+## Seen and Unseen
+
+- **Visible endpoints** (lights, fans, registers, grilles, ductless heads,
+  sinks, exterior fixtures, thermostats) are part of the composition. Place
+  them by `composition-guide.md` within the clearances and heights of
+  `mep-placement-guide.md`.
+- **Hidden routes** (pipes, drains, vents, wiring, conduit, ducts, line sets)
+  never chase symmetry. Make them short and straight with few bends and
+  crossings. Stack wet rooms and risers. Share chases, and run parallel to
+  the structure.
+- Routes adapt to the architecture. When moving a visible element would
+  shorten or simplify a route a lot, propose the move to the user instead of
+  making it.
+
 ## Sequence
 
 1. Stabilize levels, walls, openings, stairs, shafts, wet spaces, equipment
