@@ -46,6 +46,9 @@ Each finding records:
 - an optional numeric check only when the source states an explicit parameter.
 
 Use `references/code-findings.schema.json` for the output shape.
+The agent writes both the JSON and `reviews/code-review.md`; no repository
+script researches adoption or evaluates arbitrary code parameters. The
+viewer displays the recorded findings and coverage without certifying them.
 
 ## Applying Findings
 
@@ -53,6 +56,9 @@ Only explicit, cited, and machine-testable parameters may become geometry
 checks, such as a minimum width, maximum rise, minimum headroom, opening area,
 fixture clearance, equipment working space, or setback. Interpretive and
 conditional provisions remain review notes.
+Record the evaluated result in the finding's `check.result`; it is not
+recomputed by the viewer when geometry changes. Re-evaluate affected findings
+and coverage after a model edit, or mark them `not-evaluated` and unresolved.
 
 The coverage report uses four buckets:
 

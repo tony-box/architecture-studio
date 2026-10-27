@@ -67,6 +67,8 @@
         "setbacks": { "$ref": "#/$defs/answer" },
         "orientation": { "$ref": "#/$defs/answer" },
         "slope": { "$ref": "#/$defs/answer" },
+        "survey": { "$ref": "#/$defs/answer" },
+        "landscape": { "$ref": "#/$defs/answer" },
         "utilities": { "$ref": "#/$defs/answer" },
         "access": { "$ref": "#/$defs/answer" }
       }

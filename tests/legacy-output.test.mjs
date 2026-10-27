@@ -1,5 +1,5 @@
-// Freezes the drawing sets of the examples that predate site plans and curved geometry. Site
-// features and curves are additive: a model that uses neither must draw exactly as it did.
+// Drawing snapshots for the four original building examples. Refresh only after reviewing
+// intentional renderer or example changes; the legacy filename keeps the existing baseline history.
 //
 //   UPDATE_GOLDEN=1 node --test tests/legacy-output.test.mjs   # rewrite after an intended change
 import assert from 'node:assert/strict';
@@ -25,7 +25,7 @@ function digest(name) {
   };
 }
 
-test('drawing sets of models without site features or curves are unchanged', () => {
+test('original example drawing sets match their reviewed snapshots', () => {
   const actual = Object.fromEntries(LEGACY_EXAMPLES.map(name => [name, digest(name)]));
   if (process.env.UPDATE_GOLDEN) {
     fs.mkdirSync(path.dirname(goldenPath), { recursive: true });

@@ -283,6 +283,10 @@ table".
   never as invented values), and a one-line evidence summary. An Approve
   button records the owner's sign-off (approved state shows a check and Undo);
   entities already accepted in the model say so instead.
+  Approvals are browser-local and are not automatically invalidated by model
+  edits. The exported approval file identifies the whole model at export
+  time, not each entity at approval time. Re-review changed elements before
+  handing those approvals to the agent.
 - **Findings on the Code review page**: a card with a coloured severity word
   and topic, same clickable rule.
 - **Sheet entities** are focusable; Enter or Space inspects, Escape clears.

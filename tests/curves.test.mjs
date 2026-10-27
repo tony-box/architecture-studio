@@ -104,7 +104,7 @@ test('curved slabs and surfaces render in plan, section, and 3D', () => {
   const box = api.rectangleBounds(slab.boundary);
   // Round the south-east corner of the slab with a quarter arc (bulge tan(22.5 degrees)).
   slab.boundary = [{ x: box.minX, y: box.minY }, { x: box.maxX - 2000, y: box.minY, bulge: Math.tan(Math.PI / 8) }, { x: box.maxX, y: box.minY + 2000 }, { x: box.maxX, y: box.maxY }, { x: box.minX, y: box.maxY }];
-  model.materials = [{ id: 'mat-pavers', name: 'Pavers', category: 'concrete' }];
+  model.materials = [...(model.materials ?? []), { id: 'mat-pavers', name: 'Pavers', category: 'concrete' }];
   model.surfaces = [{ id: 'surface-curved-walk', name: 'Curved Walk', levelId: 'level-ground', boundary: [{ x: box.minX, y: box.minY - 2400, c1: { x: box.minX + 3000, y: box.minY - 3600 }, c2: { x: box.minX + 6000, y: box.minY - 1200 } }, { x: box.minX + 9000, y: box.minY - 2400 }, { x: box.minX + 9000, y: box.minY - 1200, c1: { x: box.minX + 6000, y: box.minY }, c2: { x: box.minX + 3000, y: box.minY - 2400 } }, { x: box.minX, y: box.minY - 1200 }], topElevationMm: 0, thicknessMm: 100, materialId: 'mat-pavers', evidence: fixture.levels[0].evidence }];
   assert.deepEqual([...errors(model).map(item => item.code)], []);
   const plan = api.renderPlanSheet(model, 'level-ground');

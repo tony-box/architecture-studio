@@ -95,21 +95,25 @@ with each other and with nearby openings.
 ## Model
 
 ```json
-"composition": {
-  "strategy": "symmetric",
-  "facades": { "east": { "strategy": "balanced" } },
-  "toleranceMm": 13,
-  "minGapMm": 400,
-  "cornerReturnMm": 600,
-  "exceptions": [
-    { "entityId": "opening-overhead-door", "reason": "Set by the lift bay and driveway approach." },
-    { "entityId": "opening-window-s1", "rules": ["head-alignment"], "reason": "4 ft sill keeps the window above benches." }
-  ]
+{
+  "composition": {
+    "strategy": "symmetric",
+    "facades": { "east": { "strategy": "balanced" } },
+    "toleranceMm": 13,
+    "minGapMm": 400,
+    "cornerReturnMm": 600,
+    "exceptions": [
+      { "entityId": "opening-overhead-door", "reason": "Set by the lift bay and driveway approach." },
+      { "entityId": "opening-window-s1", "rules": ["head-alignment"], "reason": "4 ft sill keeps the window above benches." }
+    ]
+  }
 }
 ```
 
 - Every field is optional. Without the block, the checker uses the
   `symmetric` strategy and the defaults shown.
+  Author new examples and concepts with an explicit strategy so their intent
+  survives changes to defaults.
 - `strategy` is `symmetric`, `balanced`, `rhythm`, or `none`. `none` turns off
   every composition check except partition conflicts.
 - An exception without `rules` fixes the element in place. It is skipped by
@@ -141,6 +145,18 @@ recording an exception. The same findings show as notes in the viewer.
 Never type a mirrored offset by hand. Openings are measured from their wall's
 start point, so mirroring by eye on a wall that runs right to left is how
 facades go wrong.
+
+### Automated coverage
+
+The current facade checker groups straight, axis-aligned exterior walls.
+Check arc walls and oblique facades manually with `inspect.mjs`; their absence
+from a proposal is not approval of their composition. Sink centring checks
+nearby windows; light grids apply to rectangular rooms when the device count
+fits a complete grid. Counter runs, terminal alignment, window proportions,
+size counts, and lighting in irregular rooms still need manual review.
+Corner returns and gaps constrain proposals, but are not a structural check.
+Some findings have no safe proposal. Record a justified exception or change
+the design, rather than assuming an empty `proposal` means no findings.
 
 ## Handoff
 

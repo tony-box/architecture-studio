@@ -18,15 +18,35 @@ export function textBoxes(svg) {
   // checked against itself rather than skipped.
   const titleBlockX = w - 10 - 64, viewTitleY = h - 10 - 6 - 18;
   const boxes = [];
-  for (const match of svg.matchAll(/<text x="([-\d.]+)" y="([-\d.]+)" font-size="([\d.]+)" text-anchor="(\w+)"[^>]*?(?: transform="rotate\(([-\d.]+) [-\d.]+ [-\d.]+\)")?>([^<]*)<\/text>/g)) {
+  const transforms = [{ x: 0, y: 0, sx: 1, sy: 1 }];
+  for (const token of svg.matchAll(/<g\b[^>]*>|<\/g>|<text\b[^>]*>[^<]*<\/text>/g)) {
+    const tag = token[0], parent = transforms.at(-1);
+    if (tag === '</g>') { transforms.pop(); continue; }
+    if (tag.startsWith('<g')) {
+      const next = { ...parent }, transform = tag.match(/transform="([^"]+)"/)?.[1] ?? '';
+      for (const [, kind, args] of transform.matchAll(/([a-z]+)\(([^)]+)\)/g)) {
+        const values = args.trim().split(/[,\s]+/).map(Number);
+        if (kind === 'translate') { next.x += next.sx * values[0]; next.y += next.sy * (values[1] ?? 0); }
+        else if (kind === 'scale') { next.sx *= values[0]; next.sy *= values[1] ?? values[0]; }
+        else throw new Error(`Unsupported lettering group transform: ${kind}`);
+      }
+      transforms.push(next);
+      continue;
+    }
+    const match = tag.match(/<text x="([-\d.]+)" y="([-\d.]+)" font-size="([\d.]+)" text-anchor="(\w+)"[^>]*?(?: transform="rotate\(([-\d.]+) [-\d.]+ [-\d.]+\)")?>([^<]*)<\/text>/);
+    assert.ok(match, `Unsupported text shape: ${tag}`);
     const [, xs, ys, ss, anchor, rotate, raw] = match, x = Number(xs), y = Number(ys), s = Number(ss), text = decode(raw);
     if (!text.trim()) continue;
-    const region = x >= titleBlockX ? 'title block' : y >= viewTitleY ? 'view title' : 'drawing';
+    const sheetX = parent.x + parent.sx * x, sheetY = parent.y + parent.sy * y;
+    const region = sheetX >= titleBlockX ? 'title block' : sheetY >= viewTitleY ? 'view title' : 'drawing';
     const width = text.length * s * 0.62, x0 = anchor === 'start' ? 0 : anchor === 'end' ? -width : -width / 2;
     // Glyphs sit from about 0.75 of the size above the baseline to 0.2 below; shrink slightly so touching is not overlap.
     const local = [[x0 + 0.15, -0.72 * s], [x0 + width - 0.15, -0.72 * s], [x0 + width - 0.15, 0.15 * s], [x0 + 0.15, 0.15 * s]];
     const a = (Number(rotate) || 0) * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a);
-    boxes.push({ text, region, points: local.map(([px, py]) => ({ x: x + px * c - py * sn, y: y + px * sn + py * c })) });
+    boxes.push({ text, region, points: local.map(([px, py]) => ({
+      x: parent.x + parent.sx * (x + px * c - py * sn),
+      y: parent.y + parent.sy * (y + px * sn + py * c)
+    })) });
   }
   return boxes;
 }
@@ -61,4 +81,12 @@ test('the overlap check finds lettering drawn on top of other lettering', () => 
   // Overlaps inside the title block and the view title band are caught too.
   const block = '<svg viewBox="0 0 431.8 279.4"><text x="362" y="60" font-size="2.4" text-anchor="start" fill="#000">PROJECT NAME</text><text x="362" y="60.5" font-size="2.4" text-anchor="start" fill="#000">LOCATION</text><text x="40" y="262" font-size="4.8" text-anchor="start" fill="#000">SITE PLAN</text><text x="45" y="262" font-size="2.4" text-anchor="start" fill="#000">SCALE</text></svg>';
   assert.deepEqual(overlappingText(block).map(hit => hit.split(':')[0]), ['title block', 'view title']);
+});
+
+test('legend lettering is checked at its translated and scaled sheet position', () => {
+  const text = '<text x="0" y="0" font-size="2.4" text-anchor="start">SD</text>';
+  const svg = `<svg viewBox="0 0 431.8 279.4"><g transform="translate(362 80) scale(0.8)">${text}</g><g transform="translate(362 90) scale(0.8)">${text}</g></svg>`;
+  assert.deepEqual(overlappingText(svg), []);
+  assert.ok(textBoxes(svg).every(box => box.region === 'title block'));
+  assert.equal(overlappingText(svg.replace('362 90', '362 80')).length, 1);
 });

@@ -91,8 +91,9 @@ and times out after five seconds. It does not install or replace anything.
    add a `materials` catalog and assign wall and slab `layers`, opening
    `headers`, `beams`, `columns`, `foundations`, and site `surfaces` so the
    drawings hatch by material; never invent a material the brief does not
-   support, and leave unknown elements without one. Draw walks, paths, and
-   drives as surface `path`s (a centreline, a width, and corner radii), bowed
+   support, and leave unknown elements without one. Draw constant-width walks,
+   paths, and drives as surface `path`s (a centreline, a width, and corner
+   radii); use a `boundary` for a variable-width landing or apron. Draw bowed
    edges and curved decks, rooms, and walls with `bulge`, and only free-form
    beds with Bezier controls. Anchor any point that should line up with a door,
    window, or wall instead of typing its coordinates. Follow
@@ -112,6 +113,8 @@ and times out after five seconds. It does not install or replace anything.
 5. **Validate.** Check model references, polygons, hosted openings, vertical
    datums, stairs, and system connectivity. `export-drawings.mjs` (step 9)
    prints every validation error and writes nothing until they are fixed.
+   Its runtime checks are not a complete JSON Schema or professional review;
+   follow the manual checks in `references/model-validation.md` as well.
    Resolve every error before handoff. Preserve warnings and advisories in the
    diagnostics and assumptions outputs. After adding or changing a curved
    element, run `node <skill>/scripts/inspect.mjs --project <project> --id <id>`
@@ -154,12 +157,17 @@ and times out after five seconds. It does not install or replace anything.
    change; never hand-write or edit the SVG files. The viewer's Download
    drawing set button packages these files.
 10. **Apply approvals.** If the user returns a `reviews/approvals.json` (the
-    viewer's Approve button exports it with the drawing set), set each listed
+    viewer's Download drawing set includes browser-stored approvals), first
+    check its `projectId` and whole-model `modelFingerprint` against the
+    current model and export manifest. The viewer does not store an
+    entity fingerprint or automatically invalidate approvals after edits.
+    If the model changed after approval, ask the user to review and
+    re-approve the affected elements; without a saved comparison model,
+    re-approve all listed elements. Do not infer freshness from the date.
+    Once confirmed, set each listed
     entity's evidence to `source: "user"` and `status: "accepted"`, keep its
-    confidence, and note the approval date. Ignore entries whose
-    `modelFingerprint` predates edits to that entity and ask the user to
-    re-approve. An approval is the owner's sign-off on the concept, never a
-    professional or code approval.
+    confidence, and note the approval date. An approval is the owner's
+    sign-off on the concept, never a professional or code approval.
 11. **Hand off.** Run the cross-view checklist in `references/checklist.md`,
     then write `ASSUMPTIONS.md` and `HANDOFF.md` for the architect and
     engineering team. Rerun the export last so the manifest lists both
@@ -167,6 +175,9 @@ and times out after five seconds. It does not install or replace anything.
 12. **Share (optional).** To send the concept to someone without the skill,
     run `node <skill>/scripts/bundle.mjs <project>`. It writes one
     self-contained HTML file to `exports/` that opens with a double-click.
+    It embeds the model and code findings, not source images, the drawing
+    ZIP, the brief, or handoff files. Share the drawing ZIP or complete
+    project separately when those are needed.
 
 To move an existing project to a newer version of this skill's viewer, run
 `node <skill>/scripts/init.mjs <project> --update`. It replaces only
@@ -211,3 +222,14 @@ and generated facts. It must list unresolved code questions and all MEP,
 structural, site, and survey decisions that require professional verification,
 and every composition exception with its reason, so the architect can tell
 deliberate asymmetry from open design choices.
+
+## Repository Examples
+
+The models under `examples/` are synthetic capability studies, not completed
+projects or confirmed user briefs. Use the example table in `README.md` to
+choose a starting point. Keep their explicit composition settings, supported
+device kinds, and evidence when adapting them; replace fictional site and
+jurisdiction data only with the user's confirmed information. Empty systems
+in a material or landscape study do not demonstrate a completed MEP layout.
+When maintaining the examples, edit their generator where present, regenerate
+the JSON and preview, and run the example checks described in the README.

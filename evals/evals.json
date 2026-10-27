@@ -39,7 +39,8 @@
       "prompt": "Using the supplied concept model, move the north great-room window 600 mm east and regenerate every view.",
       "expected_output": "One model edit reflected in plan, elevation, section, and 3D.",
       "assertions": [
-        "Only the canonical opening offset changes",
+        "The canonical opening offset changes; any dependent anchored geometry follows from the model rather than renderer-local edits",
+        "compose.mjs is rerun and the user-requested position is preserved with a reasoned exception when it conflicts with the composition",
         "Every derived view resolves the same opening ID and new offset",
         "The drawing set is re-exported so the manifest fingerprint matches the edited model",
         "No renderer-local opening coordinate is introduced"
@@ -51,7 +52,7 @@
       "expected_output": "A model with site content that draws L-101 and keeps every lot, tree, and grade fact traceable.",
       "assertions": [
         "The property line and setbacks come from the user's figures and the lot is not inferred from imagery; the property line evidence is not marked as a survey",
-        "The walk uses curve vertices and the lawn and beds use landscape material categories",
+        "The constant-width walk uses a surface path with corner radii and an opening anchor when it serves a door; the lawn and beds use landscape material categories",
         "The existing oak is a planting with status existing, the maples are proposed, and the plant schedule counts them",
         "Any contours are marked needs-review as a concept slope, not survey data",
         "exports/site/site-plan.svg exists and the manifest lists L-101",
@@ -60,10 +61,10 @@
     },
     {
       "id": "curve-edit-walk",
-      "prompt": "Using the hillside garden house example, make the front walk curve more gently and swing it about 3 feet further east, keeping it 4 feet wide.",
+      "prompt": "Using the hillside garden house example, make the front walk curve more gently, swing its middle about 3 feet further east, and widen it to 4 feet without changing the door.",
       "expected_output": "A predictable edit of the walk's centreline path, checked with inspect.mjs.",
       "assertions": [
-        "The walk stays a surface path anchored to the front door with matchWidth; the door and street lead-in points stay in line with their ends",
+        "The walk stays a surface path anchored to the front door; matchWidth is removed and widthMm is 1219, without changing the door width; the door and street lead-in points stay in line with their ends",
         "The bend moves east by about 914 mm through a point between the lead-ins, and the corner radii increase within the largest radius validation allows",
         "inspect.mjs reports the new width, radii, and bounds, unchanged end headings, and a non-negative clearance to the building and the property line",
         "The reply states the change in the user's terms (radius and direction), not as raw coordinates"
@@ -76,8 +77,8 @@
       "assertions": [
         "The landing's wall-side vertices use anchors on opening-deck-door at start and end, not typed coordinates",
         "The far vertices use the same jamb anchors with offsetMm 1829",
-        "The far edge carries a bulge of about 2 x 305 / 1829 (the bow rule), with the sign that bows it away from the house",
-        "inspect.mjs shows corners at the door's exterior jamb points and no findings",
+        "The far edge carries a bulge of about 2 x 305 / opening-deck-door.widthMm (the bow rule uses the door width as the chord, not the landing depth), with the sign that bows it away from the house",
+        "inspect.mjs confirms the door's exterior jamb anchors, landing bounds, and clearances; any overlap with the existing deck is explicitly resolved or documented",
         "The landing does not overlap the deck slab without the reply saying so"
       ]
     },
@@ -93,6 +94,18 @@
         "Offsets were taken from compose.mjs rather than mirrored by hand, including on the wall that runs right to left",
         "No exterior opening spans the end of an interior wall, and HANDOFF.md lists each composition exception with its reason",
         "Plumbing and electrical routes are short and stacked, not arranged for symmetry"
+      ]
+    },
+    {
+      "id": "viewer-refresh-and-sharing",
+      "prompt": "Bring my existing Architecture Studio project up to the installed skill version, keep my design and calibrated images, and give me a file I can email to my architect.",
+      "expected_output": "An approved, backed-up viewer refresh with regenerated drawings and an accurately described sharing package.",
+      "assertions": [
+        "The agent checks versions once, explains unknown or failed checks, and asks before updating the skill or viewer",
+        "init.mjs --update replaces only index.html and architecture-studio.json after a backup; model, brief, sources, and reviews are preserved",
+        "Validation and drawing exports run with the refreshed viewer, and any shared HTML bundle is regenerated",
+        "The agent explains that the HTML bundle embeds the model and code findings, not source images, the drawing ZIP, or Markdown handoff files",
+        "Browser approvals are rechecked after model edits; the agent does not claim per-entity approval fingerprints"
       ]
     },
     {

@@ -13,14 +13,14 @@ sections, schedules, measurements, and 3D meshes must derive from it.
 - Store true north as clockwise decimal degrees from positive `y`.
 - Keep the project origin and site datum explicit in `project.coordinates`.
 
-Do not encode page rotation, screen pixels, Three.js axes, SVG inversion, or
+Do not encode page rotation, screen pixels, renderer axes, SVG inversion, or
 display-unit formatting in model coordinates.
 
 ## Renderer Adapters
 
 Plan SVG maps domain `(x, y)` to sheet `(x, -y)` before fit/zoom transforms.
 Elevations project domain points onto the selected view axis and map `z` to
-negative sheet `y`. Three.js maps domain `(x, y, z)` to world `(x, z, -y)` in
+negative sheet `y`. The built-in WebGL2 renderer maps domain `(x, y, z)` to world `(x, z, -y)` in
 meters by multiplying millimeters by `0.001`.
 
 Every renderer must expose inverse transforms for pointer inspection and
@@ -236,7 +236,9 @@ A section definition is a vertical cutting plane through `start` and `end`.
 - Default comparison tolerance is 3 mm.
 - Feet/inches display rounds to the nearest configured fraction, defaulting to
   1/8 inch. Display strings are never used as inputs to geometry.
-- Metric display defaults to millimeters below 10 m and meters above 10 m.
+- Metric drawing dimensions use millimeters. Site distances and elevations
+  use meters; areas use square meters. Display formatting does not change
+  the stored unit.
 
 ## Source Images
 

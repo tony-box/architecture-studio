@@ -24,7 +24,7 @@ before writing `models/building.json`, save it to `brief.json` (validated by
 | --- | --- | --- |
 | `project.name` | What should we call this project? | Default: "Untitled building concept". |
 | `project.use` | What is the building for? | Residence, workshop, accessory dwelling, studio, mixed use, other. |
-| `location` | Where will it be built? | Locality, county, state or region, country. Drives code research and climate. Never ask for or store a street address unless the user offers it. |
+| `location` | Where will it be built? | Locality, county, state or region, country. Drives code research and climate. Never ask for or store a street address unless the user offers it; the schema has no address field, so keep an offered address in source notes only when needed. |
 | `levels` | How many levels, including any basement or loft? | Integer of at least 1. |
 | `units` | Feet and inches, or metric? | `feet-inches` or `metric`. Selects the drafting profile. |
 
@@ -68,7 +68,7 @@ before writing `models/building.json`, save it to `brief.json` (validated by
 | Field | Question | Notes |
 | --- | --- | --- |
 | `sources` | Do you have satellite views, site or floor plans, framing or truss plans, elevations, photos, sketches, or code documents? | Import each image with `node <skill>/scripts/import-image.mjs add` (PNG, JPEG, or WebP) and follow `image-intake.md`: estimate its scale from what is printed on it, report each estimate with its ± and method, and offer the viewer's manual calibration (start `serve.mjs` now if the user wants it; the Sources tab works before a model exists). Photos are context only. A sketch used for dimensions needs at least one trusted calibration dimension. Copy code documents and other files into `sources/`. |
-| `research.network` | May I look up the adopted building code online? | If no, code research is `unavailable` and the handoff lists the open code questions. |
+| `research.network` | May I look up the adopted building code online? | If no, use supplied official code documents. Mark research `unavailable` only when neither permitted online sources nor supplied documents establish it. |
 
 ## Before modeling
 

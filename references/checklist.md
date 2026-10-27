@@ -4,6 +4,9 @@
 
 - [ ] `models/building.json` parses and all stable IDs/references resolve.
 - [ ] No `error` findings remain in studio diagnostics.
+- [ ] Manual coordination checks in `model-validation.md` are complete or
+      explicitly unresolved; an error-free export was not treated as a full
+      schema, clash, device-placement, or code review.
 - [ ] Every plan, elevation, section, schedule, and 3D object derives from the
       active model; no renderer contains a competing geometry constant table.
 - [ ] Opening offsets, widths, sill heights, and head heights agree in plan,
@@ -21,6 +24,8 @@
       code, structure, function, or owner choice that wins, and no
       `composition.partition-conflict` warning remains.
 - [ ] Code findings cite sources or explicitly report research as unavailable.
+- [ ] Recorded code check results and coverage were re-evaluated after the
+      last relevant model edit; the viewer does not recompute them.
 - [ ] Diagnostics, Code, Assumptions, and Handoff surfaces all state that the
       work is conceptual and requires professional verification.
 - [ ] `exports/` was written by `export-drawings.mjs` after the last model
@@ -54,6 +59,8 @@
       line and existing trees trace to a survey or the user.
 - [ ] Curved walls, slabs, and surfaces agree in plan, section, elevation, and
       3D, and no `wall.join-fallback` advisory is left unexplained.
+- [ ] Changed paths and anchored surfaces were checked with `inspect.mjs`
+      for requested widths, radii, end headings, and numeric clearances.
 
 ## Professional Handoff
 
@@ -70,3 +77,7 @@
       accessibility, plumbing, electrical, and mechanical follow-up is explicit.
 - [ ] The package never describes itself as permit ready, engineered,
       construction ready, or code compliant.
+- [ ] Browser approvals were reviewed against the correct project and model
+      revision before applying them. Changed elements were re-approved.
+- [ ] The sharing format includes what the recipient needs: the HTML bundle
+      omits source images, the exported drawing ZIP, and handoff files.

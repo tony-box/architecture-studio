@@ -40,6 +40,9 @@ design practice puts it there, is in `mep-placement-guide.md`.
   equipment, and fixture connection nodes.
 - Waste paths must not rise toward discharge. Record slope and nominal size as
   `unverified` until supported by a cited rule and professional design.
+  The schema provides `nominalSize` and `evidence.note`, not a slope field.
+  Identify supply, waste, and vent service in system names and edge notes;
+  never present one undifferentiated route as all three services.
 - Show vertical stack alignment across levels and flag offsets above 25 mm.
 - Keep drainage, venting, backflow, freeze protection, well/septic design, and
   oil/grease handling as explicit review topics when applicable.
@@ -80,3 +83,6 @@ Flag route or service-zone intersections with:
 
 Every warning names affected entity IDs so an architect or engineer can locate
 the issue in plan and 3D.
+These collision and service checks are agent review tasks, not an automatic
+clash-detection engine. The runtime checks edge endpoints, node references,
+and isolated nodes; follow `model-validation.md` for the remaining checks.

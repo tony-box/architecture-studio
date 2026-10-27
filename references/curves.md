@@ -11,6 +11,7 @@ points. Then check the result with `scripts/inspect.mjs`.
 |---|---|---|
 | Anything that should line up with a door, window, or wall | An `anchor` on that point (see below) | Exact, and it follows the opening if it moves |
 | A walk, path, drive, or anything else of constant width | Surface `path` | You set the centreline, width, and corner radii; the outline is derived exactly, so the width never drifts |
+| A landing or apron that changes width | Surface `boundary` with anchors | Keeps the wider landing and narrower walk explicit; one path has only one width |
 | An edge that bows out or in: a curved lawn edge, a rounded patio, a curved deck, a bay | `bulge` on that edge | One number from how far the middle of the edge moves |
 | A circle (pond, tree ring) | Two vertices, both `bulge: 1` | Exact circle |
 | A rounded corner of an outline | Two vertices around the corner, the first with a `bulge` | Exact fillet of a chosen radius |
@@ -32,9 +33,16 @@ a stake; Beziers cannot.
     ],
     "cornerRadiusMm": 2438
   },
-  "followsGrade": true, "thicknessMm": 102, "materialId": "mat-concrete", "evidence": { ... }
+  "followsGrade": true, "thicknessMm": 102, "materialId": "mat-concrete",
+  "evidence": {
+    "source": "generated", "confidence": 0.6, "status": "needs-review",
+    "note": "Synthetic path example; width follows the door, not an accessibility minimum."
+  }
 }
 ```
+
+This entity fragment uses IDs from the imperial hillside example; it is not
+a standalone building model.
 
 - The centreline runs from one end to the other. Its first and last points
   are the middle of each end; the ends are square to the centreline. Start a
@@ -74,7 +82,7 @@ a stake; Beziers cannot.
 | "Move the curve east by 3 ft" | Move the points between the lead-in points east by 914 mm. If the walk has none (only lead-ins), add one where the bend should be |
 | "Make it an S-curve" | Two interior points turning opposite ways, with a straight between them |
 | "Straighten it" | Remove the interior points |
-| "Wider" / "narrower" | Change `widthMm`; check the radii are still more than half of it |
+| "Wider" / "narrower" | Change `widthMm`; if the path uses `matchWidth`, remove that flag before specifying a width, but retain the opening anchor. Check the radii still fit |
 | "Start it at the side door" | Move the first point to the middle of that door's opening, just outside the wall |
 
 ## Bowed edges (`bulge`)
@@ -89,7 +97,7 @@ that straight line (the sagitta).
   bulge bows the edge outward and a negative one bows it inward. On a
   clockwise outline it is the other way round. When unsure, compute the
   signed area of the outline: positive is counter-clockwise.
-- The arc's radius is `c / 2 × (1 + b²) / (2b)` for bulge `b`; quote it to the
+- The arc's radius is `c × (1 + b²) / (4 × abs(b))` for bulge `b`; quote it to the
   user when they ask for "a 20 ft radius edge" and solve for `b` instead:
   `b = (2R − √(4R² − c²)) / c` for an arc under a semicircle.
 - `bulge: 1` is a semicircle. Keep walls at 1 or below and outlines at 3.7 or

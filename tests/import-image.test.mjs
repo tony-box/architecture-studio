@@ -66,6 +66,16 @@ function check(schema, node, value, at = '$', errors = []) {
 
 // ---------------------------------------------------------------- synthetic images
 
+test('the brief schema accepts the survey and landscape answers from intake', () => {
+  const site = {
+    survey: { value: 'No survey supplied', source: 'unknown' },
+    landscape: { value: 'Entry walk and planting beds', source: 'user' }
+  };
+  assert.deepEqual(check(briefSchema, briefSchema.properties.site, site), []);
+  site.landscape.source = 'generated';
+  assert.ok(check(briefSchema, briefSchema.properties.site, site).some(error => error.includes('not in enum')));
+});
+
 function jpeg(width, height, { orientation = null, littleEndian = true } = {}) {
   const parts = [Buffer.from([0xff, 0xd8])];
   if (orientation !== null) {

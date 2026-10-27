@@ -24,6 +24,36 @@
       "codeReviewStatus": "unavailable"
     }
   },
+  "composition": {
+    "strategy": "symmetric",
+    "exceptions": [
+      {
+        "entityId": "opening-front-door",
+        "reason": "Entry stays centred on the main rectangular house and its anchored walk, rather than the bounds of the projecting bay."
+      },
+      {
+        "entityId": "opening-living-window",
+        "rules": [
+          "symmetry"
+        ],
+        "reason": "Daylight opening stays beside the entry; matching the door width would reduce glazing."
+      },
+      {
+        "entityId": "opening-deck-door",
+        "rules": [
+          "symmetry"
+        ],
+        "reason": "Slider stays centred on the main house and opens onto the deck, not the bay-expanded facade centre."
+      },
+      {
+        "entityId": "opening-bedroom-window",
+        "rules": [
+          "symmetry"
+        ],
+        "reason": "Window must remain in the north bedroom; centring on the full west facade would move it into the great room."
+      }
+    ]
+  },
   "materials": [
     {
       "id": "mat-earth",
@@ -1178,13 +1208,13 @@
       "offsetMm": 914,
       "widthMm": 1219,
       "heightMm": 1219,
-      "sillMm": 914,
+      "sillMm": 813,
       "swing": "none",
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept living room window."
+        "note": "Concept living room window with its head aligned to the entry."
       }
     },
     {
@@ -1549,7 +1579,7 @@
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept concrete walk as wide as the front door, from the door to the street on two 8 ft radius curves."
+        "note": "Concept concrete walk matching the 914 mm front door, with 2438 mm corner radii; accessibility width unverified."
       }
     },
     {
@@ -1647,7 +1677,7 @@
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept 3 ft flagstone path from the patio to the back lawn, one 10 ft radius curve."
+        "note": "Concept 914 mm flagstone path from the patio to the back lawn, with a 3048 mm corner radius."
       }
     },
     {
@@ -2174,6 +2204,23 @@
   ],
   "viewpoints": [],
   "assumptions": [
+    {
+      "id": "assumption-scope",
+      "topic": "scope",
+      "statement": "This landscape and curved-envelope study omits kitchen and bathroom fit-out, MEP devices and routes, foundations, and bay-roof construction. It is not a complete dwelling or professional handoff.",
+      "impact": "high",
+      "affectedEntityIds": [
+        "space-great-room",
+        "space-bedroom",
+        "roof-main"
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 1,
+        "status": "accepted",
+        "note": "Synthetic capability study, not an occupied-building design."
+      }
+    },
     {
       "id": "assumption-survey",
       "topic": "site",

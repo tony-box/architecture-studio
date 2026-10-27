@@ -152,12 +152,16 @@ the scale bar or dimensions that belong to it.
    `calibrationRevision`, and a placement keeps its stored pixel pairs, so
    removing a point never moves it.
 
-   Where the page cannot write (the single-file bundle, a plain static
-   server, a file opened from disk), the viewer offers **Copy calibration**
+   Where the page cannot write (a plain static server or a file opened from
+   disk with accessible source files), the viewer offers **Copy calibration**
    instead, and the user pastes the text back to you. Pass the whole pasted
    text to `apply`, through stdin or a scratch file
    (outside `sources/`; delete it afterwards) rather than as an argument,
    because the JSON's quotes break shell quoting:
+
+   A single-file bundle does not embed source images or their manifest, so
+   it cannot calibrate them on its own. Share and serve the complete project
+   when source review is needed.
 
    ```text
    import-image.mjs apply <project> --file <path>

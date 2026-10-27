@@ -15,6 +15,8 @@ const evidence = { source: 'generated', confidence: 0.5, status: 'needs-review',
 // Adds a device node to the fixture's system for `discipline` on the upper level (elevation 3900).
 function withDevices(devices) {
   const model = structuredClone(fixture);
+  // Keep each symbol test independent of the demo's growing device vocabulary.
+  for (const system of model.systems) for (const node of system.nodes) node.kind = 'circuit-end';
   for (const [discipline, kind, x, y, height = 300] of devices) {
     model.systems.find(system => system.discipline === discipline).nodes.push({ id: `test-${kind}-${x}-${y}`, kind, levelId: 'level-upper', position: { x, y, z: 3900 + height }, evidence });
   }
@@ -45,7 +47,7 @@ test('the symbol key lists exactly the symbols and tags a sheet draws', () => {
   assert.match(upper, />GFCI RECEPTACLE</);
 
   const ground = api.renderPlanSheet(model, 'level-ground', { systems: ALL });
-  assert.deepEqual([...ground.svg.matchAll(/data-legend-symbol="([^"]+)"/g)].map(m => m[1]), ['electrical-panel', 'heat-pump']);
+  assert.deepEqual([...ground.svg.matchAll(/data-legend-symbol="([^"]+)"/g)].map(m => m[1]), ['electrical-panel', 'air-handler', 'heat-pump']);
   assert.match(ground.svg, /data-symbol="electrical-panel"><polygon[^>]*fill="#9c2f8f"[^>]*\/><text[^>]*>EP</, 'the panel takes the panelboard symbol and its tag');
   assert.match(ground.svg, /data-symbol="heat-pump"><text[^>]*>HP</);
   assert.ok(!ground.warnings.some(item => item.code === 'symbol.key-overflow'));
@@ -88,6 +90,6 @@ test('legacy node kinds keep the plain dot and details name the symbol', () => {
   // Each symbolized device also gets one 3D marker; plain nodes add none.
   const triangles = m => { api.state.model = m; api.state.systems = ALL; const gls = { triangles: [], lines: [] }; api.buildScene(gls); return gls.triangles.length; };
   const plain = withDevices([['electrical', 'circuit-end', 2000, 3000, 2400]]);
-  assert.equal(triangles(model) - triangles(structuredClone(fixture)), 216, 'one prism per device');
-  assert.equal(triangles(plain), triangles(structuredClone(fixture)));
+  assert.equal(triangles(model) - triangles(withDevices([])), 216, 'one prism per device');
+  assert.equal(triangles(plain), triangles(withDevices([])));
 });

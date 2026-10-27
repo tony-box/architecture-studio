@@ -45,13 +45,13 @@ function build(s) {
   const openings = [
     op('opening-office-window', 'wall-g-south', 'window', { ...s.o.officeWindow, headers: [H.officeWindow, { ...H.officeWindow, face: 'outer' }] }, 'Concept office window with a pair of angle lintels in the block.'),
     op('opening-overhead-door', 'wall-g-south', 'overhead-door', { ...s.o.overhead, headers: [H.overhead] }, 'Concept shop door with a steel beam header.'),
-    op('opening-shop-door', 'wall-g-east', 'door', { ...s.o.shopDoor, swing: 'right', headers: [H.shopDoor] }, 'Concept shop door with a precast lintel.'),
+    op('opening-shop-door', 'wall-g-east', 'door', { ...s.o.shopDoor, offset: Math.round((D - s.o.shopDoor.width) / 2), swing: 'right', headers: [H.shopDoor] }, 'Centred concept shop door with a precast lintel.'),
     op('opening-shop-window', 'wall-g-north', 'window', { ...s.o.shopWindow, headers: [H.shopWindow] }, 'Concept high window under a bond beam.'),
-    op('opening-office-west-window', 'wall-g-west', 'window', s.o.officeWest, 'Header not yet chosen.'),
+    op('opening-office-west-window', 'wall-g-west', 'window', { ...s.o.officeWest, offset: s.o.studioWest.offset }, 'Stacked below the studio window, clear of the upper bath partition; header not yet chosen.'),
     op('opening-office-door', 'wall-g-office', 'door', { ...s.o.officeDoor, swing: 'left', headers: [H.officeDoor] }, 'Concept office door.'),
     op('opening-studio-window', 'wall-u-south', 'window', { ...s.o.studioWindow, headers: [H.studioWindow, H.angle] }, 'Concept picture window: built-up header plus veneer lintel.'),
     op('opening-studio-small-window', 'wall-u-south', 'window', { ...s.o.studioSmall, headers: [H.studioSmall, H.angle] }, 'Concept window: two-ply header plus veneer lintel.'),
-    op('opening-studio-east-window', 'wall-u-east', 'window', { ...s.o.studioEast, headers: [H.studioEast, H.angle] }, 'Concept window: solid sawn header plus veneer lintel.'),
+    op('opening-studio-east-window', 'wall-u-east', 'window', { ...s.o.studioEast, offset: Math.round((D - s.o.studioEast.width) / 2), headers: [H.studioEast, H.angle] }, 'Window stacked over the shop door: solid sawn header plus veneer lintel.'),
     op('opening-studio-north-window', 'wall-u-north', 'window', { ...s.o.studioNorth, headers: [H.studioNorth, H.angle] }, 'Concept window: engineered lumber header plus veneer lintel.'),
     op('opening-studio-west-window', 'wall-u-west', 'window', s.o.studioWest, 'Header not yet chosen.'),
     op('opening-bath-door', 'wall-u-bath-east', 'door', { ...s.o.bathDoor, swing: 'left', headers: [H.bathDoor] }, 'Concept bath door.')
@@ -94,13 +94,15 @@ function build(s) {
     foot('foundation-footing-west', rect(-fo, fi, fi, D - fi)), foot('foundation-footing-east', rect(W - fi, fi, W + fo, D - fi)),
     ...columns.slice(0, 2).map((c, i) => ({ id: `foundation-pad-${i + 1}`, kind: 'pad-footing', boundary: rect(c.position.x - s.pad / 2, c.position.y - s.pad / 2, c.position.x + s.pad / 2, c.position.y + s.pad / 2), topElevationMm: -slabG, depthMm: s.padDepth, materialId: 'mat-concrete-reinforced', evidence: ev('Concept pad footing under a steel column.') }))
   ];
-  const A = s.apron, K = s.walk, door = s.o.shopDoor;
+  const A = s.apron, K = s.walk;
+  const shopDoor = openings.find(item => item.id === 'opening-shop-door');
+  const door = { offset: shopDoor.offsetMm, width: shopDoor.widthMm };
   const wx0 = W + gH, wx1 = wx0 + K.pad, wx2 = wx1 - K.leg, wyTop = door.offset + door.width + K.margin, wyBot = door.offset - K.margin;
   const surfaces = [
     { id: 'surface-apron', name: 'Concrete Apron', levelId: 'level-ground', boundary: rect(A.x0, -gH - A.depth, A.x1, -gH), topElevationMm: 0, thicknessMm: A.thickness, materialId: 'mat-concrete', evidence: ev('Concept apron at the overhead door.') },
     { id: 'surface-apron-base', name: 'Apron Base Course', levelId: 'level-ground', boundary: rect(A.x0, -gH - A.depth, A.x1, -gH), topElevationMm: -A.thickness, thicknessMm: A.base, materialId: 'mat-gravel', evidence: ev('Concept compacted gravel base under the apron.') },
     { id: 'surface-drip-edge', name: 'Gravel Drip Edge', levelId: 'level-ground', boundary: rect(-gH, -gH - A.drip, A.x0, -gH), topElevationMm: 0, thicknessMm: A.dripThickness, materialId: 'mat-gravel', evidence: ev('Concept gravel strip along the south wall.') },
-    { id: 'surface-shop-walk', name: 'Shop Door Walk', levelId: 'level-ground', boundary: [{ x: wx0, y: wyBot }, { x: wx2, y: wyBot }, { x: wx2, y: -gH }, { x: wx1, y: -gH }, { x: wx1, y: wyTop }, { x: wx0, y: wyTop }], topElevationMm: 0, thicknessMm: A.thickness, materialId: 'mat-concrete', evidence: ev('Concept L-shaped walk from the shop door to the drive.') }
+    { id: 'surface-shop-walk', name: 'Shop Door Walk', levelId: 'level-ground', boundary: [{ anchor: { wallId: 'wall-g-east', alongMm: wyBot } }, { x: wx2, y: wyBot }, { x: wx2, y: -gH }, { x: wx1, y: -gH }, { x: wx1, y: wyTop }, { anchor: { wallId: 'wall-g-east', alongMm: wyTop } }], topElevationMm: 0, thicknessMm: A.thickness, materialId: 'mat-concrete', evidence: ev('Variable-width L-shaped walk with a wider door landing; wall-side vertices are anchored to the finished face.') }
   ];
   const dimensions = [
     { id: 'dimension-width', kind: 'horizontal', from: { x: 0, y: 0, z: 0 }, to: { x: W, y: 0, z: 0 }, offsetMm: s.dimSouth },
@@ -113,6 +115,7 @@ function build(s) {
     { id: 'section-bb', name: 'Longitudinal Section B-B', start: { x: -600, y: s.sectionBY }, end: { x: W + gH + K.pad + 600, y: s.sectionBY }, lookDirection: 'right' }
   ];
   const assumptions = [
+    { id: 'assumption-scope', topic: 'scope', statement: 'This material and structure-display study omits MEP routes and devices. The sinks and toilet show fixture footprints only; plumbing connections, room device coverage, stair headroom, and service clearances remain to be designed.', impact: 'high', affectedEntityIds: fixtures.map(item => item.id), evidence: fixed('Synthetic capability study, not a complete workshop residence.') },
     { id: 'assumption-site', topic: 'site', statement: 'No survey, setbacks, soils report, or utility locations are known for this synthetic fixture.', impact: 'high', affectedEntityIds: [], evidence: fixed('Fixture intentionally excludes survey data.') },
     { id: 'assumption-structure', topic: 'structure', statement: 'Beam, column, post, and header sizes are placeholders that exercise the drawings; a structural engineer must size every member and connection.', impact: 'high', affectedEntityIds: ['beam-floor', 'beam-ridge', 'column-shop-1', 'column-shop-2', 'column-ridge-post'], evidence: fixed('Fixture exercises material display, not structural design.') },
     { id: 'assumption-foundation', topic: 'foundation', statement: s.frostNote, impact: 'medium', affectedEntityIds: foundations.map(f => f.id), evidence: ev('Assumed frost depth; verify locally.', 0.4) },
@@ -121,6 +124,19 @@ function build(s) {
   return {
     schemaVersion: '1.0.0',
     project: { id: s.id, name: s.name, status: 'study', description: s.description, coordinates: { unit: 'mm', origin: { x: 0, y: 0, z: 0 }, siteDatumMm: 0, trueNorthDeg: 0, toleranceMm: 3, displayUnits: s.units }, jurisdiction: s.jurisdiction },
+    composition: {
+      strategy: 'symmetric',
+      exceptions: [
+        { entityId: 'opening-office-window', reason: 'The office window serves the narrow office; it cannot match or mirror the vehicle opening beside it.' },
+        { entityId: 'opening-overhead-door', reason: 'Vehicle opening stays aligned with the shop bay and concrete apron.' },
+        { entityId: 'opening-studio-small-window', reason: 'Window stays east of the upper bathroom; stacking it over the office window would move it into that bathroom.' },
+        { entityId: 'opening-studio-window', rules: ['stacking', 'symmetry'], reason: 'The wider picture window serves the open studio beside its smaller window, rather than copying the ground-floor office and vehicle bays.' },
+        { entityId: 'opening-shop-window', rules: ['symmetry'], reason: 'High north window serves the stair end of the shop and preserves wall space beyond it.' },
+        { entityId: 'opening-studio-north-window', rules: ['symmetry'], reason: 'Upper north window stacks over the high stair-side shop window.' },
+        { entityId: 'opening-office-west-window', rules: ['symmetry'], reason: 'West windows stack north of the upper bathroom partition instead of at the full facade centre.' },
+        { entityId: 'opening-studio-west-window', rules: ['symmetry'], reason: 'Window stays in the studio, clear of the bathroom partition and its return.' }
+      ]
+    },
     materials: M, site: { groundMaterialId: 'mat-earth' },
     levels, spaces, walls, openings, slabs, roofs, stairs, fixtures, equipment: [], systems: [],
     beams, columns, foundations, surfaces, dimensions, sections, viewpoints: [], assumptions

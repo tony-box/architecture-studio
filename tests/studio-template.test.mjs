@@ -258,7 +258,8 @@ test('sections cut walls, slabs, stairs, and roofs from the canonical model', ()
   const partition = metric.cut.filter(item => item.id === 'wall-u-partition');
   assert.equal(partition.length, 1, 'the sliding door leaves only the wall above its head');
   assert.equal(partition[0].z0, 3000 + 2100);
-  const window = metric.cut.filter(item => item.id === 'wall-u-west');
+  const windowCut = { ...metricFixture.sections[0], start: { ...metricFixture.sections[0].start, y: 3000 }, end: { ...metricFixture.sections[0].end, y: 3000 } };
+  const window = api.sectionGeometry(structuredClone(metricFixture), windowCut).cut.filter(item => item.id === 'wall-u-west');
   assert.equal(window.length, 2, 'the west window splits the cut wall');
 
   const reversed = structuredClone(metricFixture.sections[0]);
@@ -402,7 +403,7 @@ test('material hatching follows the drafting profile', () => {
 
 test('material detail falls back to poche without a catalog or at small scales', () => {
   const { api } = loadStudio();
-  const legacy = api.renderPlanSheet(cloneFixture(), 'level-ground').svg;
+  const legacy = api.renderPlanSheet(structuredClone(metricFixture), 'level-ground').svg;
   assert.doesNotMatch(legacy, /hatch-|MATERIALS/);
 
   const distant = structuredClone(materialFixture);
@@ -627,7 +628,7 @@ test('thin regions stay unhatched except steel, and material detail follows each
   assert.equal(api.materialsActive(imperial, 128), false, '3/32" = 1\'-0"');
   assert.equal(api.materialsActive(metric, 100), true, '1:100');
   assert.equal(api.materialsActive(metric, 200), false, '1:200');
-  assert.equal(api.materialsActive(cloneFixture(), 12), false, 'no catalog, no detail');
+  assert.equal(api.materialsActive(structuredClone(metricFixture), 12), false, 'no catalog, no detail');
 });
 
 test('oblique layered walls hatch, miter, and stay finite', () => {
@@ -679,7 +680,10 @@ test('foundations and surfaces may be any simple polygon', () => {
   const walk = model.surfaces.find(item => item.id === 'surface-shop-walk');
   assert.equal(walk.boundary.length, 6);
   assert.equal(entityGroup(api.renderPlanSheet(model, 'level-ground').svg, 'surface-shop-walk').match(/points="([^"]+)"/)[1].split(' ').length, 6);
-  assert.ok(api.sectionGeometry(model, model.sections[1]).cut.some(item => item.id === 'surface-shop-walk'));
+  const door = model.openings.find(item => item.id === 'opening-shop-door');
+  const y = door.offsetMm + door.widthMm / 2;
+  const throughWalk = { ...model.sections[1], start: { ...model.sections[1].start, y }, end: { ...model.sections[1].end, y } };
+  assert.ok(api.sectionGeometry(model, throughWalk).cut.some(item => item.id === 'surface-shop-walk'));
 });
 
 test('the material key never drops entries silently', () => {

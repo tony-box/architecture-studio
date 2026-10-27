@@ -34,7 +34,7 @@ function build(s) {
   const op = (id, wallId, kind, o, note) => ({ id, wallId, kind, offsetMm: U(o.offset), widthMm: o.width, heightMm: o.height, sillMm: o.sill ?? 0, swing: o.swing ?? 'none', evidence: ev(note) });
   const openings = [
     op('opening-front-door', 'wall-south', 'door', { offset: 10.5, width: s.door, height: s.doorHeight, swing: 'left' }, 'Concept entry door.'),
-    op('opening-living-window', 'wall-south', 'window', { offset: 3, width: s.window, height: s.windowHeight, sill: s.sill }, 'Concept living room window.'),
+    op('opening-living-window', 'wall-south', 'window', { offset: 3, width: s.window, height: s.windowHeight, sill: s.doorHeight - s.windowHeight }, 'Concept living room window with its head aligned to the entry.'),
     op('opening-bay-window', 'wall-bay', 'window', { offset: 3.5, width: s.bayWindow, height: s.windowHeight, sill: s.sill }, 'Concept curved bay window, measured along the wall centreline.'),
     op('opening-deck-door', 'wall-north', 'door', { offset: 9, width: s.slider, height: s.doorHeight, swing: 'sliding' }, 'Concept sliding door to the deck.'),
     op('opening-bedroom-window', 'wall-west', 'window', { offset: 2.5, width: s.window, height: s.windowHeight, sill: s.sill }, 'Concept bedroom window.'),
@@ -58,10 +58,10 @@ function build(s) {
     surface('surface-back-lawn', 'Back Lawn', [C(1, 72, [20, 68], [40, 76]), P(59, 71), P(59, 99), P(1, 99)], 'mat-lawn', draped(s.lawn), 'Concept rear lawn.'),
     surface('surface-front-bed', 'Front Planting Bed', [C(17, 25.5, [24, 23], [36, 23]), P(43, 26), P(43, 29.4), P(17, 29.4)], 'mat-mulch', draped(s.mulch), 'Concept mulch bed along the entry.'),
     // The walk starts at the front door's centre and takes the door's width, so its edges run on from the jambs.
-    surface('surface-walk', 'Entry Walk', { centerline: [{ anchor: { openingId: 'opening-front-door', at: 'center', matchWidth: true } }, P(30, 20), P(23.5, 13), P(23.5, 4)], cornerRadiusMm: U(8) }, 'mat-concrete', draped(s.walk), 'Concept concrete walk as wide as the front door, from the door to the street on two 8 ft radius curves.'),
+    surface('surface-walk', 'Entry Walk', { centerline: [{ anchor: { openingId: 'opening-front-door', at: 'center', matchWidth: true } }, P(30, 20), P(23.5, 13), P(23.5, 4)], cornerRadiusMm: U(8) }, 'mat-concrete', draped(s.walk), `Concept concrete walk matching the ${s.door} mm front door, with ${U(8)} mm corner radii; accessibility width unverified.`),
     surface('surface-drive', 'Driveway', rect(46, 1, 56, 34), 'mat-asphalt', draped(s.drive), 'Concept asphalt drive.'),
     surface('surface-patio', 'Paver Patio', rect(8, 36, 17.4, 49), 'mat-pavers', { topElevationMm: -s.step, thicknessMm: s.patio }, 'Concept paver patio one step below the floor.'),
-    surface('surface-stepping-path', 'Stepping-Stone Path', path([[11.5, 49], [11.5, 58], [19.5, 70]], 3, 10), 'mat-flagstone', draped(s.walk), 'Concept 3 ft flagstone path from the patio to the back lawn, one 10 ft radius curve.'),
+    surface('surface-stepping-path', 'Stepping-Stone Path', path([[11.5, 49], [11.5, 58], [19.5, 70]], 3, 10), 'mat-flagstone', draped(s.walk), `Concept ${U(3)} mm flagstone path from the patio to the back lawn, with a ${U(10)} mm corner radius.`),
     surface('surface-pond', 'Pond', [P(6, 14, { bulge: 1 }), P(14, 14, { bulge: 1 })], 'mat-water', { topElevationMm: s.pondTop, thicknessMm: s.pondDepth }, 'Concept lined pond; the water level is held flat.')
   ];
   const interval = s.interval, contour = (k, status, path, extra = {}) => ({ id: `contour-${status === 'existing' ? 'ex' : 'pr'}-${k < 0 ? `m${-k}` : k}`, elevationMm: Math.round(k * interval), status, path, ...extra, evidence: status === 'existing' ? ev('Concept contour sketched for the fixture; no topographic survey.', 0.4) : ev('Concept finished grade around the house pad.') });
@@ -126,6 +126,7 @@ function build(s) {
     { id: 'dimension-depth', kind: 'vertical', from: { ...P(18, 30), z: 0 }, to: { ...P(18, 60), z: 0 }, offsetMm: U(13) }
   ];
   const assumptions = [
+    { id: 'assumption-scope', topic: 'scope', statement: 'This landscape and curved-envelope study omits kitchen and bathroom fit-out, MEP devices and routes, foundations, and bay-roof construction. It is not a complete dwelling or professional handoff.', impact: 'high', affectedEntityIds: ['space-great-room', 'space-bedroom', 'roof-main'], evidence: fixed('Synthetic capability study, not an occupied-building design.') },
     { id: 'assumption-survey', topic: 'site', statement: 'The lot, setbacks, contours, and existing trees are synthetic. A boundary and topographic survey, a tree survey, and the zoning setbacks are required before any site decision.', impact: 'high', affectedEntityIds: ['site-property-line', 'setback-front', 'setback-rear', 'planting-oak'], evidence: fixed('Fixture intentionally excludes survey data.') },
     { id: 'assumption-grading', topic: 'grading', statement: 'The house pad grading is a concept. Drainage away from the foundation, cut and fill balance, and the drive slope need a civil review.', impact: 'medium', affectedEntityIds: ['site-grading-limit', 'contour-pr-0'], evidence: ev('Concept grading only.') },
     { id: 'assumption-planting', topic: 'planting', statement: 'Plant choices are illustrative. Confirm hardiness, invasiveness rules, and nursery availability locally.', impact: 'low', affectedEntityIds: plants.map(item => item.id), evidence: ev('Illustrative planting.') }
@@ -133,6 +134,15 @@ function build(s) {
   return {
     schemaVersion: '1.0.0',
     project: { id: s.id, name: s.name, status: 'study', description: s.description, coordinates: { unit: 'mm', origin: { x: 0, y: 0, z: 0 }, siteDatumMm: 0, trueNorthDeg: 12, toleranceMm: 3, displayUnits: s.units }, jurisdiction: s.jurisdiction },
+    composition: {
+      strategy: 'symmetric',
+      exceptions: [
+        { entityId: 'opening-front-door', reason: 'Entry stays centred on the main rectangular house and its anchored walk, rather than the bounds of the projecting bay.' },
+        { entityId: 'opening-living-window', rules: ['symmetry'], reason: 'Daylight opening stays beside the entry; matching the door width would reduce glazing.' },
+        { entityId: 'opening-deck-door', rules: ['symmetry'], reason: 'Slider stays centred on the main house and opens onto the deck, not the bay-expanded facade centre.' },
+        { entityId: 'opening-bedroom-window', rules: ['symmetry'], reason: 'Window must remain in the north bedroom; centring on the full west facade would move it into the great room.' }
+      ]
+    },
     materials: s.materials, site,
     levels, spaces, walls, openings, slabs, roofs, stairs: [], fixtures: [], equipment: [], systems: [],
     surfaces, plants, plantings, dimensions, sections, viewpoints: [], assumptions

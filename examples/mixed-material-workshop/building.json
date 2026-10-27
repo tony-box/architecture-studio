@@ -24,6 +24,59 @@
       "codeReviewStatus": "unavailable"
     }
   },
+  "composition": {
+    "strategy": "symmetric",
+    "exceptions": [
+      {
+        "entityId": "opening-office-window",
+        "reason": "The office window serves the narrow office; it cannot match or mirror the vehicle opening beside it."
+      },
+      {
+        "entityId": "opening-overhead-door",
+        "reason": "Vehicle opening stays aligned with the shop bay and concrete apron."
+      },
+      {
+        "entityId": "opening-studio-small-window",
+        "reason": "Window stays east of the upper bathroom; stacking it over the office window would move it into that bathroom."
+      },
+      {
+        "entityId": "opening-studio-window",
+        "rules": [
+          "stacking",
+          "symmetry"
+        ],
+        "reason": "The wider picture window serves the open studio beside its smaller window, rather than copying the ground-floor office and vehicle bays."
+      },
+      {
+        "entityId": "opening-shop-window",
+        "rules": [
+          "symmetry"
+        ],
+        "reason": "High north window serves the stair end of the shop and preserves wall space beyond it."
+      },
+      {
+        "entityId": "opening-studio-north-window",
+        "rules": [
+          "symmetry"
+        ],
+        "reason": "Upper north window stacks over the high stair-side shop window."
+      },
+      {
+        "entityId": "opening-office-west-window",
+        "rules": [
+          "symmetry"
+        ],
+        "reason": "West windows stack north of the upper bathroom partition instead of at the full facade centre."
+      },
+      {
+        "entityId": "opening-studio-west-window",
+        "rules": [
+          "symmetry"
+        ],
+        "reason": "Window stays in the studio, clear of the bathroom partition and its return."
+      }
+    ]
+  },
   "materials": [
     {
       "id": "mat-earth",
@@ -891,7 +944,7 @@
       "id": "opening-shop-door",
       "wallId": "wall-g-east",
       "kind": "door",
-      "offsetMm": 3810,
+      "offsetMm": 2591,
       "widthMm": 914,
       "heightMm": 2032,
       "sillMm": 0,
@@ -910,7 +963,7 @@
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept shop door with a precast lintel."
+        "note": "Centred concept shop door with a precast lintel."
       }
     },
     {
@@ -943,7 +996,7 @@
       "id": "opening-office-west-window",
       "wallId": "wall-g-west",
       "kind": "window",
-      "offsetMm": 1524,
+      "offsetMm": 1372,
       "widthMm": 914,
       "heightMm": 1219,
       "sillMm": 1067,
@@ -952,7 +1005,7 @@
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Header not yet chosen."
+        "note": "Stacked below the studio window, clear of the upper bath partition; header not yet chosen."
       }
     },
     {
@@ -1059,7 +1112,7 @@
       "id": "opening-studio-east-window",
       "wallId": "wall-u-east",
       "kind": "window",
-      "offsetMm": 3658,
+      "offsetMm": 2591,
       "widthMm": 914,
       "heightMm": 1067,
       "sillMm": 1067,
@@ -1088,7 +1141,7 @@
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept window: solid sawn header plus veneer lintel."
+        "note": "Window stacked over the shop door: solid sawn header plus veneer lintel."
       }
     },
     {
@@ -1947,12 +2000,14 @@
       "levelId": "level-ground",
       "boundary": [
         {
-          "x": 9268,
-          "y": 3658
+          "anchor": {
+            "wallId": "wall-g-east",
+            "alongMm": 2439
+          }
         },
         {
           "x": 10183,
-          "y": 3658
+          "y": 2439
         },
         {
           "x": 10183,
@@ -1964,11 +2019,13 @@
         },
         {
           "x": 11097,
-          "y": 4876
+          "y": 3657
         },
         {
-          "x": 9268,
-          "y": 4876
+          "anchor": {
+            "wallId": "wall-g-east",
+            "alongMm": 3657
+          }
         }
       ],
       "topElevationMm": 0,
@@ -1978,7 +2035,7 @@
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept L-shaped walk from the shop door to the drive."
+        "note": "Variable-width L-shaped walk with a wider door landing; wall-side vertices are anchored to the finished face."
       }
     }
   ],
@@ -2074,6 +2131,23 @@
   ],
   "viewpoints": [],
   "assumptions": [
+    {
+      "id": "assumption-scope",
+      "topic": "scope",
+      "statement": "This material and structure-display study omits MEP routes and devices. The sinks and toilet show fixture footprints only; plumbing connections, room device coverage, stair headroom, and service clearances remain to be designed.",
+      "impact": "high",
+      "affectedEntityIds": [
+        "fixture-shop-sink",
+        "fixture-toilet",
+        "fixture-bath-sink"
+      ],
+      "evidence": {
+        "source": "generated",
+        "confidence": 1,
+        "status": "accepted",
+        "note": "Synthetic capability study, not a complete workshop residence."
+      }
+    },
     {
       "id": "assumption-site",
       "topic": "site",

@@ -4,7 +4,21 @@ Run validation before rendering and again before handoff. Only `error` findings
 block handoff; `warning` and `advisory` findings remain visible in diagnostics,
 `ASSUMPTIONS.md`, and `HANDOFF.md`.
 
-## Errors
+## What Runs Automatically
+
+`export-drawings.mjs`, `inspect.mjs`, and `compose.mjs` use the project's
+`index.html` when present, otherwise the installed template. `--page` selects
+an explicit viewer. An old project therefore keeps its old checks until an
+approved viewer refresh.
+
+The runtime checks below cover geometry and selected references. They do not
+execute the full JSON Schema, check building-code compliance, or perform
+collision detection for every object. Check authored JSON against
+`building.schema.json` too; the repository's schema tests cover every example.
+Sheet warnings arise during rendering, and source-image checks require
+`import-image.mjs check`. A successful export is not a completed handoff.
+
+## Geometry and Schema Errors
 
 - Every entity ID is unique and every referenced ID resolves.
 - Each level elevation is unique and levels sort bottom to top.
@@ -24,11 +38,17 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
   does not overlap another opening in the same wall. Openings may share part
   of their span along the wall when one sits wholly above the other (a
   clerestory over a window).
-- A stair has positive width, connects two existing levels, and its total rise
-  equals the level-elevation difference within 3 mm.
+- A stair has positive width and tread depth, connects two existing levels
+  upward, and has enough run for `(riserCount - 1) * treadDepthMm` within
+  tolerance. Rise per riser derives from the level-elevation difference;
+  code geometry, landings, guards, and headroom remain manual checks.
 - Every system edge references two nodes in the same system.
+- Each edge path starts and ends at its referenced node positions within
+  model tolerance, and every node participates in an edge. This does not
+  prove that the whole network reaches the service entry or equipment.
 - Every fixture or equipment connection references an existing system node.
-- Derived dimensions reference existing entities or explicit model points.
+- Dimensions have distinct explicit `from` and `to` model points; the current
+  schema does not support dimensions attached by entity reference.
 - Every `materialId` (walls, wall and slab layers, slabs, stairs, headers,
   beams, columns, foundations, surfaces, `site.groundMaterialId`) resolves to a
   catalog material with a known category.
@@ -74,7 +94,7 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
 - Property lines, grading limits, setbacks, contours, spot elevations, plants,
   and plantings carry evidence.
 
-## Warnings
+## Automatic Warnings
 
 - A sheet's material key has no room for every material the sheet draws
   (`material.key-overflow`), or a systems sheet's symbol key has no room for
@@ -98,6 +118,14 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
   (`terrain.constraint-failed`).
 - The contours and spot elevations lie on one line, so no ground surface can
   be built and the ground stays at the site datum (`terrain.degenerate`).
+- Stairs always retain a `stair.code` warning, and incomplete jurisdiction
+  research retains `code.status`.
+
+## Manual Coordination Checks
+
+The agent must inspect these and record unresolved findings in the handoff.
+They are not implemented as automatic runtime warnings:
+
 - Space boundaries overlap or leave an unintended gap inside an occupied
   envelope.
 - Doors collide with walls, fixtures, equipment, or another door swing.
@@ -132,13 +160,10 @@ block handoff; `warning` and `advisory` findings remain visible in diagnostics,
   sizes are concept placeholders.
 - A catalog material has no evidence (`material.evidence`): its name may carry
   a grade nobody sourced.
-- Pipe, duct, conductor, breaker, equipment-capacity, or penetration sizing is
-  unresolved.
-- Code research is unavailable, uses a secondary source, or has conditional
-  applicability.
-- A device was placed from a model-code baseline in `mep-placement-guide.md`
-  that no code finding for the jurisdiction confirms. Its evidence names the
-  rule ID and stays `needs-review`.
+- Keep unresolved sizing, secondary or conditional code sources, and
+  unconfirmed placement baselines as manual review notes. The runtime does
+  not evaluate those engineering or code questions. Each baseline-derived
+  device names its rule ID in evidence and stays `needs-review`.
 - A visible element breaks the composition (`composition-guide.md`): a row
   does not follow its facade strategy (`composition.symmetry`,
   `composition.thirds`, `composition.rhythm`), an upper opening does not stack

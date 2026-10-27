@@ -27,7 +27,7 @@ How the two connect to `code-research.md`:
 1. Place elements using the baseline and design practice. Record evidence as
    `source: "heuristic"`, `status: "needs-review"`, and put the rule ID from
    this file plus the model-code section in `evidence.reference`, for example
-   `"MEP-E4; NEC 2023 210.52(C)"`.
+   `"MEP-E5; NEC 2023 210.52(C)"`.
 2. When `reviews/code-findings.json` has a verified finding for the same topic
    in the project's jurisdiction, the finding wins. Move the element to suit
    it, switch its evidence to `source: "code-source"`, and cite the finding ID.
@@ -69,7 +69,7 @@ air. Local amendments most often change these.
 ## Modeling Devices
 
 - Plumbing fixtures and fixed appliances that occupy floor area are
-  `fixtures`: `toilet`, `lavatory`, `sink`, `kitchen-sink`, `bathtub`,
+  `fixtures`:   `toilet`, `lavatory`, `sink`, `kitchen-sink`, `utility-sink`, `bathtub`,
   `shower`, `washer`, `dryer`, `range`, `cooktop`, `dishwasher`,
   `refrigerator`.
 - Serviceable equipment is `equipment`: `electrical-panel`, `meter`,
@@ -96,11 +96,20 @@ air. Local amendments most often change these.
   (for example "kitchen small-appliance circuit 1"), never a breaker size.
 - Name nodes by room and function, such as `e-kitchen-counter-1` or
   `m-bed2-supply`, so diagnostics point at a findable device.
-- Each node kind and equipment kind above has a standard symbol or tag on the
-  systems sheets (`drafting-standard.md`, Systems Symbols). A wall device
+- Device kinds have the symbols and equipment kinds have the tags listed in
+  `drafting-standard.md`, Systems Symbols. Connection and distribution nodes
+  such as `panel`, `circuit-end`, `fixture-connection`, and `vertical-stack`
+  intentionally remain plain dots. Equipment connection nodes may use the
+  equipment's kind (such as `outdoor-unit` or `air-handler`), but a node alone
+  does not draw the equipment's body or tag; add an `equipment` object.
+  A wall device
   sits on its wall only when its position is within 300 mm of the wall face,
   so put it at the finished face. Invent no other kinds: an unlisted kind
   draws as a plain dot with no key entry.
+
+Connectivity and endpoint checks are automatic. Device spacing, circuit
+coverage, wet zones, clearances, and the Room Checklist below are manual
+checks; an export with no errors does not establish that they are satisfied.
 
 ## Electrical
 

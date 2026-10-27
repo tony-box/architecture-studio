@@ -24,6 +24,15 @@
       "codeReviewStatus": "unavailable"
     }
   },
+  "composition": {
+    "strategy": "symmetric",
+    "exceptions": [
+      { "entityId": "opening-entry", "reason": "Entry keeps the west approach clear of the kitchen work area." },
+      { "entityId": "opening-living-window", "rules": ["symmetry"], "reason": "The kitchen window stays over the sink and clear of the bathroom partition." },
+      { "entityId": "opening-garden-door", "rules": ["symmetry"], "reason": "Garden access stays in the east arm of the L-shaped living room." },
+      { "entityId": "opening-studio-window", "rules": ["symmetry"], "reason": "Window stays in the east studio, not across the upper partition." }
+    ]
+  },
   "levels": [
     {
       "id": "level-ground",
@@ -450,7 +459,7 @@
       "id": "opening-bath-window",
       "wallId": "wall-g-east",
       "kind": "window",
-      "offsetMm": 1200,
+      "offsetMm": 2550,
       "widthMm": 900,
       "heightMm": 700,
       "sillMm": 1400,
@@ -498,7 +507,7 @@
       "id": "opening-bedroom-window",
       "wallId": "wall-u-west",
       "kind": "window",
-      "offsetMm": 400,
+      "offsetMm": 2100,
       "widthMm": 1800,
       "heightMm": 1300,
       "sillMm": 900,
@@ -514,7 +523,7 @@
       "id": "opening-studio-window",
       "wallId": "wall-u-north",
       "kind": "window",
-      "offsetMm": 900,
+      "offsetMm": 1400,
       "widthMm": 2400,
       "heightMm": 1400,
       "sillMm": 800,
@@ -669,7 +678,7 @@
       "kind": "sink",
       "levelId": "level-ground",
       "position": {
-        "x": 2600,
+        "x": 3600,
         "y": 600,
         "z": 0
       },
@@ -774,12 +783,12 @@
     {
       "id": "system-plumbing",
       "discipline": "plumbing",
-      "name": "Concept Plumbing",
+      "name": "Concept Water Supply",
       "status": "concept",
       "nodes": [
         {
           "id": "plumbing-entry",
-          "kind": "water-entry",
+          "kind": "main-shutoff",
           "position": {
             "x": 6000,
             "y": 0,
@@ -790,14 +799,15 @@
             "source": "generated",
             "confidence": 0.6,
             "status": "needs-review",
-            "note": "Concept node."
+            "reference": "mep-concept-rules.md; Plumbing",
+            "note": "Illustrative water-entry shutoff; local plumbing rules and access unresolved."
           }
         },
         {
           "id": "plumbing-kitchen",
           "kind": "fixture-connection",
           "position": {
-            "x": 2600,
+            "x": 3600,
             "y": 600,
             "z": 450
           },
@@ -843,12 +853,12 @@
               "z": 0
             },
             {
-              "x": 2600,
+              "x": 3600,
               "y": 300,
               "z": 0
             },
             {
-              "x": 2600,
+              "x": 3600,
               "y": 600,
               "z": 450
             }
@@ -922,18 +932,19 @@
         },
         {
           "id": "electrical-studio",
-          "kind": "circuit-end",
+          "kind": "floor-receptacle",
           "position": {
             "x": 6300,
             "y": 3000,
-            "z": 3300
+            "z": 3000
           },
           "levelId": "level-upper",
           "evidence": {
             "source": "generated",
             "confidence": 0.6,
             "status": "needs-review",
-            "note": "Concept node."
+            "reference": "mep-placement-guide.md; Receptacles, design practice",
+            "note": "Illustrative floor box at the studio work area; no US code baseline is applied to this metric locality."
           }
         }
       ],
@@ -951,12 +962,12 @@
             {
               "x": 250,
               "y": 3000,
-              "z": 3300
+              "z": 3000
             },
             {
               "x": 6300,
               "y": 3000,
-              "z": 3300
+              "z": 3000
             }
           ],
           "nominalSize": "unverified",
@@ -964,7 +975,7 @@
             "source": "generated",
             "confidence": 0.6,
             "status": "needs-review",
-            "note": "Concept route; sizing unresolved."
+            "note": "Studio work-area circuit group; loads, conductor size, and protection unresolved."
           }
         }
       ],
@@ -999,10 +1010,10 @@
         },
         {
           "id": "mechanical-indoor",
-          "kind": "indoor-unit",
+          "kind": "ductless-head",
           "position": {
-            "x": 4400,
-            "y": 4600,
+            "x": 100,
+            "y": 3000,
             "z": 2400
           },
           "levelId": "level-ground",
@@ -1010,7 +1021,8 @@
             "source": "generated",
             "confidence": 0.6,
             "status": "needs-review",
-            "note": "Concept node."
+            "reference": "mep-placement-guide.md; Air Distribution, design practice",
+            "note": "Concept ductless head centred on the west wall; manufacturer clearances, throw, and condensate unresolved."
           }
         }
       ],
@@ -1031,8 +1043,8 @@
               "z": 2400
             },
             {
-              "x": 4400,
-              "y": 4600,
+              "x": 100,
+              "y": 3000,
               "z": 2400
             }
           ],
@@ -1160,6 +1172,14 @@
   ],
   "viewpoints": [],
   "assumptions": [
+    {
+      "id": "assumption-mep-scope",
+      "topic": "mep",
+      "statement": "Systems demonstrate a water-supply branch, a studio floor-box circuit, and a ductless line set only. Waste and vent routes, other room receptacles, switches, lighting, alarms, ventilation, and condensate are omitted and need a complete room-by-room design.",
+      "impact": "high",
+      "affectedEntityIds": ["system-plumbing", "system-electrical", "system-mechanical"],
+      "evidence": { "source": "generated", "confidence": 1, "status": "needs-review", "note": "Synthetic legibility and coordination study, not a completed dwelling." }
+    },
     {
       "id": "assumption-site",
       "topic": "site",
