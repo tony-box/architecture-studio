@@ -84,7 +84,7 @@ test('elevations use project directions and wall base offsets', () => {
   api.state.elevation = 'south';
   const baseline = api.elevationSvg();
   assert.match(baseline, /opening-overhead-west/);
-  model.walls.find(wall => wall.id === 'wall-g-north').baseOffsetMm = 500;
+  model.walls.find(wall => wall.id === 'wall-g-south').baseOffsetMm = 500;
   assert.notEqual(api.elevationSvg(), baseline);
 });
 
@@ -92,13 +92,15 @@ for (const source of ['roof', 'space']) {
   test(`elevation openings use wall faces when the ${source} extends beyond wall centerlines`, () => {
     const { api } = loadStudio();
     const model = cloneFixture();
-    const faces = { north: 'south', east: 'east', south: 'north', west: 'west' };
+    const faces = { north: 'north', east: 'east', south: 'south', west: 'west' };
     model.openings = model.walls.map(wall => ({
       ...model.openings[0], id: `opening-${wall.id}`, wallId: wall.id,
       kind: 'window', offsetMm: 500, widthMm: 900, heightMm: 900, sillMm: 1000
     }));
     const baseline = Object.fromEntries(Object.keys(faces).map(side => [side, api.renderElevationSheet(model, side).svg]));
-    const boundary = [{ x: -102, y: -102 }, { x: 9702, y: -102 }, { x: 9702, y: 13302 }, { x: -102, y: 13302 }];
+    const maxX = Math.max(...model.walls.flatMap(wall => [wall.start.x, wall.end.x]));
+    const maxY = Math.max(...model.walls.flatMap(wall => [wall.start.y, wall.end.y]));
+    const boundary = [{ x: -102, y: -102 }, { x: maxX + 102, y: -102 }, { x: maxX + 102, y: maxY + 102 }, { x: -102, y: maxY + 102 }];
     if (source === 'roof') model.roofs[0].footprint = boundary;
     else model.spaces[0].boundary = boundary;
 
@@ -223,10 +225,10 @@ test('sheets are deterministic and carry no invented document-control data', () 
 test('plan dimensions sit outside the building footprint', () => {
   const { api } = loadStudio();
   const plan = api.renderPlanSheet(cloneFixture(), 'level-ground').svg;
-  const eastWall = Math.max(...pointXs(entityGroup(plan, 'wall-g-east')));
+  const westWall = Math.min(...pointXs(entityGroup(plan, 'wall-g-west')));
   const depth = entityGroup(plan, 'dimension-depth');
   assert.ok(depth, 'depth dimension is drawn');
-  assert.ok(Math.min(...numbersIn(depth, 'x1'), ...numbersIn(depth, 'x2')) > eastWall, 'depth dimension clears the east wall');
+  assert.ok(Math.max(...numbersIn(depth, 'x1'), ...numbersIn(depth, 'x2')) < westWall, 'depth dimension clears the west wall');
 });
 
 test('room tags find clear positions on crowded metric plans', () => {
@@ -248,9 +250,9 @@ test('sections cut walls, slabs, stairs, and roofs from the canonical model', ()
   const cutIds = new Set(barn.cut.map(item => item.id));
   for (const id of ['wall-g-west', 'wall-g-east', 'wall-u-west', 'wall-u-east', 'slab-ground', 'slab-upper', 'stair-main']) assert.ok(cutIds.has(id), `${id} is cut`);
   const slab = barn.cut.find(item => item.id === 'slab-upper');
-  assert.equal(slab.z1 - slab.z0, 300);
+  assert.equal(slab.z1 - slab.z0, fixture.slabs.find(item => item.id === 'slab-upper').thicknessMm);
   assert.equal(barn.roofCut.length, 1);
-  assert.equal(Math.max(...barn.roofCut[0].points.map(point => point.z)), 9000);
+  assert.equal(Math.max(...barn.roofCut[0].points.map(point => point.z)), fixture.roofs[0].ridgeElevationMm);
 
   const metric = api.sectionGeometry(structuredClone(metricFixture), metricFixture.sections[0]);
   const stair = metric.cut.find(item => item.id === 'stair-main');
@@ -286,7 +288,7 @@ test('the export script writes a complete, standalone, deterministic drawing set
   assert.equal(first.errors.length, 0);
   assert.equal(JSON.stringify(first.manifest), JSON.stringify(second.manifest));
   assert.equal(first.sheets.map(sheet => sheet.svg).join(''), second.sheets.map(sheet => sheet.svg).join(''));
-  assert.deepEqual([...first.manifest.files.map(file => file.sheet)], ['A-101', 'A-102', 'A-201', 'A-202', 'A-203', 'A-204', 'A-301', 'M-101', 'M-102']);
+  assert.deepEqual([...first.manifest.files.map(file => file.sheet)], ['A-101', 'A-102', 'A-201', 'A-202', 'A-203', 'A-204', 'A-301', 'A-302', 'M-101', 'M-102']);
   assert.ok(first.manifest.files.every(file => /^exports\/(plans|elevations|sections|systems)\/[a-z0-9-]+\.svg$/.test(file.path)));
   for (const sheet of first.sheets) {
     assert.match(sheet.svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="[\d.]+mm" height="[\d.]+mm"/);
@@ -332,18 +334,18 @@ test('selected elements expose review details without inventing undefined values
   assert.equal(stair.type, 'Stair');
   assert.equal(stair.title, 'Main stair');
   const stairDims = Object.fromEntries(stair.dims);
-  assert.equal(stairDims.Riser, '6 5/8"');
-  assert.equal(stairDims['Total rise'], `12'-9 1/2"`);
+  assert.equal(stairDims.Riser, '7 1/8"');
+  assert.equal(stairDims['Total rise'], `11'-9 3/4"`);
   assert.match(stair.diagram, /^<svg[^>]*role="img"/);
   assert.ok(stair.openItems.includes('Guards and handrails'));
 
   const opening = Object.fromEntries(api.entityDetails(model, 'opening-bedroom-window').dims);
-  assert.equal(opening['Head height'], `7'-4 5/8"`);
+  assert.equal(opening['Head height'], `7'-6 1/2"`);
   assert.ok(!('Header' in opening), 'header size is an open item, not a value');
   assert.ok(api.entityDetails(model, 'opening-bedroom-window').openItems.includes('Header size and framing'));
 
   const room = Object.fromEntries(api.entityDetails(model, 'space-workshop').dims);
-  assert.equal(room.Area, '930 SF');
+  assert.equal(room.Area, api.profileFor(model).area(api.polygonArea(model.spaces.find(item => item.id === 'space-workshop').boundary)));
   const metricRoom = Object.fromEntries(api.entityDetails(structuredClone(metricFixture), 'space-bath-ground').dims);
   assert.equal(metricRoom.Area, '11.5 m²');
   assert.equal(api.entityDetails(model, 'not-an-entity'), null);

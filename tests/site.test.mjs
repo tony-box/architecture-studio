@@ -219,7 +219,7 @@ test('terrain for dense survey-sized contours builds in reasonable time', () => 
 test('site plan layers can be hidden in the viewer without changing the scale or the export', () => {
   const model = clone(site);
   assert.deepEqual([...api.siteCategories(model)], ['trees', 'plants', 'surfaces', 'grading', 'lot']);
-  assert.deepEqual([...api.siteCategories(legacy)], []);
+  assert.deepEqual([...api.siteCategories({ ...legacy, surfaces: [] })], []);
   assert.deepEqual([...api.parseSiteHidden('trees,bogus,grading', model)], ['trees', 'grading']);
   const full = api.renderSitePlanSheet(model), noTrees = api.renderSitePlanSheet(model, { hidden: new Set(['trees']) });
   assert.equal(noTrees.scaleLabel, full.scaleLabel);

@@ -1,16 +1,17 @@
 {
   "lakeside-barn-residence": {
-    "manifest": "3534166509d58fe8d1175127205fe8f499ee5f5ea9ee2769057bab152653c510",
+    "manifest": "db589c84f80513c5faf8e10ea581e1327e34d87dc1299dd1ba81602b0a48074b",
     "sheets": {
-      "exports/plans/level-ground.svg": "7c074c561dfaf16ba0f276ab197518ae06b010ad6092943934839343abebdc43",
-      "exports/plans/level-upper.svg": "a4c4b76cb37d1710a3b779fe8130199096c5f947acb9772232738876c1a5d6ac",
-      "exports/elevations/north.svg": "642ec64c9ae740a3819c409361665ae9b90bb7d1aa70079235eaa38ff91911c3",
-      "exports/elevations/east.svg": "3c24fc25b4346bdead7b2d21a21d06a3b7087df047bc7201958226e7cb5f1629",
-      "exports/elevations/south.svg": "21d46cf924d626110fd394237f370679e4cdb915f5b89072959c1f63882c0d2b",
-      "exports/elevations/west.svg": "173cf01e02780ed6c3aa5e474dcef85790ef8ae0782ddaf48200febd12e42f56",
-      "exports/sections/section-aa.svg": "6a2ef9632232b9fd37c61b93dbe596ce50fa91667c380af878706e69520cde3c",
-      "exports/systems/level-ground.svg": "bc5c590815f3c25ac0a403712b355b6210a90690442ccb2db2f94a2283933d36",
-      "exports/systems/level-upper.svg": "dd90016a5d894511da028f9bc7e1f83845b4da4eb3f5676d1367aaad380f10a5"
+      "exports/plans/level-ground.svg": "eb531dcd494540ec34736cca8007ab852d254d94aeaa06704d7c2d8a2412abf8",
+      "exports/plans/level-upper.svg": "f412217b7a0f30bfb0c779205a9c9ee7d1692a405525e187490a25e544e9c173",
+      "exports/elevations/north.svg": "26d66a1f0a26d418f026ad129e57d546227d6246e4179c95d83340774af191d0",
+      "exports/elevations/east.svg": "ad55f8b33773038e4292efcfbc4c6d12702f6ef353d61e6bd44fbbc1acfa832d",
+      "exports/elevations/south.svg": "62c419d50155770e222723bec2c0a23cdb7533853da307077479cb10d214b6fb",
+      "exports/elevations/west.svg": "54336dc2d1b7b1d1fa6ca68e855fdec84f1d4ace7788e8c7f6826ec7d49a70aa",
+      "exports/sections/section-aa.svg": "4f616213e1085dad78c187634d7573a995704d22e8ae7b07baafe982431d15c1",
+      "exports/sections/section-bb.svg": "9b0ed1dab9c5237a95f20231ff7dd25af69d800d6295571434c5c533e3678d7e",
+      "exports/systems/level-ground.svg": "eb726c6dbe1e38c8d0b46ef8ef0facd6bb0f84eec34e44c2bb5af14d98a1dcd8",
+      "exports/systems/level-upper.svg": "c475f2994c95c490d083064504805e6987e72860e78dc74b592d2ffb73747713"
     }
   },
   "compact-metric-studio": {

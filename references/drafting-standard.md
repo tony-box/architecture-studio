@@ -40,8 +40,12 @@ fits the drawing area.
 - Elevations share one scale: the largest at which every face fits, so the
   four faces compare directly. Each face is still centred on its own sheet.
 - The building sets the scale of elevations and sections. An elevation's
-  extent is the walls plus the roof overhang, from the lower of zero and the
-  site datum to the top of walls, eave, or ridge. A section's extent is the
+  extent includes walls, roof overhang, and exposed exterior stairs, raised
+  deck surfaces, beams, and columns. These attachments draw when wholly in
+  front of the facade or wholly beside its silhouette, never through the
+  building from the opposite side. They extend the frame without moving the
+  roof ridge or openings. Ground-level surfaces and plants do not set this
+  scale. A section's extent is the
   building elements it cuts or sees beyond (walls, slabs, foundations,
   stairs, beams, columns, roof) plus 3000 mm of site each side along the cut,
   no wider than everything the section draws; vertically it is the

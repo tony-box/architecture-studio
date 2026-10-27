@@ -1806,6 +1806,17 @@
     const u = unit2(sub(stair.end, stair.start)), n = perp(u), w = stair.widthMm / 2;
     return [add(stair.start, mul(n, w)), add(stair.end, mul(n, w)), sub(stair.end, mul(n, w)), sub(stair.start, mul(n, w))];
   }
+  function stairRunProfile(stair, from, to, project) {
+    const u = unit2(sub(stair.end, stair.start)), L = Math.hypot(stair.end.x - stair.start.x, stair.end.y - stair.start.y);
+    const rise = (to.elevationMm - from.elevationMm) / stair.riserCount;
+    const run = r => project(add(stair.start, mul(u, r))), profile = [{ h: run(0), z: from.elevationMm }];
+    for (let i = 0; i < stair.riserCount; i += 1) {
+      const r0 = i / stair.riserCount * L, r1 = (i + 1) / stair.riserCount * L, z = from.elevationMm + rise * (i + 1);
+      profile.push({ h: run(r0), z }, { h: run(r1), z });
+    }
+    profile.push({ h: run(L), z: to.elevationMm - rise }, { h: run(L / stair.riserCount), z: from.elevationMm });
+    return profile;
+  }
   function planExtent(model) {
     const points = [
       ...model.spaces.flatMap(space => ringOf(space.boundary)),
@@ -2979,9 +2990,36 @@
     return parts.join('');
   }
 
-  // The building as one elevation sees it, in (h, z) model millimetres: the walls' projected extent plus
-  // the roof overhang, from the lower of zero and the site datum to the top of walls, eave, or ridge.
-  // Plants and site are left out, so only the building sets the scale.
+  // Only fully exposed attachments are projected: in front of the facade, or entirely beside it.
+  // Interior members and attachments behind the building must not show through its silhouette.
+  function elevationAttachments(model, side, basis, wallMin, wallMax) {
+    const outward = side === 'north' || side === 'east' ? 1 : -1;
+    const items = [], datum = model.project.coordinates.siteDatumMm ?? 0;
+    const addItem = (entity, kind, corners, z0, z1, profile, risers = 0) => {
+      const hh = corners.map(basis.project), h0 = Math.min(...hh), h1 = Math.max(...hh);
+      const depths = corners.map(point => outward * (point[basis.axis] - basis.face));
+      if (Math.min(...depths) < -3 && h0 < wallMax && h1 > wallMin) return;
+      items.push({ id: entity.id, kind, h0, h1, z0, z1, profile, risers, depth: Math.max(...depths) });
+    };
+    for (const stair of model.stairs) {
+      const from = model.levels.find(level => level.id === stair.fromLevelId), to = model.levels.find(level => level.id === stair.toLevelId);
+      if (!from || !to) continue;
+      const sideOn = Math.abs(basis.project(stair.end) - basis.project(stair.start)) > 1;
+      addItem(stair, 'stair', stairCorners(stair), from.elevationMm, to.elevationMm,
+        sideOn ? stairRunProfile(stair, from, to, basis.project) : null, sideOn ? 0 : stair.riserCount);
+    }
+    for (const surface of model.surfaces ?? []) {
+      if (surface.followsGrade || !(surface.topElevationMm > datum)) continue;
+      const outline = outlineOf(model, surface);
+      if (outline) addItem(surface, 'surface', ringOf(outline), surface.topElevationMm - surface.thicknessMm, surface.topElevationMm);
+    }
+    for (const beam of model.beams ?? []) addItem(beam, 'beam', beamCorners(beam), beamBottom(beam), beam.topElevationMm);
+    for (const column of model.columns ?? []) addItem(column, 'column',
+      rotatedRect(column.position, column.shape.widthMm, column.shape.depthMm, column.rotationDeg), column.baseElevationMm, column.topElevationMm);
+    return items.sort((a, b) => a.depth - b.depth);
+  }
+
+  // Raised exterior access belongs to the building frame; ground surfaces and plants do not.
   function elevationExtent(model, side) {
     const roof = model.roofs[0];
     const wallBox = boundsOf(model.walls.flatMap(wallPoints));
@@ -2990,9 +3028,12 @@
     const wallMin = Math.min(...projected), wallMax = Math.max(...projected), ov = roof?.overhangMm ?? 0;
     const wallTop = Math.max(...model.walls.map(wall => (model.levels.find(level => level.id === wall.levelId)?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0) + wall.heightMm));
     const ridge = roof?.ridgeElevationMm ?? wallTop, eave = roof?.eaveElevationMm ?? wallTop;
+    const attachments = elevationAttachments(model, side, basis, wallMin, wallMax);
     return {
-      minH: wallMin - ov, maxH: wallMax + ov, minZ: Math.min(0, model.project.coordinates.siteDatumMm ?? 0), maxZ: Math.max(ridge, eave, wallTop),
-      basis, wallBox, wallMin, wallMax, wallTop, ridge, eave
+      minH: Math.min(wallMin - ov, ...attachments.map(item => item.h0)), maxH: Math.max(wallMax + ov, ...attachments.map(item => item.h1)),
+      minZ: Math.min(0, model.project.coordinates.siteDatumMm ?? 0, ...attachments.map(item => item.z0)),
+      maxZ: Math.max(ridge, eave, wallTop, ...attachments.map(item => item.z1)),
+      basis, wallBox, wallMin, wallMax, wallTop, ridge, eave, attachments, roofMin: wallMin - ov, roofMax: wallMax + ov
     };
   }
   // All four elevations share one scale: the largest standard scale at which every face fits.
@@ -3006,7 +3047,7 @@
 
   function renderElevationSheet(model, side, options = {}) {
     const roof = model.roofs[0], frame = elevationExtent(model, side);
-    const { basis, wallBox, wallMin, wallMax, wallTop, ridge, eave, minH, maxH } = frame;
+    const { basis, wallBox, wallMin, wallMax, wallTop, ridge, eave, minH, maxH, roofMin, roofMax } = frame;
     const gable = roof ? ((side === 'north' || side === 'south') ? roof.ridgeAxis === 'y' : roof.ridgeAxis === 'x') : false;
     const isVisibleWall = wall => Math.abs(wall.start[basis.axis] - basis.face) < 3 && Math.abs(wall.end[basis.axis] - basis.face) < 3;
     // An arc wall shows an opening when the wall faces the viewer there; its jambs project to their true
@@ -3031,8 +3072,8 @@
         const silhouette = !roof
           ? [[wallMin, 0], [wallMax, 0], [wallMax, wallTop], [wallMin, wallTop]]
           : gable
-            ? [[wallMin, 0], [wallMax, 0], [wallMax, eave], [maxH, eave], [(minH + maxH) / 2, ridge], [minH, eave], [wallMin, eave]]
-            : [[wallMin, 0], [wallMax, 0], [wallMax, eave], [maxH, eave], [maxH, ridge], [minH, ridge], [minH, eave], [wallMin, eave]];
+            ? [[wallMin, 0], [wallMax, 0], [wallMax, eave], [roofMax, eave], [(roofMin + roofMax) / 2, ridge], [roofMin, eave], [wallMin, eave]]
+            : [[wallMin, 0], [wallMax, 0], [wallMax, eave], [roofMax, eave], [roofMax, ridge], [roofMin, ridge], [roofMin, eave], [wallMin, eave]];
         parts.push(`<g data-entity="${escapeHtml(roof?.id ?? 'building-outline')}">${svgPoly(silhouette.map(([h, z]) => map(h, z)), { fill: DRAFT.paper, width: P.profile, join: 'miter' })}</g>`);
         if (roof && !gable) parts.push(svgLine(map(wallMin, eave), map(wallMax, eave), { width: P.thin }));
         // A curved wall facing the viewer shows where it meets the walls at its ends.
@@ -3057,6 +3098,16 @@
             inner.push(svgPoly([map(left + 50, top - 50), map(right - 50, top - 50), map(right - 50, bottom), map(left + 50, bottom)], { width: P.thin }));
           }
           parts.push(`<g data-entity="${escapeHtml(opening.id)}">${svgPoly(box, { fill: DRAFT.paper, width: P.medium })}${inner.join('')}</g>`);
+        }
+        for (const item of frame.attachments) {
+          if (options.structureOnly && item.kind === 'surface') continue;
+          const poly = item.profile ?? [{ h: item.h0, z: item.z0 }, { h: item.h1, z: item.z0 }, { h: item.h1, z: item.z1 }, { h: item.h0, z: item.z1 }];
+          const lines = [];
+          for (let i = 1; i < item.risers; i += 1) {
+            const z = item.z0 + (item.z1 - item.z0) * i / item.risers;
+            lines.push(svgLine(map(item.h0, z), map(item.h1, z), { width: P.thin }));
+          }
+          parts.push(`<g data-entity="${escapeHtml(item.id)}">${svgPoly(poly.map(point => map(point.h, point.z)), { fill: DRAFT.paper, width: P.medium })}${lines.join('')}</g>`);
         }
         if (!options.structureOnly && plants.length) parts.push(ctx.clipped(`clip-elev-plants-${side}`, plants.map(item => plantProfileSvg(model, item, map, basis.project(item.position), datumZ, P)).join('')));
         parts.push(verticalAnnotations(model, ctx, minH, maxH, roof));
@@ -3594,13 +3645,7 @@
       const parallel = Math.abs(dot2(u, d)) >= 0.3;
       let profile;
       if (parallel) {
-        const run = r => hOf(add(stair.start, mul(u, r)));
-        profile = [{ h: run(0), z: from.elevationMm }];
-        for (let i = 0; i < stair.riserCount; i += 1) {
-          const r0 = i / stair.riserCount * L, r1 = (i + 1) / stair.riserCount * L, z = from.elevationMm + rise * (i + 1);
-          profile.push({ h: run(r0), z }, { h: run(r1), z });
-        }
-        profile.push({ h: run(L), z: to.elevationMm - rise }, { h: run(L / stair.riserCount), z: from.elevationMm });
+        profile = stairRunProfile(stair, from, to, hOf);
       } else {
         const [h0, h1] = hRange(corners);
         let top = to.elevationMm, soffit = from.elevationMm;

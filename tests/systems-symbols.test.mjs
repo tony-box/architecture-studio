@@ -12,13 +12,14 @@ const fixture = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', 'lak
 const ALL = new Set(['plumbing', 'electrical', 'mechanical']);
 const evidence = { source: 'generated', confidence: 0.5, status: 'needs-review', note: 'Test device.' };
 
-// Adds a device node to the fixture's system for `discipline` on the upper level (elevation 3900).
+// Adds a device node to the fixture's system for `discipline` on the upper level.
 function withDevices(devices) {
   const model = structuredClone(fixture);
   // Keep each symbol test independent of the demo's growing device vocabulary.
   for (const system of model.systems) for (const node of system.nodes) node.kind = 'circuit-end';
   for (const [discipline, kind, x, y, height = 300] of devices) {
-    model.systems.find(system => system.discipline === discipline).nodes.push({ id: `test-${kind}-${x}-${y}`, kind, levelId: 'level-upper', position: { x, y, z: 3900 + height }, evidence });
+    const elevation = model.levels.find(level => level.id === 'level-upper').elevationMm;
+    model.systems.find(system => system.discipline === discipline).nodes.push({ id: `test-${kind}-${x}-${y}`, kind, levelId: 'level-upper', position: { x, y, z: elevation + height }, evidence });
   }
   return model;
 }
@@ -47,13 +48,14 @@ test('the symbol key lists exactly the symbols and tags a sheet draws', () => {
   assert.match(upper, />GFCI RECEPTACLE</);
 
   const ground = api.renderPlanSheet(model, 'level-ground', { systems: ALL });
-  assert.deepEqual([...ground.svg.matchAll(/data-legend-symbol="([^"]+)"/g)].map(m => m[1]), ['electrical-panel', 'air-handler', 'heat-pump']);
+  assert.deepEqual([...ground.svg.matchAll(/data-legend-symbol="([^"]+)"/g)].map(m => m[1]), ['electrical-panel', 'water-heater', 'heat-pump']);
   assert.match(ground.svg, /data-symbol="electrical-panel"><polygon[^>]*fill="#9c2f8f"[^>]*\/><text[^>]*>EP</, 'the panel takes the panelboard symbol and its tag');
   assert.match(ground.svg, /data-symbol="heat-pump"><text[^>]*>HP</);
   assert.ok(!ground.warnings.some(item => item.code === 'symbol.key-overflow'));
 
   const plumbingOnly = api.renderPlanSheet(model, 'level-ground', { systems: new Set(['plumbing']) }).svg;
-  assert.doesNotMatch(plumbingOnly, /data-symbol=/, 'tags follow the shown disciplines');
+  assert.deepEqual([...plumbingOnly.matchAll(/data-legend-symbol="([^"]+)"/g)].map(m => m[1]), ['water-heater'], 'tags follow the shown disciplines');
+  assert.deepEqual([...new Set([...plumbingOnly.matchAll(/data-symbol="([^"]+)"/g)].map(m => m[1]))], ['water-heater'], 'hidden disciplines draw neither symbols nor tags');
   const floorPlan = api.renderPlanSheet(model, 'level-upper').svg;
   assert.doesNotMatch(floorPlan, /data-symbol=|data-legend-symbol=/, 'floor plans draw no device symbols');
 });

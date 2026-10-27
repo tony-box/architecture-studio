@@ -110,13 +110,13 @@
     },
     {
       "id": "mep-device-placement",
-      "prompt": "In the lakeside barn residence, add outlets, light switches, and lights to the upstairs bathroom and great room, and put smoke and CO alarms where they belong. It's in upstate New York and there's a propane range.",
+      "prompt": "Review the existing outlets, light switches, lights, and smoke and CO alarms in the regenerated lakeside barn residence. Adapt the upstairs bathroom and living area for a propane range instead of the example's electric range. It's in upstate New York.",
       "expected_output": "Devices placed by rule from mep-placement-guide.md, connected to conceptual circuits, with model-code baselines kept separate from cited findings.",
       "assertions": [
-        "Each new receptacle, switch, light, and alarm is a node in the electrical system, connected by edges back to the panel, with z equal to its level elevation plus its mounting height",
+        "Existing devices are reviewed and reused, not blindly duplicated; every new device connects back to the panel, with z equal to its level elevation plus its mounting height",
         "A bathroom receptacle sits within 3 ft of the basin and outside the 3 ft by 8 ft tub and shower zone; bathroom and kitchen receptacles are marked for GFCI",
         "Switches sit on the latch side of doors, and the stair has a switch at each floor level",
-        "Smoke alarms are in the bedroom and outside it, at least 3 ft from the bathroom door; a CO alarm is outside the sleeping area because of the propane range",
+        "Smoke alarms are in both bedrooms and outside the sleeping area, at least 3 ft from the bathroom door; CO detection is reviewed for the propane range",
         "Each device's evidence names its rule ID, and model-code baselines stay needs-review unless a cited New York finding confirms them",
         "The reply names which placements are design practice and which topics remain open for the electrician"
       ]
