@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="architecture-studio-version" content="0.5.1">
+<meta name="architecture-studio-version" content="0.5.2">
 <title>Architecture Studio</title>
 <style>
   /* Viewer chrome tokens. See references/viewer-chrome.md. Drawing sheets carry their own
@@ -103,9 +103,11 @@
   .sheet-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
   .sheet-stage svg { display: block; box-shadow: 0 2px 10px rgba(31, 36, 32, .18); }
   .sheet [data-entity] { cursor: pointer; outline: none; }
-  .sheet [data-entity]:hover > :not(text), .sheet [data-entity]:hover:not(g) { stroke: var(--accent) !important; }
-  .sheet [data-entity].is-selected > :not(text), .sheet [data-entity].is-selected:not(g),
-  .sheet [data-entity]:focus-visible > :not(text), .sheet [data-entity]:focus-visible:not(g) { stroke: var(--accent) !important; stroke-width: 0.9px; }
+  .sheet [data-entity]:hover > :not(text):not([data-wall]), .sheet [data-entity]:hover:not(g) { stroke: var(--accent) !important; }
+  .sheet [data-entity].is-selected > :not(text):not([data-wall]), .sheet [data-entity].is-selected:not(g),
+  .sheet [data-entity]:focus-visible > :not(text):not([data-wall]), .sheet [data-entity]:focus-visible:not(g) { stroke: var(--accent) !important; stroke-width: 0.9px; }
+  /* A wall's cut line is a filled strip along its exposed edges, so highlighting recolours exactly that wall's share. */
+  .sheet [data-entity]:hover > [data-wall="cut"], .sheet [data-entity].is-selected > [data-wall="cut"], .sheet [data-entity]:focus-visible > [data-wall="cut"] { fill: var(--accent); }
   #model3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: #dfe6e2; }
   #model3d:focus-visible { outline-offset: -3px; }
   #content { position: absolute; inset: 0; overflow: auto; padding: 32px clamp(20px, 5vw, 64px); background: var(--sheet); }
@@ -2280,6 +2282,7 @@ exec node open-studio.mjs "$@"
   // other wall stops at the inside edge of its match, so outer layers wrap inner ones and every seam is
   // square. Walls with different layer counts butt whole: the through wall reaches the other's outside
   // face and the other stops at the through wall's inside face.
+  const cornerRunsThrough = (wall, other) => wall.thicknessMm !== other.thicknessMm ? wall.thicknessMm > other.thicknessMm : wall.id < other.id;
   function cornerBandKeep(model, wall, other, self, away) {
     const frame = (w, toward) => {
       const n = perp(unit2(sub(w.end, w.start))), sigma = -(Math.sign(dot2(n, toward)) || 1);
@@ -2288,12 +2291,131 @@ exec node open-studio.mjs "$@"
     const mine = frame(wall, away), theirs = frame(other, self);
     const ranges = (w, f) => wallBands(model, w).map(band => ({ index: band.index, outer: Math.min(f.of(band.s0), f.of(band.s1)), inner: Math.max(f.of(band.s0), f.of(band.s1)) })).sort((a, b) => a.outer - b.outer);
     const own = ranges(wall, mine), theirsRanges = ranges(other, theirs), matched = own.length === theirsRanges.length;
-    const through = wall.thicknessMm !== other.thicknessMm ? wall.thicknessMm > other.thicknessMm : wall.id < other.id;
+    const through = cornerRunsThrough(wall, other);
     return band => {
       const match = matched ? theirsRanges[own.findIndex(range => range.index === band.index)] : null;
       const limit = through ? (match?.outer ?? 0) : (match?.inner ?? other.thicknessMm);
       return p => theirs.at(p) - limit;
     };
+  }
+  // The whole wall as one band, for joins drawn without layers (poché plans).
+  const wholeWallBand = wall => [{ index: -1, s0: wall.thicknessMm / 2, s1: -wall.thicknessMm / 2, layer: null }];
+  // The joined plan outline of one piece of a straight wall, from `a` to `b` along it (openings split a wall
+  // into pieces). Each band ends where its own join rule says, and the outline is the union of the bands, so
+  // a layered corner steps exactly where its layers do. This one outline is the wall's paper ground, its
+  // click target, the edge its cut line follows, and the footprint the 3D model extrudes.
+  function straightWallPiece(wall, bands, startEnd, endEnd, a, b) {
+    const u = unit2(sub(wall.end, wall.start)), n = perp(u), at = (along, side) => add(add(wall.start, mul(u, along)), mul(n, side));
+    const ruleOf = (end, band) => end ? (end.bandKeep?.(band) ?? end.keep) : null;
+    // Where an end rule crosses the line at offset s; an end without a rule stops at the piece boundary.
+    const reach = (f, s, fallback) => {
+      if (!f) return fallback;
+      const f0 = f(at(0, s)), slope = f(at(1, s)) - f0;
+      return Math.abs(slope) < 1e-9 ? fallback : -f0 / slope;
+    };
+    const ranges = [...bands].sort((p, q) => Math.min(p.s0, p.s1) - Math.min(q.s0, q.s1)).map(band => {
+      const lo = Math.min(band.s0, band.s1), hi = Math.max(band.s0, band.s1), fs = ruleOf(startEnd, band), fe = ruleOf(endEnd, band);
+      return { lo, hi, start: [reach(fs, lo, a), reach(fs, hi, a)], end: [reach(fe, lo, b), reach(fe, hi, b)] };
+    });
+    return simplifyRing([
+      ...ranges.flatMap(r => [at(r.end[0], r.lo), at(r.end[1], r.hi)]),
+      ...[...ranges].reverse().flatMap(r => [at(r.start[1], r.hi), at(r.start[0], r.lo)])
+    ]);
+  }
+  // Drops repeated and collinear points so outlines triangulate and trace cleanly. Points within a
+  // millimetre merge: a clipped arc outline can leave a sample a hair from its corner.
+  function simplifyRing(points, eps = 0.01, minGap = 1) {
+    let ring = points.filter((p, i) => { const q = points[(i + 1) % points.length]; return Math.hypot(p.x - q.x, p.y - q.y) > minGap; });
+    for (let changed = true; changed && ring.length > 3;) {
+      changed = false;
+      for (let i = 0; i < ring.length && ring.length > 3; i += 1) {
+        const prev = ring[(i + ring.length - 1) % ring.length], p = ring[i], next = ring[(i + 1) % ring.length];
+        const d1 = sub(p, prev), d2 = sub(next, p), l1 = Math.hypot(d1.x, d1.y), l2 = Math.hypot(d2.x, d2.y);
+        if (Math.abs(cross2(d1, d2)) <= eps * Math.max(l1, l2) && dot2(d1, d2) > 0) { ring.splice(i, 1); changed = true; i -= 1; }
+      }
+    }
+    return ring;
+  }
+  // Cut lines for the walls of one plan, as filled strips just outside the wall outlines. An edge is cut
+  // where nothing else on the level lies beyond it, so a joint between walls draws no line; consecutive
+  // strips meet on the mitre of the turn between them, whichever wall owns each side, so strips tile the
+  // outline of the joined walls without overlapping. Returns, per piece, rings in model coordinates.
+  function wallCutStrips(pieces, width) {
+    const eps = 0.5, key = p => `${Math.round(p.x * 2)},${Math.round(p.y * 2)}`;
+    const boxes = pieces.map(piece => boundsOf(piece.outline)), near = (a, b) => a.x0 <= b.x1 + 1 && b.x0 <= a.x1 + 1 && a.y0 <= b.y1 + 1 && b.y0 <= a.y1 + 1;
+    const runs = pieces.map((piece, index) => {
+      const ring = polygonSignedArea(piece.outline) > 0 ? piece.outline : [...piece.outline].reverse();
+      const others = pieces.filter((other, j) => j !== index && near(boxes[j], boxes[index])).map(other => other.outline);
+      const segments = [];
+      ring.forEach((p, i) => {
+        const q = ring[(i + 1) % ring.length], d = sub(q, p), len = Math.hypot(d.x, d.y);
+        if (len < eps) return;
+        const dir = mul(d, 1 / len), normal = { x: dir.y, y: -dir.x }, cuts = [0, len];
+        for (const other of others) other.forEach((r, k) => {
+          const s = other[(k + 1) % other.length], e = sub(s, r), den = cross2(d, e);
+          for (const v of [r, s]) { const along = dot2(sub(v, p), dir); if (Math.abs(cross2(dir, sub(v, p))) < eps && along > eps && along < len - eps) cuts.push(along); }
+          if (Math.abs(den) < 1e-9) return;
+          const tt = cross2(sub(r, p), e) / den, uu = cross2(sub(r, p), d) / den;
+          if (tt > 0 && tt < 1 && uu >= 0 && uu <= 1) cuts.push(tt * len);
+        });
+        cuts.sort((x, y) => x - y);
+        for (let c = 0; c < cuts.length - 1; c += 1) {
+          const from = cuts[c], to = cuts[c + 1];
+          if (to - from < 2) continue;
+          const probe = add(add(p, mul(dir, (from + to) / 2)), mul(normal, eps));
+          if (others.some(other => pointInPolygon(probe, other))) continue;
+          const start = add(p, mul(dir, from)), end = add(p, mul(dir, to)), last = segments.at(-1);
+          if (last && Math.hypot(last.q.x - start.x, last.q.y - start.y) < 1e-6 && Math.abs(cross2(last.dir, dir)) < 1e-9) last.q = end;
+          else segments.push({ p: start, q: end, dir, normal, piece: index });
+        }
+      });
+      // Chain touching segments into runs; a run that closes on itself is the whole outline.
+      const chains = [];
+      for (const segment of segments) {
+        const last = chains.at(-1)?.at(-1);
+        if (last && key(last.q) === key(segment.p)) chains.at(-1).push(segment); else chains.push([segment]);
+      }
+      if (chains.length > 1 && key(chains.at(-1).at(-1).q) === key(chains[0][0].p)) chains[0].unshift(...chains.pop());
+      return chains.map(chain => ({ chain, closed: chains.length === 1 && key(chain.at(-1).q) === key(chain[0].p) }));
+    });
+    const runEnds = runs.flat().filter(run => !run.closed);
+    // Joints are matched within 2 mm, and exposed slivers under 2 mm are ignored: an arc outline is sampled,
+    // so its corners sit a hair off the exact face intersections a straight neighbour uses.
+    const nearest = (point, pick) => runEnds.map(run => pick(run.chain)).find(s => { const p = pick === firstOf ? s.p : s.q; return Math.hypot(p.x - point.x, p.y - point.y) < 2; });
+    const firstOf = chain => chain[0], lastOf = chain => chain.at(-1);
+    const starts = { get: point => nearest(point, firstOf) }, ends = { get: point => nearest(point, lastOf) };
+    // The offset corner where segment `a` turns into segment `b`, or a square end when there is no turn to make.
+    const mitre = (a, b, at, own) => {
+      if (!a || !b || Math.abs(cross2(a.dir, b.dir)) < 1e-6) return add(at, mul(own.normal, width));
+      const pa = add(at, mul(a.normal, width)), pb = add(at, mul(b.normal, width)), t = cross2(sub(pb, pa), b.dir) / cross2(a.dir, b.dir), x = add(pa, mul(a.dir, t));
+      return Math.hypot(x.x - at.x, x.y - at.y) > 4 * width ? add(at, mul(own.normal, width)) : x;
+    };
+    // At an inside corner between two walls, the strips overlap in a square. The wall that runs through the
+    // joint (the one whose outline fills the quadrant behind the corner) owns that square; the other wall's
+    // strip starts one strip width along its edge. Elsewhere strips meet on the mitre of the turn.
+    const ownsInsideCorner = (a, b, at) => {
+      if (!a || !b || a.piece === b.piece || cross2(a.dir, b.dir) > -0.7) return null;
+      const behind = add(at, sub(a.dir, b.dir));
+      return pointInPolygon(behind, pieces[a.piece].outline) ? 'before' : pointInPolygon(behind, pieces[b.piece].outline) ? 'after' : null;
+    };
+    return runs.map(list => list.map(({ chain, closed }) => {
+      const inner = [chain[0].p, ...chain.map(s => s.q)];
+      const outer = inner.map((point, i) => {
+        const before = i > 0 ? chain[i - 1] : closed ? chain.at(-1) : ends.get(point);
+        const after = i < chain.length ? chain[i] : closed ? chain[0] : starts.get(point);
+        return mitre(before, after, point, i < chain.length ? chain[i] : chain.at(-1));
+      });
+      if (!closed) {
+        const first = chain[0], last = chain.at(-1);
+        const lengthOf = s => Math.hypot(s.q.x - s.p.x, s.q.y - s.p.y);
+        const atStart = ownsInsideCorner(ends.get(first.p), first, first.p), atEnd = ownsInsideCorner(last, starts.get(last.q), last.q);
+        if (atStart === 'after') outer[0] = add(first.p, mul(first.normal, width));
+        if (atStart === 'before' && lengthOf(first) > width) { inner[0] = add(first.p, mul(first.dir, width)); outer[0] = add(inner[0], mul(first.normal, width)); }
+        if (atEnd === 'before') outer[outer.length - 1] = add(last.q, mul(last.normal, width));
+        if (atEnd === 'after' && lengthOf(last) > width) { inner[inner.length - 1] = sub(last.q, mul(last.dir, width)); outer[outer.length - 1] = add(inner.at(-1), mul(last.normal, width)); }
+      }
+      return closed ? { closed, inner: inner.slice(0, -1), outer: outer.slice(0, -1) } : { closed, inner, outer };
+    }));
   }
   // Distance from a point to a wall's centreline (the segment, or the arc between its ends).
   function wallDistance(wall, p) {
@@ -2744,6 +2866,8 @@ exec node open-studio.mjs "$@"
     }
 
     // Arc walls: the same layers, joins, and openings as straight walls, drawn on concentric bands.
+    // Every wall piece records its joined outline; grounds and cut lines are drawn once all are known.
+    const wallPieces = [];
     const splitRun = (run, f) => {
       const out = []; let current = [];
       run.forEach((p, i) => {
@@ -2763,7 +2887,7 @@ exec node open-studio.mjs "$@"
       const { cut: openings, overhead } = planOpenings(model, wall, level);
       const ends = [wallEndClip(wall, true, walls, tolerance), wallEndClip(wall, false, walls, tolerance)];
       for (const end of ends) if (end.fallback) warnings.push({ severity: 'advisory', code: 'wall.join-fallback', message: `${wall.id} meets ${end.fallback} where the faces have no clean miter; the end is drawn square.`, entityId: wall.id });
-      const bands = wallBands(model, wall), strokeParts = [], fillParts = [], lineParts = [], cuts = [];
+      const bands = wallBands(model, wall), fillParts = [], lineParts = [], cuts = [];
       let cursor = 0;
       for (const opening of openings) { cuts.push([cursor, opening.offsetMm]); cursor = opening.offsetMm + opening.widthMm; }
       cuts.push([cursor, L]);
@@ -2772,14 +2896,10 @@ exec node open-studio.mjs "$@"
         const startEnd = a <= 0 ? ends[0] : null, endEnd = b >= L ? ends[1] : null;
         const a0 = a - (startEnd?.extend ?? 0), b0 = b + (endEnd?.extend ?? 0), keeps = [startEnd?.keep, endEnd?.keep].filter(Boolean);
         const clipPoly = poly => keeps.reduce((points, f) => points.length >= 3 ? clipHalfPlane(points, f) : points, poly);
-        const outline = clipPoly(wallBand(g, a0, b0, t / 2, -t / 2));
+        const outline = simplifyRing(clipPoly(wallBand(g, a0, b0, t / 2, -t / 2)));
         if (outline.length < 3) return;
-        if (!mats.active) {
-          strokeParts.push(svgPoly(outline.map(map), { fill: poche, stroke: ink, width: P.cut * 2, join: 'miter' }));
-          fillParts.push(svgPoly(outline.map(map), { fill: poche, width: 0, inert: true }));
-          return;
-        }
-        strokeParts.push(svgPoly(outline.map(map), { fill: DRAFT.paper, stroke: ink, width: P.cut * 2, join: 'miter' }));
+        wallPieces.push({ wallId: wall.id, outline, fill: mats.active ? DRAFT.paper : poche });
+        if (!mats.active) return;
         for (const band of bands) {
           const region = clipPoly(wallBand(g, a0, b0, band.s0, band.s1)), faces = [band.s0, band.s1].map(s => clipRuns(g.points(a0, b0, s), keeps).flat());
           if (region.length < 3 || faces.some(face => !face.length)) continue;
@@ -2790,7 +2910,6 @@ exec node open-studio.mjs "$@"
         }
         for (const side of [bands[0].s0, ...bands.map(band => band.s1)]) for (const run of clipRuns(g.points(a0, b0, side), keeps)) lineParts.push(svgPoly(run.map(map), { open: true, stroke: ink, width: P.fine }));
       });
-      layers.wallStroke.push(`<g data-entity="${escapeHtml(wall.id)}">${strokeParts.join('')}</g>`);
       layers.wallFill.push(fillParts.join(''));
       if (lineParts.length) layers.wallLines.push(lineParts.join(''));
       const centreLine = g.points(0, L).map(map);
@@ -2846,59 +2965,38 @@ exec node open-studio.mjs "$@"
       const inward = dot2(sub(center, mul(add(wall.start, wall.end), 0.5)), n) >= 0 ? 1 : -1;
       const { cut: openings, overhead } = planOpenings(model, wall, level);
       const p = (along, side) => map(add(add(wall.start, mul(u, along)), mul(n, side)));
-      const strokeParts = [], fillParts = [];
-      if (mats.active) {
-        // Material plan: each layer is its own region; corners join square layer by layer and tees stop at the face they meet.
-        const ends = [wallEndClip(wall, true, walls, tolerance, model), wallEndClip(wall, false, walls, tolerance, model)];
-        const at = (along, side) => add(add(wall.start, mul(u, along)), mul(n, side));
-        const bands = wallBands(model, wall);
-        const cuts = []; let along = 0;
-        for (const opening of openings) { cuts.push([along, opening.offsetMm]); along = opening.offsetMm + opening.widthMm; }
-        cuts.push([along, L]);
-        const lineParts = [], cutPen = { stroke: ink, width: P.cut * 2, cap: 'square' };
-        for (const [a, b] of cuts) {
-          if (b - a < 1) continue;
-          const startEnd = a <= 0 ? ends[0] : null, endEnd = b >= L ? ends[1] : null;
-          const a0 = a - (startEnd?.extend ?? 0), b0 = b + (endEnd?.extend ?? 0);
-          const clipWith = keeps => ({
-            poly: points => keeps.reduce((acc, f) => acc.length >= 3 ? clipHalfPlane(acc, f) : acc, points),
-            line: side => keeps.reduce((segment, f) => segment && clipSegmentHalfPlane(segment[0], segment[1], f), [at(a0, side), at(b0, side)])
-          });
-          const whole = clipWith([startEnd?.keep, endEnd?.keep].filter(Boolean));
-          const outline = whole.poly([at(a0, -t / 2), at(b0, -t / 2), at(b0, t / 2), at(a0, t / 2)]);
-          if (outline.length < 3) continue;
-          // Paper ground for the hatches; the cut line follows the faces and free ends only, so joins show no seam.
-          strokeParts.push(svgPoly(outline.map(map), { fill: DRAFT.paper, width: 0 }));
-          for (const side of [-t / 2, t / 2]) { const edge = whole.line(side); if (edge) strokeParts.push(svgLine(map(edge[0]), map(edge[1]), cutPen)); }
-          if (!startEnd?.keep) strokeParts.push(svgLine(p(a0, -t / 2), p(a0, t / 2), cutPen));
-          if (!endEnd?.keep) strokeParts.push(svgLine(p(b0, -t / 2), p(b0, t / 2), cutPen));
-          for (const band of bands) {
-            const clip = clipWith([startEnd, endEnd].map(end => end?.bandKeep?.(band) ?? end?.keep).filter(Boolean));
-            const region = clip.poly([at(a0, band.s0), at(b0, band.s0), at(b0, band.s1), at(a0, band.s1)]);
-            const edges = [clip.line(band.s0), clip.line(band.s1)];
-            if (region.length < 3 || edges.some(edge => !edge)) continue;
-            const alongOf = q => dot2(sub(q, wall.start), u);
-            const coreA = Math.max(alongOf(edges[0][0]), alongOf(edges[1][0])), coreB = Math.min(alongOf(edges[0][1]), alongOf(edges[1][1]));
-            const o = map(at(coreA, band.s0));
-            const frame = { o, u: unit2(sub(map(at(coreB, band.s0)), o)), v: unit2(sub(map(at(coreA, band.s1)), o)), L: Math.max(0, coreB - coreA) / ratio, T: Math.abs(band.s0 - band.s1) / ratio };
-            fillParts.push(mats.region(region.map(map), frame, mats.resolve(band.layer.materialId)));
-            lineParts.push(svgPoly(region.map(map), { stroke: ink, width: P.fine, join: 'miter' }));
-          }
-        }
-        layers.wallLines.push(lineParts.join(''));
-      } else {
-        const startExt = wallEndJoined(wall, wall.start, walls, tolerance) ? t / 2 : 0, endExt = wallEndJoined(wall, wall.end, walls, tolerance) ? t / 2 : 0;
-        const solids = []; let cursor = -startExt;
-        for (const opening of openings) { solids.push([cursor, opening.offsetMm]); cursor = opening.offsetMm + opening.widthMm; }
-        solids.push([cursor, L + endExt]);
-        for (const [a, b] of solids) {
-          if (b - a < 1) continue;
-          const corners = [p(a, -t / 2), p(b, -t / 2), p(b, t / 2), p(a, t / 2)];
-          strokeParts.push(svgPoly(corners, { fill: poche, stroke: ink, width: P.cut * 2, join: 'miter' }));
-          fillParts.push(svgPoly(corners, { fill: poche, width: 0, inert: true }));
+      const fillParts = [];
+      // Corners join square (layer by layer in a material plan) and tees stop at the face they meet. Each
+      // piece between openings records its joined outline; its ground and cut line are drawn with the rest.
+      const ends = [wallEndClip(wall, true, walls, tolerance, model), wallEndClip(wall, false, walls, tolerance, model)];
+      const at = (along, side) => add(add(wall.start, mul(u, along)), mul(n, side));
+      const bands = mats.active ? wallBands(model, wall) : wholeWallBand(wall);
+      const cuts = []; let along = 0;
+      for (const opening of openings) { cuts.push([along, opening.offsetMm]); along = opening.offsetMm + opening.widthMm; }
+      cuts.push([along, L]);
+      const lineParts = [];
+      for (const [a, b] of cuts) {
+        if (b - a < 1) continue;
+        const startEnd = a <= 0 ? ends[0] : null, endEnd = b >= L ? ends[1] : null;
+        const a0 = a - (startEnd?.extend ?? 0), b0 = b + (endEnd?.extend ?? 0);
+        const outline = straightWallPiece(wall, bands, startEnd, endEnd, a, b);
+        if (outline.length < 3) continue;
+        wallPieces.push({ wallId: wall.id, outline, fill: mats.active ? DRAFT.paper : poche });
+        if (!mats.active) continue;
+        for (const band of bands) {
+          const keeps = [startEnd, endEnd].map(end => end?.bandKeep?.(band) ?? end?.keep).filter(Boolean);
+          const region = keeps.reduce((acc, f) => acc.length >= 3 ? clipHalfPlane(acc, f) : acc, [at(a0, band.s0), at(b0, band.s0), at(b0, band.s1), at(a0, band.s1)]);
+          const edges = [band.s0, band.s1].map(side => keeps.reduce((segment, f) => segment && clipSegmentHalfPlane(segment[0], segment[1], f), [at(a0, side), at(b0, side)]));
+          if (region.length < 3 || edges.some(edge => !edge)) continue;
+          const alongOf = q => dot2(sub(q, wall.start), u);
+          const coreA = Math.max(alongOf(edges[0][0]), alongOf(edges[1][0])), coreB = Math.min(alongOf(edges[0][1]), alongOf(edges[1][1]));
+          const o = map(at(coreA, band.s0));
+          const frame = { o, u: unit2(sub(map(at(coreB, band.s0)), o)), v: unit2(sub(map(at(coreA, band.s1)), o)), L: Math.max(0, coreB - coreA) / ratio, T: Math.abs(band.s0 - band.s1) / ratio };
+          fillParts.push(mats.region(region.map(map), frame, mats.resolve(band.layer.materialId)));
+          lineParts.push(svgPoly(region.map(map), { stroke: ink, width: P.fine, join: 'miter' }));
         }
       }
-      layers.wallStroke.push(`<g data-entity="${escapeHtml(wall.id)}">${strokeParts.join('')}</g>`);
+      if (lineParts.length) layers.wallLines.push(lineParts.join(''));
       layers.wallFill.push(fillParts.join(''));
       placer.reserveSegment(p(wallEndJoined(wall, wall.start, walls, tolerance) ? -t / 2 : 0, 0), p(L + (wallEndJoined(wall, wall.end, walls, tolerance) ? t / 2 : 0), 0), t / ratio / 2 + 0.8);
 
@@ -2935,6 +3033,19 @@ exec node open-studio.mjs "$@"
         layers.openings.push(`<g data-entity="${escapeHtml(opening.id)}">${svgLine(p(a, out), p(b, out), hidden)}${svgLine(p(a, face), p(a, out), hidden)}${svgLine(p(b, face), p(b, out), hidden)}</g>`);
       }
     }
+
+    // Wall grounds and cut lines, from the joined outlines of every wall piece on the level.
+    const cutStrips = wallCutStrips(wallPieces, P.cut * ratio), wallGroups = new Map();
+    wallPieces.forEach((piece, index) => {
+      const parts = wallGroups.get(piece.wallId) ?? [];
+      parts.push(svgPoly(piece.outline.map(map), { fill: piece.fill, width: 0 }).replace('<polygon ', '<polygon data-wall="ground" '));
+      for (const strip of cutStrips[index]) {
+        const d = strip.closed ? `M${pts(strip.inner.map(map))}Z M${pts(strip.outer.map(map))}Z` : `M${pts([...strip.inner, ...[...strip.outer].reverse()].map(map))}Z`;
+        parts.push(`<path data-wall="cut" d="${d}" fill="${ink}" fill-rule="evenodd" stroke="none"/>`);
+      }
+      wallGroups.set(piece.wallId, parts);
+    });
+    for (const [id, parts] of wallGroups) layers.wallStroke.push(`<g data-entity="${escapeHtml(id)}">${parts.join('')}</g>`);
 
     const centerPaper = map(center);
     for (const dimension of model.dimensions ?? []) {
@@ -5018,7 +5129,7 @@ void main() {
     for (const column of model.columns ?? []) {
       pushPrism(gls.triangles, column.position.x / 1000, (column.baseElevationMm + column.topElevationMm) / 2000, -column.position.y / 1000, column.shape.widthMm / 1000, (column.topElevationMm - column.baseElevationMm) / 1000, column.shape.depthMm / 1000, -(column.rotationDeg ?? 0) * Math.PI / 180, rgb(materialColor(column.materialId, '#7d858c')));
     }
-    // Walls join the way the plan draws them (wallEndClip): corners miter through the face intersections and
+    // Walls join the way the plan draws them (straightWallPiece): corners join square, layer by layer, and
     // tees stop at the face they meet, so a corner is closed rather than notched on the outside and doubled
     // on the inside. Joins are found among the walls of the same level.
     const tolerance = model.project.coordinates.toleranceMm ?? 3;
@@ -5040,13 +5151,15 @@ void main() {
         const s = geometry.offsetOf({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
         return s > t / 2 - tolerance ? leftColor : s < -t / 2 + tolerance ? rightColor : null;
       };
-      const neighbours = wallsOnLevel.get(wall.levelId), ends = [wallEndClip(wall, true, neighbours, tolerance), wallEndClip(wall, false, neighbours, tolerance)];
-      // Each piece is extruded from its plan outline; a piece at either end of the wall takes that end's join.
+      const neighbours = wallsOnLevel.get(wall.levelId), ends = [wallEndClip(wall, true, neighbours, tolerance, model), wallEndClip(wall, false, neighbours, tolerance, model)];
+      // Each piece is extruded from the same joined outline the plan draws; a piece at either end of the wall takes that end's join.
       const addChunk = (from, to, z0, z1) => {
         if (to - from < 1 || z1 - z0 < 1) return;
         const startEnd = from <= 0 ? ends[0] : null, endEnd = to >= length ? ends[1] : null;
         const a0 = from - (startEnd?.extend ?? 0), b0 = to + (endEnd?.extend ?? 0);
-        const outline = [startEnd?.keep, endEnd?.keep].filter(Boolean).reduce((points, keep) => points.length >= 3 ? clipHalfPlane(points, keep) : points, wallBand(geometry, a0, b0, t / 2, -t / 2));
+        const outline = wall.bulge
+          ? simplifyRing([startEnd?.keep, endEnd?.keep].filter(Boolean).reduce((points, keep) => points.length >= 3 ? clipHalfPlane(points, keep) : points, wallBand(geometry, a0, b0, t / 2, -t / 2)))
+          : straightWallPiece(wall, bands, startEnd, endEnd, from, to);
         if (outline.length >= 3) pushExtrusion(gls.triangles, outline, wallBase + z0, wallBase + z1, color, sideColor);
       };
       // Split the wall at every jamb; each piece is solid except where openings over it are, so openings

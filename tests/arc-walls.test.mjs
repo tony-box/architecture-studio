@@ -150,5 +150,5 @@ test('arc walls draw in poché when the plan has no material detail', () => {
   model.surfaces = []; model.site = { ...model.site, groundMaterialId: undefined };
   delete model.site.groundMaterialId;
   const plan = api.renderPlanSheet(model, 'level-ground');
-  assert.match(plan.svg, /data-entity="wall-bay"><polygon points="[^"]+" fill="#4d4d4d"/);
+  assert.match(plan.svg, /data-entity="wall-bay"><polygon data-wall="ground" points="[^"]+" fill="#4d4d4d"/);
 });

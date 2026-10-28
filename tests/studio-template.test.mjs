@@ -16,6 +16,15 @@ const metricFixture = readFixture('compact-metric-studio');
 const materialFixture = readFixture('mixed-material-workshop');
 const metricMaterialFixture = readFixture('mixed-material-workshop-metric');
 
+function insideRing([px, py], ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [ax, ay] = ring[i], [bx, by] = ring[j];
+    if ((ay > py) !== (by > py) && px < (bx - ax) * (py - ay) / (by - ay) + ax) inside = !inside;
+  }
+  return inside;
+}
+
 function withoutCatalog(source) {
   const model = structuredClone(source);
   delete model.materials;
@@ -635,6 +644,17 @@ test('layered wall corners join square, layer by layer, with no diagonal seams',
   const svg = api.renderPlanSheet(structuredClone(metricFixture), 'level-ground').svg;
   const layers = [...svg.matchAll(/<polygon points="([^"]+)" fill="none" stroke="[^"]+" stroke-width="[^"]+" stroke-linejoin="miter"\/>/g)].map(match => match[1].split(' ').map(pair => pair.split(',').map(Number)));
   assert.ok(layers.length >= 40, `expected outlined layer regions, got ${layers.length}`);
+  assert.match(svg, /<polygon data-wall="ground"/, 'the paper ground under a wall is marked so highlights skip it');
+  const grounds = [...svg.matchAll(/data-wall="ground" points="([^"]+)"/g)].map(match => match[1].split(' ').map(pair => pair.split(',').map(Number)));
+  const strips = [...svg.matchAll(/data-wall="cut" d="M([^"Z]+)Z"/g)].map(match => match[1].trim().split(' ').map(pair => pair.split(',').map(Number)));
+  assert.ok(strips.length > 0, 'walls draw cut strips');
+  // An open strip is its inner edge then its outer edge reversed; the middle of each piece of it is outside every wall.
+  for (const strip of strips) for (let i = 0; i + 1 < strip.length / 2; i += 1) {
+    const n = strip.length - 1, quad = [strip[i], strip[i + 1], strip[n - i - 1], strip[n - i]];
+    const mid = quad.reduce(([sx, sy], [x, y]) => [sx + x / 4, sy + y / 4], [0, 0]);
+    assert.ok(!grounds.some(ground => insideRing(mid, ground)), `cut strip at ${mid} lies outside every wall`);
+  }
+  assert.match(html, /is-selected > :not\(text\):not\(\[data-wall\]\)/, 'highlighting a wall does not outline its mitered paper ground');
   for (const ring of layers) ring.forEach(([x, y], i) => {
     const [nx, ny] = ring[(i + 1) % ring.length];
     assert.ok(Math.abs(nx - x) < 0.05 || Math.abs(ny - y) < 0.05, `diagonal layer edge ${x},${y} to ${nx},${ny}`);
@@ -729,16 +749,20 @@ test('sections cut assemblies, headers, members, foundations, and site surfaces'
   assert.match(entityGroup(sheet, 'beam-floor'), /<path d="M[^"]+" fill="#1b1b1b"/, 'steel cut solid');
 });
 
-test('material plans miter wall corners and stop partitions at the faces they meet', () => {
+test('material plans join wall corners square and stop partitions at the faces they meet', () => {
   const { api } = loadStudio();
   const plan = api.renderPlanSheet(structuredClone(materialFixture), 'level-ground').svg;
   const polygons = id => [...entityGroup(plan, id).matchAll(/points="([^"]+)"/g)].map(match => match[1].split(' ').map(pair => pair.split(',').map(Number)));
-  const south = polygons('wall-g-south'), office = polygons('wall-g-office');
+  const south = polygons('wall-g-south'), office = polygons('wall-g-office'), west = polygons('wall-g-west');
   const southBottom = Math.max(...south.flat().map(([, y]) => y)), officeBottom = Math.max(...office.flat().map(([, y]) => y));
   const wallPaper = 248 / 48;
   assert.ok(officeBottom <= southBottom - wallPaper + 0.05, 'the partition stops at the inner face of the south wall');
-  const firstLeg = south[0], leftX = firstLeg.map(([x]) => x).sort((a, b) => a - b);
-  assert.ok(leftX[1] - leftX[0] > wallPaper * 0.9, 'the south wall miters at its west corner');
+  for (const ring of [...south, ...west]) ring.forEach(([x, y], i) => {
+    const [nx, ny] = ring[(i + 1) % ring.length];
+    assert.ok(Math.abs(nx - x) < 0.05 || Math.abs(ny - y) < 0.05, 'the south-west corner joins square, with no diagonal edge');
+  });
+  const corner = [Math.min(...west.flat().map(([x]) => x)) + 0.05, southBottom - 0.05];
+  assert.equal([...south, ...west].filter(ring => insideRing(corner, ring)).length, 1, 'exactly one wall owns the outer corner');
 });
 
 test('review details describe assemblies, headers, and members', () => {
@@ -785,11 +809,12 @@ test('review regressions: lintel draw order, near-miss corners, unequal miters, 
   const plan = model => api.renderPlanSheet(model, 'level-ground').svg;
   const polygons = (svg, id) => [...entityGroup(svg, id).matchAll(/points="([^"]+)"/g)].map(match => match[1].split(' ').map(pair => pair.split(',').map(Number)));
   const area = points => Math.abs(points.reduce((sum, [x, y], i) => { const [nx, ny] = points[(i + 1) % points.length]; return sum + x * ny - nx * y; }, 0) / 2);
-  // A corner whose endpoints miss by 10 mm still miters instead of leaving a hole.
+  // A corner whose endpoints miss by 10 mm still closes instead of leaving a hole.
   const gap = structuredClone(materialFixture);
   gap.walls.find(wall => wall.id === 'wall-g-west').end = { x: 0, y: 10 };
   const west = polygons(plan(gap), 'wall-g-west'), south = polygons(plan(gap), 'wall-g-south');
-  assert.ok(Math.max(...west.flat().map(([, y]) => y)) >= Math.max(...south.flat().map(([, y]) => y)) - 0.05, 'the west wall reaches the outer corner');
+  const outer = [Math.min(...west.flat().map(([x]) => x)) + 0.05, Math.max(...south.flat().map(([, y]) => y)) - 0.05];
+  assert.ok([...west, ...south].some(ring => insideRing(outer, ring)), 'the joined walls reach the outer corner');
   // Collinear walls with a small gap keep their full width.
   const split = structuredClone(materialFixture);
   const wall = split.walls.find(item => item.id === 'wall-g-west');
@@ -797,7 +822,7 @@ test('review regressions: lintel draw order, near-miss corners, unequal miters, 
   wall.end = { x: 0, y: 3000 };
   split.openings = split.openings.filter(item => item.wallId !== 'wall-g-west');
   for (const id of ['wall-g-west', 'wall-g-west-lower']) assert.ok(polygons(plan(split), id).every(points => area(points) > 1), `${id} keeps its width`);
-  // Walls of different thickness miter through both face intersections.
+  // Walls of different thickness still close on one outer corner.
   const thick = structuredClone(materialFixture);
   const thickWest = thick.walls.find(item => item.id === 'wall-g-west');
   thickWest.thicknessMm = 400; thickWest.layers[2].thicknessMm += 152;
@@ -871,7 +896,7 @@ test('thin regions stay unhatched except steel, and material detail follows each
   assert.equal(api.materialsActive(withoutCatalog(metricFixture), 12), false, 'no catalog, no detail');
 });
 
-test('oblique layered walls hatch, miter, and stay finite', () => {
+test('oblique layered walls hatch, join, and stay finite', () => {
   const { api } = loadStudio();
   const model = structuredClone(metricMaterialFixture);
   const u1 = { x: Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) }, u2 = { x: -u1.y, y: u1.x };
@@ -889,7 +914,10 @@ test('oblique layered walls hatch, miter, and stay finite', () => {
   assert.match(sheet.svg, /<path d="M[^"]+ C/, 'batt wave follows the oblique wall');
   const vertices = id => [...entityGroup(sheet.svg, id).matchAll(/points="([^"]+)"/g)][0][1].split(' ').map(pair => pair.split(',').map(Number));
   const shared = vertices('wall-a').filter(([x, y]) => vertices('wall-b').some(([x2, y2]) => Math.hypot(x - x2, y - y2) < 0.02));
-  assert.equal(shared.length, 2, 'the 90 degree oblique corner miters on a shared edge');
+  assert.ok(shared.length >= 2, 'the 90 degree oblique corner joins on shared edges');
+  const area = ring => Math.abs(ring.reduce((sum, [x, y], i) => { const [nx, ny] = ring[(i + 1) % ring.length]; return sum + x * ny - nx * y; }, 0) / 2);
+  const centroidOf = ring => ring.reduce(([sx, sy], [x, y]) => [sx + x / ring.length, sy + y / ring.length], [0, 0]);
+  assert.ok(!insideRing(centroidOf(vertices('wall-b')), vertices('wall-a')) && area(vertices('wall-a')) > 1, 'the joined walls do not overlap');
 });
 
 test('interior-to-exterior layer order survives reversing a wall', () => {

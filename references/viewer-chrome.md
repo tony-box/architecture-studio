@@ -321,7 +321,7 @@ table".
   gypsum inside, gypsum on both faces of a stud partition; tops, ends, and
   jambs show the exterior face's layer. Slabs keep the colour of their
   thickest layer other than insulation and gypsum. Walls are extruded from the same joined
-  outlines as the plan (corners close on their face intersections, tees stop at the face they meet,
+  outlines as the plan (corners join square, layer by layer, tees stop at the face they meet,
   among the walls of one level), so corners are closed rather than notched,
   including the pieces above and below openings near a corner. Held keys
   move by elapsed time on a

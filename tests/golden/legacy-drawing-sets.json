@@ -2,61 +2,61 @@
   "lakeside-barn-residence": {
     "manifest": "43e846d6677b3e3361769b9f3ebcebc7798b935fdd070b3c2c0876773dba53a1",
     "sheets": {
-      "exports/plans/level-ground.svg": "20f50b70915113f77fdb00dd32d019b9caccece5bad7dc3245282d2939c8ceb6",
-      "exports/plans/level-upper.svg": "ce98bb7a021e7b5d75fc71bde3ffb8ff91f728670795c1a7d36d9c85245165d0",
+      "exports/plans/level-ground.svg": "a381343b9e26093a26f32bb35ac6ea7aa349e191601eb846115a383422cdd25c",
+      "exports/plans/level-upper.svg": "c0a5c76a66024bcb8be0bbf05fb78bd9bb1f131dac6ec1cf2cd438a87f5b0c66",
       "exports/elevations/north.svg": "1d9c8b231175aa07f7be1bba07bb32d66f0d0abe654f3e482e0fe074051a6f4b",
       "exports/elevations/east.svg": "ad55f8b33773038e4292efcfbc4c6d12702f6ef353d61e6bd44fbbc1acfa832d",
       "exports/elevations/south.svg": "8f1fdb5936503cadc486ee6eb7ae71d5ced1f311096c39ea171078bdfa84c9bb",
       "exports/elevations/west.svg": "54336dc2d1b7b1d1fa6ca68e855fdec84f1d4ace7788e8c7f6826ec7d49a70aa",
       "exports/sections/section-aa.svg": "39a6a436b8768812f91a2ab9bbb5ce7f30edbb4cb7ec9b2f0eadc1d469288c77",
       "exports/sections/section-bb.svg": "63fe8bb5999564b31d7077bf33acd70781333e7584875833eea931ac2a07ed4c",
-      "exports/systems/level-ground.svg": "6642602f59c5db3d8f8300ff5573df0dc7bd2e7695f99318862abeb48a780c12",
-      "exports/systems/level-upper.svg": "3a47612639d624ba4ae99e72e25e45a34cca1e129d1d377954117d828006f8ad"
+      "exports/systems/level-ground.svg": "5d6ce4990e2e75a7330dcbeca27effa22fad40dd2cd0ba438ab9ed7274625c2b",
+      "exports/systems/level-upper.svg": "b260452a06ba4bac023a6953d95db8a94756e70c409c65eb2f53fd368994274f"
     }
   },
   "compact-metric-studio": {
     "manifest": "155f1aa088ded5909582614450f49e34ee132201b0bde1d1f97312eadf75289a",
     "sheets": {
-      "exports/plans/level-ground.svg": "9c65e4cb20855035470e0cf0c9e7deee54ecd234a76d4209d472d919c1226408",
-      "exports/plans/level-upper.svg": "a0ebfd8bfef85304362d48bb072916d5fec09244b03c40f2148ebb62a1a7ecf2",
+      "exports/plans/level-ground.svg": "fa7f2668677297ebb027e1c209e2b6f3dff6b25fc71ff073aa133a3255d28611",
+      "exports/plans/level-upper.svg": "2ed6bbe2c9af209bf2747de7ca92518bbb0c3fef61815bcaf90c6c6cf4a63569",
       "exports/elevations/north.svg": "173c51755d1d7c46412f12ccca51483bc0ad1e59e9eda644a9797c17e1ea30c3",
       "exports/elevations/east.svg": "80249dc7cf612fde095bb181a4eaca88b9aa87412880052175628915852dbb2e",
       "exports/elevations/south.svg": "6d48b9f556c80cd05229f46c65e130f35cf69ca33d70783cf6b10fc086c6c28b",
       "exports/elevations/west.svg": "23ef849fa9e446dab317a3410f841818c22fea4ae37f5b1aa5aaf45172234408",
       "exports/sections/section-a.svg": "97626105f3d738da3be4687b4715e7d3426de9b5c0d51aba701b368faeaf5d28",
       "exports/sections/section-b.svg": "77b44787b6f92704acedc6f993ae2dccf7875134990b52d7e06f300ba0e0dfe6",
-      "exports/systems/level-ground.svg": "947ec463204e4ea3678cba825776b2646573c549b3ef1d2c409c7cc50574e172",
-      "exports/systems/level-upper.svg": "a246a49d233f9b07d4bf6663350c15887b961678a68faeb6880aeb07fc0beee9"
+      "exports/systems/level-ground.svg": "008f03fd693d235c3246d2880a540aa4b76101e430f8adbbfab2ee180f58b52e",
+      "exports/systems/level-upper.svg": "f56a2dfadfbd6043d6398dac495db5bbc2ecc16dec7722663ebacb2b60d01e91"
     }
   },
   "mixed-material-workshop": {
     "manifest": "c24797b4ef991fc2712633cd4711d412f36dd6279f7eab2099622d14fbb6d28d",
     "sheets": {
-      "exports/plans/level-ground.svg": "6bc30ea29ad3b7f6e02b99d222b759e271f874c0428c9992e5288c629116a6ac",
-      "exports/plans/level-upper.svg": "6280d826039083b887477b15763c774e019d8e26c55265f1b8d247dd4c6c6775",
+      "exports/plans/level-ground.svg": "9d73b15533921dc01c1f6107f970708ab40358646d2a707d7247e311b185581a",
+      "exports/plans/level-upper.svg": "39cf8560e218db9def83c6ed2f8865b20f97e0cfeb84599931b35ffece8d21a9",
       "exports/elevations/north.svg": "bab6be1d6d79cc2322e8ec3e0eb74ef4210bc75cb6cb8f3ad9f0af7193ac1240",
       "exports/elevations/east.svg": "be4257b9fe38b45e832e18927118591a3473e8501a16f3d6a6d35a9e648f65ac",
       "exports/elevations/south.svg": "6c4fb22bd19e41bb7fff27a986a26164e3cf6e8da5a037aab0f0b731e899d56c",
       "exports/elevations/west.svg": "1d3a1da2728cd66d9950279d1cc3049df6f0006824d08719dc5b15c131d564ab",
       "exports/sections/section-aa.svg": "53c5d64730ff8a0fc7e2ad847cbf30bf4a032e3b902d07b9504127406f0261e7",
       "exports/sections/section-bb.svg": "ffa167225c9745a24e755fae3f8c1972c9c9ea2972a97ee1611d0e7ba4df9633",
-      "exports/systems/level-ground.svg": "a56fc5094cc3d75c51854416c1893fbe774e17119c9db8fd044f723329872267",
-      "exports/systems/level-upper.svg": "9ca6a7fd420019e9543372c4a8b3b72ced2acbeb544cfb00a785acf0842c7c08"
+      "exports/systems/level-ground.svg": "83103b3a307961773c67357930c64eb541e6c20a8f7f655a96f6c5646c99aa9f",
+      "exports/systems/level-upper.svg": "e6663aed642f1deff2cea9e61b8249ccf5e3edd5dada84fc63541cfbab47434f"
     }
   },
   "mixed-material-workshop-metric": {
     "manifest": "9bfc7f1b6eb2971e72e3f5cf53d1c2ecc1c181f2987523e939d7bfba366826f7",
     "sheets": {
-      "exports/plans/level-ground.svg": "8aef7c5d1b6bd62a33363f54b4cc87098ba77183b14d5a4ea422d8d98ab336c0",
-      "exports/plans/level-upper.svg": "44dd6882b17ae80ec1270db11670231a0e62758d611fcbe12a9e3cdcaaf0325f",
+      "exports/plans/level-ground.svg": "5e23a64600ab9acde2690e7be7c75ebe50493d0f7db033f97ea277e9d2d5af2f",
+      "exports/plans/level-upper.svg": "15d8a5cbd9fd403eebd8ffd1769e1325e6e98cec4b956585eaef3c7a15f67fde",
       "exports/elevations/north.svg": "3833a0bb12d4b54a9ed125a77109f3e8e15fc5fa1b5de9cadfe11a5c26d5b949",
       "exports/elevations/east.svg": "0100227533748b2f2acd3595f70404ece6244c45cb1ef08f74ca294d7e4dcfca",
       "exports/elevations/south.svg": "0d6101e9e51a0c0271785558b3f547dbe00074bdab651c57753b97a0ca8d81f3",
       "exports/elevations/west.svg": "b8dc933fd3e2017a60979baaf0fc65c987f4fa2a711444ba573480da534bd9af",
       "exports/sections/section-aa.svg": "caba1a3ec359c8e96adda14cccef47ba4d7c23d811972ee94d77be7b76ed383c",
       "exports/sections/section-bb.svg": "ccc773b5f71d54193742706e47e8a9e22f83240cdfa988ba14ee93dd25a2518d",
-      "exports/systems/level-ground.svg": "374f6570321f93fe44ec503a13142d4a427f08b86a97f462142a2a4f87d3de72",
-      "exports/systems/level-upper.svg": "b2527f364c59ee36a4d39df0f2e6a235b94b8474cd8c1939a9ee759e81fee6bd"
+      "exports/systems/level-ground.svg": "c6a7a214845d76991bae4f0ce771519f4c1cb38513df8049674d8e83feaaf870",
+      "exports/systems/level-upper.svg": "9ef96f98c40266a9ca621628926abfdb9bed20beba48ea05c0665a0db533a887"
     }
   }
 }

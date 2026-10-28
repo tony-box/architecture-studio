@@ -247,10 +247,22 @@ reaching the outside edge of the matching layer in the other wall, and each
 layer of the other wall stops at the inside edge of its match. Outer layers
 wrap inner ones and no seam runs diagonally. Walls with different layer
 counts butt whole: the through wall reaches the other's outside face and the
-other stops at the through wall's inside face. The `cut` outline follows the
-wall faces and free ends only, so a joint draws no heavy line. Corners with an
-arc wall miter on their face intersections. Collinear walls butt square. A
-wall that ends part way along another wall stops at that wall's face.
+other stops at the through wall's inside face. A poché plan joins whole walls
+the same way. Corners with an arc wall miter on their face intersections.
+Collinear walls butt square. A wall that ends part way along another wall
+stops at that wall's face.
+
+**Wall outlines and the cut line (studio rule).** Each piece of a wall between
+openings has one joined outline, the union of its layers after these joins.
+That outline is the wall's paper ground (or poché), its click and highlight
+target, and the footprint the 3D model extrudes, so plan and 3D agree on
+which wall owns every part of a corner. The `cut` line is drawn just outside
+the joined walls, on edges where nothing else on the level lies beyond, so a
+joint between walls draws no line and nothing is drawn twice. Each wall owns
+the stretch of cut line along its own exposed edges; at an inside corner or
+tee the wall that runs through owns the corner and the other wall's line
+starts where it ends, and at a shallow bend the two meet on a mitre.
+Highlighting a wall recolours exactly its share of the cut line.
 
 **Structural members (studio rule).** A column the plan cut plane passes
 through is drawn cut, in its profile (rectangle, wide-flange I, or hollow
