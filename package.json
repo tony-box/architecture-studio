@@ -1,6 +1,6 @@
 {
   "name": "architecture-studio",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "Agent Skill for close-to-accurate building concepts: drafted plans, elevations, sections, conceptual MEP, advisory code research, and a 3D walkthrough.",
   "license": "MIT",

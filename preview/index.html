@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="architecture-studio-version" content="0.5.0">
+<meta name="architecture-studio-version" content="0.5.1">
 <title>Architecture Studio</title>
 <style>
   /* Viewer chrome tokens. See references/viewer-chrome.md. Drawing sheets carry their own
@@ -2241,9 +2241,11 @@ exec node open-studio.mjs "$@"
     const u = unit2(sub(beam.end, beam.start)), n = mul(perp(u), beam.shape.widthMm / 2);
     return [add(beam.start, n), add(beam.end, n), sub(beam.end, n), sub(beam.start, n)];
   }
-  // Wall ends in a material plan: corners miter through the inner and outer face intersections,
-  // tees stop at the face of the wall they meet, and anything else ends square.
-  function wallEndClip(wall, atStart, walls, tolerance) {
+  // Wall ends in a material plan: corners meet through the inner and outer face intersections,
+  // tees stop at the face of the wall they meet, and anything else ends square. `keep` clips the
+  // whole wall (its paper ground and cut outline); at straight corners `bandKeep(band)` clips each
+  // layer so the corner reads as square, wrapped layers instead of a diagonal miter.
+  function wallEndClip(wall, atStart, walls, tolerance, model = null) {
     const endPoint = atStart ? wall.start : wall.end;
     // Joins that involve an arc wall use the true offset faces; straight joins keep the original rule.
     if (wall.bulge || walls.some(other => other.bulge && other.id !== wall.id && wallDistance(other, endPoint) <= other.thicknessMm / 2 + tolerance)) return curvedEndClip(wall, atStart, walls, tolerance);
@@ -2255,10 +2257,10 @@ exec node open-studio.mjs "$@"
         const away = unit2(sub(otherFar, end)), sin = cross2(self, away);
         // Collinear walls butt square.
         if (Math.abs(sin) < 1e-3) return { extend: 0, keep: null };
-        // Corner at the centreline intersection; the miter runs along self * t_other + away * t_self.
+        // Corner at the centreline intersection; the outline's corner line runs along self * t_other + away * t_self.
         const k = cross2(sub(end, point), away) / sin, corner = add(point, mul(self, k));
         const m = add(mul(self, other.thicknessMm), mul(away, wall.thicknessMm)), sign = Math.sign(cross2(m, self)) || 1;
-        return { extend: other.thicknessMm + wall.thicknessMm + Math.abs(k), keep: p => sign * cross2(m, sub(p, corner)) };
+        return { extend: other.thicknessMm + wall.thicknessMm + Math.abs(k), keep: p => sign * cross2(m, sub(p, corner)), bandKeep: model ? cornerBandKeep(model, wall, other, self, away) : null };
       }
     }
     for (const other of walls) {
@@ -2271,6 +2273,27 @@ exec node open-studio.mjs "$@"
       return { extend: other.thicknessMm, keep: p => side * dot2(sub(p, other.start), normal) - other.thicknessMm / 2 };
     }
     return { extend: 0, keep: null };
+  }
+  // Square, layer-by-layer corner (drafting-standard.md "Wall joins"). Depths run from the corner's
+  // outside face inward. The thicker wall (or, at equal thickness, the earlier id) runs through: each of
+  // its layers reaches the outside edge of the matching layer in the other wall, and each layer of the
+  // other wall stops at the inside edge of its match, so outer layers wrap inner ones and every seam is
+  // square. Walls with different layer counts butt whole: the through wall reaches the other's outside
+  // face and the other stops at the through wall's inside face.
+  function cornerBandKeep(model, wall, other, self, away) {
+    const frame = (w, toward) => {
+      const n = perp(unit2(sub(w.end, w.start))), sigma = -(Math.sign(dot2(n, toward)) || 1);
+      return { of: s => w.thicknessMm / 2 - sigma * s, at: p => w.thicknessMm / 2 - sigma * dot2(sub(p, w.start), n) };
+    };
+    const mine = frame(wall, away), theirs = frame(other, self);
+    const ranges = (w, f) => wallBands(model, w).map(band => ({ index: band.index, outer: Math.min(f.of(band.s0), f.of(band.s1)), inner: Math.max(f.of(band.s0), f.of(band.s1)) })).sort((a, b) => a.outer - b.outer);
+    const own = ranges(wall, mine), theirsRanges = ranges(other, theirs), matched = own.length === theirsRanges.length;
+    const through = wall.thicknessMm !== other.thicknessMm ? wall.thicknessMm > other.thicknessMm : wall.id < other.id;
+    return band => {
+      const match = matched ? theirsRanges[own.findIndex(range => range.index === band.index)] : null;
+      const limit = through ? (match?.outer ?? 0) : (match?.inner ?? other.thicknessMm);
+      return p => theirs.at(p) - limit;
+    };
   }
   // Distance from a point to a wall's centreline (the segment, or the arc between its ends).
   function wallDistance(wall, p) {
@@ -2825,36 +2848,41 @@ exec node open-studio.mjs "$@"
       const p = (along, side) => map(add(add(wall.start, mul(u, along)), mul(n, side)));
       const strokeParts = [], fillParts = [];
       if (mats.active) {
-        // Material plan: each layer is its own region; corners miter and tees stop at the face they meet.
-        const ends = [wallEndClip(wall, true, walls, tolerance), wallEndClip(wall, false, walls, tolerance)];
+        // Material plan: each layer is its own region; corners join square layer by layer and tees stop at the face they meet.
+        const ends = [wallEndClip(wall, true, walls, tolerance, model), wallEndClip(wall, false, walls, tolerance, model)];
         const at = (along, side) => add(add(wall.start, mul(u, along)), mul(n, side));
         const bands = wallBands(model, wall);
         const cuts = []; let along = 0;
         for (const opening of openings) { cuts.push([along, opening.offsetMm]); along = opening.offsetMm + opening.widthMm; }
         cuts.push([along, L]);
-        const lineParts = [];
+        const lineParts = [], cutPen = { stroke: ink, width: P.cut * 2, cap: 'square' };
         for (const [a, b] of cuts) {
           if (b - a < 1) continue;
           const startEnd = a <= 0 ? ends[0] : null, endEnd = b >= L ? ends[1] : null;
-          const a0 = a - (startEnd?.extend ?? 0), b0 = b + (endEnd?.extend ?? 0), keeps = [startEnd?.keep, endEnd?.keep].filter(Boolean);
-          const clipPoly = poly => keeps.reduce((points, f) => points.length >= 3 ? clipHalfPlane(points, f) : points, poly);
-          const clipLine = side => keeps.reduce((segment, f) => segment && clipSegmentHalfPlane(segment[0], segment[1], f), [at(a0, side), at(b0, side)]);
-          const outline = clipPoly([at(a0, -t / 2), at(b0, -t / 2), at(b0, t / 2), at(a0, t / 2)]);
+          const a0 = a - (startEnd?.extend ?? 0), b0 = b + (endEnd?.extend ?? 0);
+          const clipWith = keeps => ({
+            poly: points => keeps.reduce((acc, f) => acc.length >= 3 ? clipHalfPlane(acc, f) : acc, points),
+            line: side => keeps.reduce((segment, f) => segment && clipSegmentHalfPlane(segment[0], segment[1], f), [at(a0, side), at(b0, side)])
+          });
+          const whole = clipWith([startEnd?.keep, endEnd?.keep].filter(Boolean));
+          const outline = whole.poly([at(a0, -t / 2), at(b0, -t / 2), at(b0, t / 2), at(a0, t / 2)]);
           if (outline.length < 3) continue;
-          strokeParts.push(svgPoly(outline.map(map), { fill: DRAFT.paper, stroke: ink, width: P.cut * 2, join: 'miter' }));
+          // Paper ground for the hatches; the cut line follows the faces and free ends only, so joins show no seam.
+          strokeParts.push(svgPoly(outline.map(map), { fill: DRAFT.paper, width: 0 }));
+          for (const side of [-t / 2, t / 2]) { const edge = whole.line(side); if (edge) strokeParts.push(svgLine(map(edge[0]), map(edge[1]), cutPen)); }
+          if (!startEnd?.keep) strokeParts.push(svgLine(p(a0, -t / 2), p(a0, t / 2), cutPen));
+          if (!endEnd?.keep) strokeParts.push(svgLine(p(b0, -t / 2), p(b0, t / 2), cutPen));
           for (const band of bands) {
-            const region = clipPoly([at(a0, band.s0), at(b0, band.s0), at(b0, band.s1), at(a0, band.s1)]);
-            const edges = [clipLine(band.s0), clipLine(band.s1)];
+            const clip = clipWith([startEnd, endEnd].map(end => end?.bandKeep?.(band) ?? end?.keep).filter(Boolean));
+            const region = clip.poly([at(a0, band.s0), at(b0, band.s0), at(b0, band.s1), at(a0, band.s1)]);
+            const edges = [clip.line(band.s0), clip.line(band.s1)];
             if (region.length < 3 || edges.some(edge => !edge)) continue;
             const alongOf = q => dot2(sub(q, wall.start), u);
             const coreA = Math.max(alongOf(edges[0][0]), alongOf(edges[1][0])), coreB = Math.min(alongOf(edges[0][1]), alongOf(edges[1][1]));
             const o = map(at(coreA, band.s0));
             const frame = { o, u: unit2(sub(map(at(coreB, band.s0)), o)), v: unit2(sub(map(at(coreA, band.s1)), o)), L: Math.max(0, coreB - coreA) / ratio, T: Math.abs(band.s0 - band.s1) / ratio };
             fillParts.push(mats.region(region.map(map), frame, mats.resolve(band.layer.materialId)));
-          }
-          for (const side of [bands[0].s0, ...bands.map(band => band.s1)]) {
-            const edge = clipLine(side);
-            if (edge) lineParts.push(svgLine(map(edge[0]), map(edge[1]), { stroke: ink, width: P.fine }));
+            lineParts.push(svgPoly(region.map(map), { stroke: ink, width: P.fine, join: 'miter' }));
           }
         }
         layers.wallLines.push(lineParts.join(''));

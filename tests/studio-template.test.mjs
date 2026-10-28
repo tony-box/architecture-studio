@@ -630,6 +630,17 @@ test('material hatching follows the drafting profile', () => {
   assert.equal((metricPost.match(/<polygon points="(?:[^ "]+ ){23}[^ "]+"/g) ?? []).length, 2, 'metric end grain is two growth rings');
 });
 
+test('layered wall corners join square, layer by layer, with no diagonal seams', () => {
+  const { api } = loadStudio();
+  const svg = api.renderPlanSheet(structuredClone(metricFixture), 'level-ground').svg;
+  const layers = [...svg.matchAll(/<polygon points="([^"]+)" fill="none" stroke="[^"]+" stroke-width="[^"]+" stroke-linejoin="miter"\/>/g)].map(match => match[1].split(' ').map(pair => pair.split(',').map(Number)));
+  assert.ok(layers.length >= 40, `expected outlined layer regions, got ${layers.length}`);
+  for (const ring of layers) ring.forEach(([x, y], i) => {
+    const [nx, ny] = ring[(i + 1) % ring.length];
+    assert.ok(Math.abs(nx - x) < 0.05 || Math.abs(ny - y) < 0.05, `diagonal layer edge ${x},${y} to ${nx},${ny}`);
+  });
+});
+
 test('material detail falls back to poche without a catalog or at small scales', () => {
   const { api } = loadStudio();
   const legacy = api.renderPlanSheet(withoutCatalog(metricFixture), 'level-ground').svg;

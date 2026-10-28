@@ -240,10 +240,17 @@ walls, so reversing a wall's direction does not flip its assembly. Slab layers
 run from top to bottom. Every layer has an `id`, stable within its wall or
 slab, that headers reference. Each layer is its own region with a `fine`
 boundary line, inside the `cut` outline of the whole element. In plan, where
-two walls meet at their ends (within half the other wall's thickness), both
-are mitered on the line through their inner and outer face intersections;
-collinear walls butt square. A wall that ends part way along another wall
-stops at that wall's face.
+two straight walls meet at their ends (within half the other wall's thickness),
+the corner is square, layer by layer: the thicker wall (or, at equal
+thickness, the one with the earlier `id`) runs through, each of its layers
+reaching the outside edge of the matching layer in the other wall, and each
+layer of the other wall stops at the inside edge of its match. Outer layers
+wrap inner ones and no seam runs diagonally. Walls with different layer
+counts butt whole: the through wall reaches the other's outside face and the
+other stops at the through wall's inside face. The `cut` outline follows the
+wall faces and free ends only, so a joint draws no heavy line. Corners with an
+arc wall miter on their face intersections. Collinear walls butt square. A
+wall that ends part way along another wall stops at that wall's face.
 
 **Structural members (studio rule).** A column the plan cut plane passes
 through is drawn cut, in its profile (rectangle, wide-flange I, or hollow
