@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -6,9 +7,9 @@ import path from 'node:path';
 import test from 'node:test';
 import { bundleProject, omittedSources } from '../scripts/bundle.mjs';
 import { buildDrawingSet } from '../scripts/export-drawings.mjs';
-import { MARKER_FILE, PROJECT_DIRS, initProject } from '../scripts/init.mjs';
+import { MARKER_FILE, PROJECT_DIRS, initProject, launcherFiles } from '../scripts/init.mjs';
 import { TEMPLATE_PATH, embedData, parseArgs } from '../scripts/lib.mjs';
-import { EVENTS_PATH, WATCHED, createStudioServer, defaultPort, listen } from '../scripts/serve.mjs';
+import { EVENTS_PATH, WATCHED, createStudioServer, defaultPort, listen, projectFiles } from '../scripts/serve.mjs';
 
 const skillRoot = path.resolve(import.meta.dirname, '..');
 const fixture = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', 'lakeside-barn-residence', 'building.json'), 'utf8'));
@@ -46,12 +47,59 @@ test('init creates a self-contained project and refuses to overwrite it', t => {
   for (const sub of PROJECT_DIRS) assert.ok(fs.statSync(path.join(dir, sub)).isDirectory(), sub);
   assert.equal(fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), template);
   assert.equal(JSON.parse(fs.readFileSync(path.join(dir, MARKER_FILE), 'utf8')).tool, 'architecture-studio');
+  for (const launcher of launcherFiles()) assert.equal(fs.readFileSync(path.join(dir, launcher.name), 'utf8'), launcher.text, launcher.name);
+  if (process.platform !== 'win32') assert.equal(fs.statSync(path.join(dir, 'Open Studio.command')).mode & 0o777, 0o755);
 
   fs.writeFileSync(path.join(dir, 'index.html'), 'customized');
+  fs.writeFileSync(path.join(dir, 'open-studio.mjs'), 'old launcher');
   assert.equal(initProject(dir).status, 'exists');
   assert.equal(fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), 'customized');
   assert.equal(initProject(dir, { update: true }).status, 'updated');
   assert.equal(fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), template);
+  assert.notEqual(fs.readFileSync(path.join(dir, 'open-studio.mjs'), 'utf8'), 'old launcher', 'a viewer refresh refreshes the launcher too');
+});
+
+test('the launcher is open-studio.mjs and two double-click wrappers', () => {
+  const launchers = launcherFiles();
+  assert.deepEqual(launchers.map(file => file.name), ['open-studio.mjs', 'Open Studio.cmd', 'Open Studio.command']);
+  const [server, cmd, command] = launchers;
+  assert.match(server.text, /^\/\/ Opens this Architecture Studio project/);
+  assert.ok(!server.text.includes('\r'));
+  assert.match(cmd.text, /^@echo off\r\n/);
+  assert.ok(!/[^\r]\n/.test(cmd.text), 'Windows batch files keep CRLF line endings');
+  assert.match(command.text, /^#!\/bin\/sh\n/);
+  assert.equal(command.mode, 0o755);
+  assert.equal(cmd.mode, 0o644);
+  assert.ok(launchers.every(file => file.text.endsWith(file.name === 'Open Studio.cmd' ? '\r\n' : '\n')));
+});
+
+test('open-studio.mjs serves the project read-only on the same port as serve.mjs', async t => {
+  const dir = seedProject(t);
+  fs.writeFileSync(path.join(dir, '.env'), 'secret');
+  fs.mkdirSync(path.join(dir, '.git'));
+  fs.writeFileSync(path.join(dir, '.git', 'config'), 'secret');
+  const child = spawn(process.execPath, [path.join(dir, 'open-studio.mjs'), '--no-open'], { cwd: os.tmpdir() });
+  t.after(() => child.kill());
+  const url = await new Promise((resolve, reject) => {
+    let out = '';
+    child.stdout.on('data', chunk => { out += chunk; const match = out.match(/open at (http:\/\/127\.0\.0\.1:\d+\/)/); if (match) resolve(match[1]); });
+    child.on('exit', code => reject(new Error(`open-studio.mjs exited with ${code}: ${out}`)));
+  });
+  const port = Number(new URL(url).port);
+  const page = await request(port, '/');
+  assert.equal(page.status, 200);
+  assert.equal(page.body, fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), 'the viewer as stored, nothing injected');
+  assert.deepEqual(JSON.parse((await request(port, '/models/building.json')).body), fixture);
+  assert.deepEqual(JSON.parse((await request(port, '/__architecture-studio/project-files')).body).files, projectFiles(dir));
+  for (const hidden of ['/.env', '/.git/config', '/%2e%2e/%2e%2e/outside', '/models/../../outside']) assert.equal((await request(port, hidden)).status, 404, hidden);
+  const post = await new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port, method: 'POST', path: '/models/building.json' }, res => { res.resume(); resolve(res.statusCode); });
+    req.on('error', reject);
+    req.end('{}');
+  });
+  assert.equal(post, 405, 'read-only');
+  // The address serve.mjs picks for this folder (or the next free one), so browser approvals stay with the project.
+  assert.ok(port >= defaultPort(dir) && port < defaultPort(dir) + 20, `${port} near ${defaultPort(dir)}`);
 });
 
 test('embedData fills each slot once and keeps the JSON inert', () => {

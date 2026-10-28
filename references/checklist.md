@@ -42,7 +42,7 @@
 - [ ] Rooms, openings, fixtures, equipment, routes, and diagnostics are
       inspectable by stable entity ID.
 - [ ] Elevations include level datums and a clear view direction.
-- [ ] Orbit and walk modes render a nonblank model without WebGL errors.
+- [ ] Orbit and fly modes render a nonblank model without WebGL errors.
 - [ ] Variant selection, when present, swaps the complete model in every view.
 - [ ] Labels may move for legibility, but leaders retain the true model anchor.
 - [ ] Sheets follow `drafting-standard.md` for the model's display units:

@@ -26,6 +26,13 @@
 // X-Architecture-Studio-Token header and, when the browser sends one, an Origin of this
 // server (http://127.0.0.1:<port> or http://localhost:<port>); otherwise it gets 403. Writes
 // run one at a time and land in sources/, so live reload refreshes the page.
+//
+// The viewer's Export project reads two more things, both read-only:
+//
+//   GET /__architecture-studio/project-files   { files: [...] }, the project-relative paths of the
+//        project contract (see PROJECT_ROOT_FILES and PROJECT_TREES), without dotfiles or symlinks.
+//   GET /index.html?raw=1                      the viewer as it is on disk, without the token or
+//        the live-reload script.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -37,6 +44,11 @@ import { isMain, parseArgs } from './lib.mjs';
 export const EVENTS_PATH = '/__architecture-studio/events';
 export const UPLOAD_PATH = '/__architecture-studio/sources';
 export const CALIBRATION_PATH = '/__architecture-studio/calibration';
+export const PROJECT_FILES_PATH = '/__architecture-studio/project-files';
+// What Export project packages: the files of the project contract (SKILL.md, Output Contract), not
+// whatever else shares the folder, such as version control or editor files.
+export const PROJECT_ROOT_FILES = ['architecture-studio.json', 'index.html', 'brief.json', 'ASSUMPTIONS.md', 'HANDOFF.md', 'open-studio.mjs', 'Open Studio.cmd', 'Open Studio.command'];
+export const PROJECT_TREES = ['models', 'sources', 'reviews', 'exports'];
 export const TOKEN_HEADER = 'x-architecture-studio-token';
 export const WRITE_META = 'architecture-studio-write';
 export const UPLOAD_LIMIT = 40 * 1024 * 1024;
@@ -92,6 +104,24 @@ function readBody(req, limit) {
 }
 
 const sourceSummary = source => ({ id: source.id, kind: source.kind, path: source.path, pixels: source.pixels, revision: source.revision, calibrationRevision: source.calibrationRevision });
+
+// Project-relative, forward-slash paths of the project's files, sorted. Dotfiles, dot folders, and
+// symbolic links are skipped, so nothing outside the project folder is listed.
+export function projectFiles(projectDir) {
+  const root = path.resolve(projectDir), files = [];
+  const isA = (relative, kind) => { try { return fs.lstatSync(path.join(root, relative))[kind](); } catch { return false; } };
+  const visit = relative => {
+    for (const entry of fs.readdirSync(path.join(root, relative), { withFileTypes: true })) {
+      if (entry.name.startsWith('.')) continue;
+      const child = `${relative}/${entry.name}`;
+      if (entry.isDirectory()) visit(child);
+      else if (entry.isFile()) files.push(child);
+    }
+  };
+  for (const file of PROJECT_ROOT_FILES) if (isA(file, 'isFile')) files.push(file);
+  for (const dir of PROJECT_TREES) if (isA(dir, 'isDirectory')) visit(dir);
+  return files.sort();
+}
 
 // Puts the write token in the page's <head>, or ahead of the closing </body> when it has none.
 export function injectWriteToken(html, token) {
@@ -190,6 +220,14 @@ export function createStudioServer(projectDir, { watch = true, token = crypto.ra
       req.on('close', () => clients.delete(res));
       return;
     }
+    if (url.pathname === PROJECT_FILES_PATH) {
+      try {
+        sendJson(res, 200, { files: projectFiles(root) });
+      } catch (error) {
+        sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error), code: 'internal' });
+      }
+      return;
+    }
     let relative;
     try {
       relative = decodeURIComponent(url.pathname);
@@ -209,7 +247,8 @@ export function createStudioServer(projectDir, { watch = true, token = crypto.ra
         return;
       }
       const headers = { 'content-type': MIME_TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream', 'cache-control': 'no-store' };
-      if (file === path.join(root, 'index.html')) {
+      // ?raw=1 returns the viewer as stored, for Export project; the token never leaves this server.
+      if (file === path.join(root, 'index.html') && !url.searchParams.has('raw')) {
         let html = fs.readFileSync(file, 'utf8');
         // Only a page loaded from this server's own address gets the token; it is never written to disk.
         if (loopback().hosts.includes(String(req.headers.host ?? '').toLowerCase())) html = injectWriteToken(html, token);

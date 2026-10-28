@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { initProject } from '../scripts/init.mjs';
-import { CALIBRATION_PATH, TOKEN_HEADER, UPLOAD_PATH, WRITE_META, createStudioServer, listen } from '../scripts/serve.mjs';
+import { CALIBRATION_PATH, PROJECT_FILES_PATH, TOKEN_HEADER, UPLOAD_PATH, WRITE_META, createStudioServer, listen, projectFiles } from '../scripts/serve.mjs';
 import { png } from './helpers/images.mjs';
 
 const skillRoot = path.resolve(import.meta.dirname, '..');
@@ -79,6 +79,29 @@ test('serve puts a per-start write token in the served page only', async t => {
   await withStudio(t, { watch: true }, async ({ port, token }) => {
     const page = await send(port, 'GET', '/');
     assert.ok(page.text.includes(`<meta name="${WRITE_META}" content="${token}">`));
+  });
+});
+
+test('Export project lists the project contract and reads the viewer without its token', async t => {
+  await withStudio(t, { watch: true }, async ({ dir, port, token }) => {
+    const write = (file, text = 'x') => { fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true }); fs.writeFileSync(path.join(dir, file), text); };
+    for (const file of ['brief.json', 'HANDOFF.md', 'sources/site photo.png', 'reviews/code-findings.json', 'exports/manifest.json', 'exports/plans/level-1.svg', 'models/variants/option-b.json']) write(file);
+    for (const file of ['.env', 'notes.txt', 'node_modules/a.js', 'models/.cache/state.json', 'sources/.DS_Store', '.git/HEAD']) write(file);
+    const listed = await send(port, 'GET', PROJECT_FILES_PATH);
+    assert.equal(listed.status, 200);
+    assert.deepEqual(listed.json.files, [
+      'HANDOFF.md', 'Open Studio.cmd', 'Open Studio.command', 'architecture-studio.json', 'brief.json', 'exports/manifest.json', 'exports/plans/level-1.svg', 'index.html',
+      'models/building.json', 'models/variants/option-b.json', 'open-studio.mjs', 'reviews/code-findings.json', 'sources/site photo.png'
+    ]);
+    assert.deepEqual(projectFiles(dir), listed.json.files);
+    assert.ok(!listed.text.includes(token));
+
+    const raw = await send(port, 'GET', '/index.html?raw=1');
+    assert.equal(raw.status, 200);
+    assert.equal(raw.text, fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), 'the viewer exactly as stored');
+    assert.ok(!raw.text.includes(token));
+    assert.ok((await send(port, 'GET', '/index.html')).text.includes(token), 'the live page keeps its token');
+    assert.equal((await send(port, 'GET', `/${encodeURIComponent('sources')}/${encodeURIComponent('site photo.png')}`)).text, 'x');
   });
 });
 

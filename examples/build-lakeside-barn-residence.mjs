@@ -16,7 +16,16 @@ const G = 'level-ground', U = 'level-upper';
 export function buildLakesideBarnResidence() {
   const W = ft(36), D = ft(48), Z = 3600, half = Math.round(W / 2);
   const livingEnd = ft(24), bedroomStart = ft(36), hallStart = ft(32), bathEnd = ft(10);
-  const face = 150, partition = 70, ceiling = 2800;
+  // Nominal wood-frame assemblies, interior to exterior. The siding type is not chosen yet, so it is an
+  // unspecified material; the sheathing behind it is ordinary wood structural panel.
+  const layer = (id, materialId, thicknessMm) => ({ id, materialId, thicknessMm });
+  const exteriorAssembly = [layer('gypsum', 'mat-gypsum', 13), layer('studs', 'mat-batt', 140), layer('sheathing', 'mat-sheathing', 12), layer('siding', 'mat-siding', 19)];
+  const partitionAssembly = [layer('gypsum-left', 'mat-gypsum', 13), layer('studs', 'mat-timber', 90), layer('gypsum-right', 'mat-gypsum', 13)];
+  const thickness = layers => layers.reduce((sum, item) => sum + item.thicknessMm, 0);
+  // Room boundaries sit on finished faces: half of each wall's thickness from its centreline.
+  const face = thickness(exteriorAssembly) / 2, partition = thickness(partitionAssembly) / 2, ceiling = 2800;
+  // Objects placed against an exterior wall keep the clearance they had from the 300 mm allowance's face.
+  const fromFace = distance => face + distance;
   const deckStart = ft(26), deckEnd = bedroomStart, deckInner = W + face, deckOuter = deckInner + ft(8);
   const stairX = Math.round((deckInner + deckOuter) / 2), stairRun = 19 * 280, stairStart = deckStart - stairRun;
   const levels = [
@@ -25,9 +34,12 @@ export function buildLakesideBarnResidence() {
   ];
   const walls = [];
   function wall(id, levelId, start, end, kind = 'interior') {
-    const heightMm = levelId === G ? Z - 350 : ceiling;
-    walls.push({ id, levelId, start, end, kind, thicknessMm: kind === 'exterior' ? 300 : 140, heightMm,
-      materialId: kind === 'exterior' ? 'mat-envelope' : 'mat-partition', evidence: evidence('Concept assembly envelope, not a specified or fire-rated assembly.') });
+    const heightMm = levelId === G ? Z - 350 : ceiling, layers = kind === 'exterior' ? exteriorAssembly : partitionAssembly;
+    walls.push({ id, levelId, start, end, kind, thicknessMm: thickness(layers), heightMm,
+      ...(kind === 'exterior' ? { layerOrder: 'interior-to-exterior' } : {}), layers: layers.map(item => ({ ...item })),
+      evidence: evidence(kind === 'exterior'
+        ? 'Concept 2x6 wall: gypsum, batt-filled stud cavity, wood structural panel sheathing, and siding of a type not yet chosen. Not a specified or fire-rated assembly.'
+        : 'Concept 2x4 stud partition with gypsum both sides. Not a fire-rated or acoustic assembly.') });
   }
   for (const [prefix, level] of [['g', G], ['u', U]]) {
     wall(`wall-${prefix}-south`, level, { x: 0, y: 0 }, { x: W, y: 0 }, 'exterior');
@@ -106,17 +118,17 @@ export function buildLakesideBarnResidence() {
     return value;
   }
   const wet = [
-    object(fixtures, 'fixture-shop-sink', 'Utility Sink', 'utility-sink', G, 450, bathY, 700, 600, 900, 90, 'MEP-P1; IRC 2021 P2705'),
-    object(fixtures, 'fixture-kitchen-sink', 'Kitchen Sink', 'kitchen-sink', U, 450, kitchenY, 900, 600, 900, 90, 'COMP-I1; MEP placement guide, NKBA kitchen design practice'),
-    object(fixtures, 'fixture-upper-bath', 'Vanity', 'lavatory', U, 450, bathY, 900, 550, 850, 90, 'MEP-P1; IRC 2021 P2705'),
+    object(fixtures, 'fixture-shop-sink', 'Utility Sink', 'utility-sink', G, fromFace(300), bathY, 700, 600, 900, 90, 'MEP-P1; IRC 2021 P2705'),
+    object(fixtures, 'fixture-kitchen-sink', 'Kitchen Sink', 'kitchen-sink', U, fromFace(300), kitchenY, 900, 600, 900, 90, 'COMP-I1; MEP placement guide, NKBA kitchen design practice'),
+    object(fixtures, 'fixture-upper-bath', 'Vanity', 'lavatory', U, fromFace(300), bathY, 900, 550, 850, 90, 'MEP-P1; IRC 2021 P2705'),
     object(fixtures, 'fixture-toilet', 'Toilet', 'toilet', U, 1500, 9300, 400, 700, 750, 180, 'MEP-P1; IRC 2021 R307.1'),
     object(fixtures, 'fixture-shower', 'Shower', 'shower', U, 2500, 7900, 900, 900, 100, 0, 'MEP-P2; IRC 2021 P2708.1'),
     object(fixtures, 'fixture-washer', 'Washer', 'washer', U, 3550, 7800, 700, 750, 1000, 0, 'MEP-P4; IRC 2021 P2706.2'),
-    object(fixtures, 'fixture-dishwasher', 'Dishwasher', 'dishwasher', U, 475, 5700, 650, 650, 900, 90, 'MEP placement guide, NKBA kitchen design practice')
+    object(fixtures, 'fixture-dishwasher', 'Dishwasher', 'dishwasher', U, fromFace(325), 5700, 650, 650, 900, 90, 'MEP placement guide, NKBA kitchen design practice')
   ];
   object(fixtures, 'fixture-dryer', 'Electric Dryer', 'dryer', U, 4550, 7800, 700, 750, 1000);
   object(fixtures, 'fixture-range', 'Electric Range', 'range', U, 2200, 6875, 760, 650, 900);
-  object(fixtures, 'fixture-refrigerator', 'Refrigerator', 'refrigerator', U, 550, 6500, 800, 800, 1850, 90);
+  object(fixtures, 'fixture-refrigerator', 'Refrigerator', 'refrigerator', U, fromFace(400), 6500, 800, 800, 1850, 90);
   object(fixtures, 'fixture-counter', 'Prep Counter', 'counter', U, 3670, 6945, 2000, 600, 900);
   object(fixtures, 'fixture-island', 'Prep Island', 'counter', U, 3000, 4900, 1800, 900, 900);
   object(fixtures, 'fixture-dining', 'Dining Table', 'table', U, 8200, 5200, 1800, 950, 750);
@@ -125,8 +137,8 @@ export function buildLakesideBarnResidence() {
     object(fixtures, `fixture-bed-${suffix}`, `Bed ${suffix}`, 'bed', U, x, 13200, 1630, 2030, 600);
     object(fixtures, `fixture-wardrobe-${suffix}`, `Wardrobe ${suffix}`, 'wardrobe', U, x + 1800, 11400, 1500, 600, 2200);
   }
-  object(fixtures, 'fixture-workbench', 'Workbench', 'workbench', G, 8700, D - 550, 3000, 800, 900);
-  object(fixtures, 'fixture-tool-shelves', 'Tool Shelves', 'shelving', G, 500, 12900, 600, 2400, 2100);
+  object(fixtures, 'fixture-workbench', 'Workbench', 'workbench', G, 8700, D - fromFace(400), 3000, 800, 900);
+  object(fixtures, 'fixture-tool-shelves', 'Tool Shelves', 'shelving', G, fromFace(350), 12900, 600, 2400, 2100);
   const panel = object(equipment, 'equipment-panel', 'Electrical Panel', 'electrical-panel', G, half - 220, 10300, 500, 180, 900, 90, 'MEP-E1; NEC 110.26');
   panel.position.z = 1000;
   const heater = object(equipment, 'equipment-water-heater', 'Electric Water Heater', 'water-heater', G, 1100, 8000, 650, 650, 1500, 0, 'MEP-P5; IRC 2021 P2801');
@@ -312,7 +324,7 @@ export function buildLakesideBarnResidence() {
     ['brief', 'Synthetic replacement brief: 36 by 48 ft, two workshop vehicle bays and rear bench, utility and tool storage, and a two-bedroom residence with full bath and laundry. Exterior stair and deck landing follow the requested access arrangement. Furniture and electric appliances are illustrative choices, not a confirmed real-project specification.'],
     ['access', 'The residence is reached only by the exterior stair and deck. There is no opening in the dwelling floor and no internal workshop-to-dwelling door. This is not an accessible route; accessibility and emergency access require professional review.'],
     ['guards', 'Deck top rails mark guard zones only. Complete guard infill, support posts, stair handrails and guards, slip resistance, frost-safe footings, snow shedding, landing drainage, and emergency escape/rescue performance are omitted or unresolved. Do not build from this model.'],
-    ['structure', 'Envelope, floor, deck posts and beam dimensions are spatial allowances. Clear-span floor and roof structure, vehicle-door headers, deck ledger, bracing, foundations, loads and connections require engineered design. No member sizing or fire rating is established.'],
+    ['structure', 'Walls are nominal 2x6 exterior and 2x4 interior wood-frame assemblies; stud spacing, plates, shear walls and the siding type are not chosen. Floor and deck dimensions are spatial allowances. Clear-span floor and roof structure, vehicle-door headers, deck ledger, bracing, foundations, loads and connections require engineered design. No member sizing or fire rating is established.'],
     ['separation', 'The dwelling floor is continuous above the workshop. Fire/smoke and acoustic separation, air sealing, rated penetrations, garage pollutant control and an independent workshop ventilation/heating design remain unresolved. Dwelling HVAC does not distribute workshop air.'],
     ['mep', 'Water supply, connected electrical devices and dwelling HVAC/exhaust are coordination examples. Waste and vent networks, hot/cold separation, condensate, protective devices, final circuit allocation, service clearances and full room coverage review are omitted or unresolved. No conductor, duct, pipe or equipment sizing is implied.'],
     ['site', 'Lakeside is an example name, not a surveyed location. No lake edge, property boundary, setback, topography, tree or utility location is asserted. Survey, shoreline restrictions, soils and drainage remain unknown.'],
@@ -329,15 +341,16 @@ export function buildLakesideBarnResidence() {
         entityId, rules: ['thirds'], reason: 'Stacked wet-room windows centre on the utility sink and vanity within the service band, clear of its partitions.'
       })) },
     materials: [
-      ['mat-envelope', 'Envelope allowance', 'generic'], ['mat-partition', 'Partition allowance', 'generic'],
+      ['mat-siding', 'Exterior siding, type not yet chosen', 'generic'], ['mat-sheathing', 'Wood structural panel sheathing', 'engineered-wood'],
+      ['mat-batt', 'Batt insulation in 2x6 stud cavity', 'insulation-batt'], ['mat-gypsum', 'Gypsum board', 'gypsum'],
       ['mat-concrete', 'Concrete', 'concrete'], ['mat-timber', 'Timber allowance', 'wood-framing'],
-      ['mat-subfloor', 'Wood subfloor', 'engineered-wood'], ['mat-ceiling', 'Ceiling lining', 'gypsum'], ['mat-decking', 'Deck assembly', 'decking']
+      ['mat-subfloor', 'Wood subfloor', 'engineered-wood'], ['mat-decking', 'Deck assembly', 'decking']
     ].map(([id, name, category]) => ({ id, name, category, evidence: evidence('Illustrative material category, not a product specification or rated assembly.') })),
     levels, spaces, walls, openings,
     slabs: [
       { id: 'slab-ground', levelId: G, boundary: rect(-face, -face, W + face, D + face), thicknessMm: 150, materialId: 'mat-concrete', evidence: evidence('Concept slab; reinforcement, insulation, moisture and foundation design unresolved.') },
       { id: 'slab-upper', levelId: U, boundary: rect(-face, -face, W + face, D + face), thicknessMm: 350,
-        layers: [{ id: 'subfloor', materialId: 'mat-subfloor', thicknessMm: 20 }, { id: 'floor-zone', materialId: 'mat-timber', thicknessMm: 300 }, { id: 'lining', materialId: 'mat-ceiling', thicknessMm: 30 }],
+        layers: [{ id: 'subfloor', materialId: 'mat-subfloor', thicknessMm: 20 }, { id: 'floor-zone', materialId: 'mat-timber', thicknessMm: 300 }, { id: 'lining', materialId: 'mat-gypsum', thicknessMm: 30 }],
         evidence: evidence('Continuous dwelling floor without an interior stair opening; layers reserve space and establish no span capacity or fire rating.') }
     ],
     roofs: [{ id: 'roof-main', levelId: U, kind: 'gable', footprint: rect(0, 0, W, D), eaveElevationMm: Z + ceiling,

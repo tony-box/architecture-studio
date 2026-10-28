@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
@@ -134,6 +135,221 @@ test('3D prisms face outward and stairs affect scene geometry', () => {
   api.state.model.stairs = [];
   api.buildScene(scene);
   assert.ok(withStair > scene.triangles.length);
+});
+
+test('flying moves where you look at a steady speed per second, whatever the frame rate', () => {
+  const { api } = loadStudio();
+  const start = { walkPosition: [0, 1.7, 0], yaw: 0, pitch: 0 };
+  const hold = (keys, frames, dt, mode = 'walk', camera = start) => {
+    let at = camera;
+    for (let i = 0; i < frames; i += 1) at = { ...at, ...api.cameraStep(at, new Set(keys), dt, mode) };
+    return at;
+  };
+  const close = (actual, expected, label) => actual.forEach((value, i) => assert.ok(Math.abs(value - expected[i]) < 1e-9, `${label}: ${actual} vs ${expected}`));
+
+  // Facing -z at yaw 0: one second of W is the flying speed, at 60 or 144 frames a second.
+  close(hold(['KeyW'], 60, 1 / 60).walkPosition, [0, 1.7, -api.WALK.speed], '60 fps');
+  close(hold(['KeyW'], 144, 1 / 144).walkPosition, [0, 1.7, -api.WALK.speed], '144 fps');
+  close(hold(['KeyW', 'Shift'], 60, 1 / 60).walkPosition, [0, 1.7, -api.WALK.run], 'Shift goes faster');
+  const diagonal = hold(['KeyW', 'KeyD'], 60, 1 / 60).walkPosition;
+  assert.ok(Math.abs(Math.hypot(diagonal[0], diagonal[2]) - api.WALK.speed) < 1e-9, 'diagonal is not faster');
+  close(hold(['KeyW', 'KeyS'], 60, 1 / 60).walkPosition, [0, 1.7, 0], 'opposite keys cancel');
+
+  // Aiming up climbs and aiming down dives along the line of sight, still at the flying speed.
+  const up = { ...start, pitch: 0.5 }, down = { ...start, pitch: -0.5 }, highUp = { ...up, walkPosition: [0, 5, 0] };
+  close(hold(['KeyW'], 60, 1 / 60, 'walk', up).walkPosition, [0, 1.7 + api.WALK.speed * Math.sin(0.5), -api.WALK.speed * Math.cos(0.5)], 'climb');
+  close(hold(['KeyS'], 60, 1 / 60, 'walk', highUp).walkPosition, [0, 5 - api.WALK.speed * Math.sin(0.5), api.WALK.speed * Math.cos(0.5)], 'back away and down');
+  assert.ok(hold(['KeyW'], 20, 1 / 60, 'walk', down).walkPosition[1] < 1.7, 'dive');
+  close(hold(['KeyD'], 60, 1 / 60, 'walk', up).walkPosition, [api.WALK.speed, 1.7, 0], 'A and D strafe level');
+  const climbingDiagonal = hold(['KeyW', 'KeyD'], 60, 1 / 60, 'walk', up).walkPosition;
+  assert.ok(Math.abs(Math.hypot(climbingDiagonal[0], climbingDiagonal[1] - 1.7, climbingDiagonal[2]) - api.WALK.speed) < 1e-9, 'diagonal climb is not faster');
+  assert.equal(hold(['KeyW'], 600, 1 / 60, 'walk', down).walkPosition[1], -api.WALK.below, 'a dive stops 8 m below the model');
+  assert.equal(hold(['KeyW'], 600, 1 / 60, 'walk', { ...down, floor: -11.5 }).walkPosition[1], -11.5, 'the floor follows the scene');
+  assert.equal(hold(['KeyW'], 3000, 1 / 60, 'walk', up).walkPosition[1], api.WALK.maxHeight);
+  assert.ok(api.WALK.maxHeight > fixture.roofs[0].ridgeElevationMm / 1000, 'you can fly over the roof');
+  assert.equal(hold(['KeyQ'], 600, 1 / 60).walkPosition[1], -api.WALK.below);
+  assert.equal(hold(['KeyE'], 3000, 1 / 60).walkPosition[1], api.WALK.maxHeight);
+  close(hold(['KeyE'], 60, 1 / 60).walkPosition, [0, 1.7 + api.WALK.climb, 0], 'rise');
+  close(hold(['KeyE', 'Shift'], 60, 1 / 60).walkPosition, [0, 1.7 + api.WALK.climbRun, 0], 'Shift rises faster');
+  close(hold(['KeyQ', 'Shift'], 30, 1 / 60, 'walk', { ...start, walkPosition: [0, 5, 0] }).walkPosition, [0, 5 - api.WALK.climbRun / 2, 0], 'Shift sinks faster');
+  assert.ok(Math.abs(api.WALK.climbRun / api.WALK.climb - api.WALK.run / api.WALK.speed) < 1e-9, 'Shift boosts climbing as much as flying');
+
+  // A stalled frame (a background tab) moves at most one short step instead of jumping.
+  close(hold(['KeyW'], 1, 5).walkPosition, [0, 1.7, -api.WALK.speed * api.WALK.maxStep], 'stall');
+  assert.ok(Math.abs(hold(['ArrowRight'], 60, 1 / 60).yaw - api.WALK.turn) < 1e-9);
+  assert.equal(hold(['ArrowUp'], 600, 1 / 60).pitch, 1.2, 'looking up stops at the limit');
+
+  // Orbit turns the other way and never moves the flying position.
+  const orbit = hold(['ArrowRight', 'KeyW'], 60, 1 / 60, 'orbit');
+  assert.ok(Math.abs(orbit.yaw + api.WALK.turn) < 1e-9);
+  close(orbit.walkPosition, start.walkPosition, 'orbit');
+
+  // Reset view's defaults are fresh each time, so flying away never changes where it returns to.
+  const home = api.defaultCamera(fixture);
+  const moved = hold(['KeyW', 'ArrowRight'], 60, 1 / 60, 'walk', { ...home.walk, walkPosition: home.walkPosition });
+  moved.walkPosition[0] += 100;
+  assert.equal(JSON.stringify(api.defaultCamera(fixture)), JSON.stringify(home));
+  assert.notEqual(api.defaultCamera(fixture).walkPosition, api.defaultCamera(fixture).walkPosition);
+});
+
+test('Fly starts outside the south face, level and centred, with the building in view', () => {
+  const { api } = loadStudio();
+  for (const name of ['lakeside-barn-residence', 'compact-metric-studio', 'hillside-garden-house']) {
+    const model = readFixture(name), home = api.defaultCamera(model);
+    const xs = model.walls.flatMap(wall => [wall.start.x, wall.end.x]), ys = model.walls.flatMap(wall => [wall.start.y, wall.end.y]);
+    const [x, y, z] = home.walkPosition;
+    assert.equal(JSON.stringify(home.walk), JSON.stringify({ yaw: 0, pitch: 0 }), `${name}: level, facing north toward the south face`);
+    assert.ok(Math.abs(x - (Math.min(...xs) + Math.max(...xs)) / 2000) < 1, `${name}: centred on the face`);
+    const back = z - (-Math.min(...ys) / 1000);
+    assert.ok(back > 0, `${name}: outside the building, not inside it`);
+    // Every wall corner and the ridge sit inside a 60-degree view from there.
+    const ridge = Math.max(...(model.roofs ?? []).map(roof => roof.ridgeElevationMm), ...model.walls.map(wall => wall.heightMm)) / 1000;
+    for (const px of xs) assert.ok(Math.atan2(Math.abs(px / 1000 - x), back) < Math.PI / 6, `${name}: ${px} fits across`);
+    assert.ok(Math.atan2(Math.abs(ridge - y), back) < Math.PI / 6 && Math.atan2(y, back) < Math.PI / 6, `${name}: the full height fits`);
+  }
+  // Each mode keeps its own heading: switching never hands Fly the orbit's downward aim, and back again.
+  const gls = {};
+  api.state.cameraMode = 'orbit';
+  api.resetCamera(gls, 'orbit', fixture);
+  assert.equal(gls.pitch, api.defaultCamera(fixture).orbit.pitch);
+  gls.yaw = 2;
+  api.switchCameraMode(gls, 'orbit', 'walk');
+  assert.deepEqual([gls.yaw, gls.pitch], [0, 0]);
+  gls.pitch = -0.4;
+  api.switchCameraMode(gls, 'walk', 'orbit');
+  assert.equal(gls.yaw, 2, 'orbit comes back where it was left');
+  api.switchCameraMode(gls, 'orbit', 'walk');
+  assert.equal(gls.pitch, -0.4, 'fly too');
+  api.resetCamera(gls, 'walk', fixture);
+  assert.deepEqual([gls.yaw, gls.pitch], [0, 0], 'Reset view restores the current mode');
+  assert.equal(JSON.stringify(gls.headings.orbit), JSON.stringify(api.defaultCamera(fixture).orbit), 'and the other mode');
+});
+
+test('the 3D scene carries face normals for lighting and a pattern for each material', () => {
+  const { api } = loadStudio();
+  const scene = model => { api.state.model = model; api.state.systems = new Set(['electrical']); const gls = { triangles: [], lines: [] }; api.buildScene(gls); return { gls, data: api.sceneVertexData(gls) }; };
+  const { gls, data } = scene(cloneFixture());
+  const stride = 10, count = gls.triangles.length / 6;
+  assert.equal(data.triangles.length, count * stride);
+  assert.equal(data.lines.length, gls.lines.length / 6 * stride);
+  for (let v = 0; v < count; v += 1) {
+    const at = v * stride, normal = [data.triangles[at + 6], data.triangles[at + 7], data.triangles[at + 8]];
+    assert.ok(Math.abs(Math.hypot(...normal) - 1) < 1e-4, `vertex ${v} has a unit face normal`);
+    for (let i = 0; i < 6; i += 1) assert.ok(Math.abs(data.triangles[at + i] - gls.triangles[v * 6 + i]) < 1e-4);
+  }
+  // A prism's top faces up, so it takes the most sky and sun.
+  const prism = { triangles: [], lines: [] };
+  api.pushPrism(prism.triangles, 0, 0, 0, 2, 2, 2, 0, [1, 1, 1]);
+  const box = api.sceneVertexData(prism).triangles, normals = new Set();
+  for (let v = 0; v < box.length / stride; v += 1) normals.add([6, 7, 8].map(i => Math.round(box[v * stride + i])).join(','));
+  assert.deepEqual([...normals].sort(), ['-1,0,0', '0,-1,0', '0,0,-1', '0,0,1', '0,1,0', '1,0,0'], 'six outward faces');
+  for (let v = 0; v < data.lines.length / stride; v += 1) assert.deepEqual([6, 7, 8, 9].map(i => data.lines[v * stride + i]), [0, 0, 0, 0], 'lines stay unlit and plain');
+
+  const patterns = values => new Set(Array.from({ length: values.length / stride }, (_, v) => values[v * stride + 9]));
+  const barn = patterns(data.triangles);
+  for (const category of ['concrete', 'wood-framing', 'decking', 'gypsum']) assert.ok(barn.has(api.SCENE_PATTERNS[category]), `the barn shows ${category}`);
+  assert.ok(barn.has(0), 'unspecified envelopes and fixtures stay plain');
+  const workshop = patterns(scene(readFixture('mixed-material-workshop')).data.triangles);
+  for (const category of ['brick', 'concrete']) assert.ok(workshop.has(api.SCENE_PATTERNS[category]), `the workshop shows ${category}`);
+  const hillside = patterns(scene(readFixture('hillside-garden-house')).data.triangles);
+  assert.ok(hillside.has(api.SCENE_PATTERNS.lawn), 'grass terrain reads as lawn');
+  // Every pattern id has a branch in the shader.
+  for (const id of new Set(Object.values(api.SCENE_PATTERNS))) assert.match(api.SCENE_FRAGMENT_SHADER, new RegExp(`id == ${id}\\)`), `pattern ${id}`);
+  assert.doesNotMatch(api.SCENE_FRAGMENT_SHADER.replace(/\/\/.*$/gm, ''), /\bhalf\b/, 'GLSL ES reserves "half"');
+});
+
+test('3D walls meet at closed corners, like the plan, not notched boxes', () => {
+  const { api } = loadStudio();
+  const model = cloneFixture();
+  api.state.model = model; api.state.systems = new Set();
+  const gls = { triangles: [], lines: [] };
+  api.buildScene(gls);
+  const vertices = new Set();
+  for (let i = 0; i < gls.triangles.length; i += 6) vertices.add(gls.triangles.slice(i, i + 3).map(value => Math.round(value * 1000)).join(','));
+  // The barn's exterior walls run on a rectangle of centrelines, 300 mm thick: the outside corners sit
+  // 150 mm beyond it both ways, at every level's wall top. A square-ended box would leave them empty.
+  for (const level of model.levels) {
+    const walls = model.walls.filter(wall => wall.levelId === level.id && wall.kind === 'exterior');
+    const xs = walls.flatMap(wall => [wall.start.x, wall.end.x]), ys = walls.flatMap(wall => [wall.start.y, wall.end.y]);
+    const half = walls[0].thicknessMm / 2, top = level.elevationMm + walls[0].heightMm;
+    for (const x of [Math.min(...xs) - half, Math.max(...xs) + half]) for (const y of [Math.min(...ys) - half, Math.max(...ys) + half]) {
+      assert.ok(vertices.has([x, top, -y].join(',')), `${level.id}: outside corner ${x}, ${y} is closed`);
+    }
+  }
+  // Nor do two walls fill the inside corner twice: the barn's south and west walls share only their miter.
+  const south = model.walls.find(wall => wall.id === 'wall-g-south'), west = model.walls.find(wall => wall.id === 'wall-g-west');
+  const inner = [Math.min(south.start.x, south.end.x) + south.thicknessMm / 2, 0, -(Math.min(west.start.y, west.end.y) + west.thicknessMm / 2)];
+  assert.ok(vertices.has(inner.join(',')), 'the inside corner is a shared miter vertex');
+});
+
+test('3D walls show the layer each face exposes', () => {
+  const { api } = loadStudio();
+  const hex = (r, g, b) => `#${[r, g, b].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('')}`;
+  // Colours of the wall faces at plan offset `y` (mm) facing `+1` (north, model +y) or `-1`, on one level's height.
+  const faceColours = (model, levelId, y, facing) => {
+    api.state.model = model; api.state.systems = new Set();
+    const gls = { triangles: [], lines: [] };
+    api.buildScene(gls);
+    const data = api.sceneVertexData(gls), level = model.levels.find(item => item.id === levelId), colours = new Set();
+    for (let tri = 0; tri < data.triangles.length / 30; tri += 1) {
+      const at = tri * 30, corner = k => [0, 1, 2].map(i => data.triangles[at + k * 10 + i]);
+      const centre = [0, 1, 2].map(i => (corner(0)[i] + corner(1)[i] + corner(2)[i]) / 3);
+      if (Math.abs(-centre[2] * 1000 - y) > 1 || Math.abs(data.triangles[at + 8] + facing) > 1e-3) continue;
+      if (centre[1] * 1000 <= level.elevationMm || centre[1] * 1000 >= level.elevationMm + 2600 || centre[0] < 1 || centre[0] > 8) continue;
+      colours.add(hex(data.triangles[at + 3], data.triangles[at + 4], data.triangles[at + 5]));
+    }
+    return [...colours];
+  };
+  const colour = category => api.MATERIAL_CATEGORIES[category].color;
+  // The barn's south wall: siding (not specified) outside, gypsum inside.
+  const barn = cloneFixture(), half = barn.walls.find(wall => wall.id === 'wall-u-south').thicknessMm / 2;
+  assert.deepEqual(faceColours(barn, 'level-upper', -half, -1), [colour('generic')], 'siding faces out');
+  assert.deepEqual(faceColours(barn, 'level-upper', half, 1), [colour('gypsum')], 'gypsum faces the living room');
+  // A stud partition shows gypsum on both faces, not its studs.
+  const living = barn.walls.find(wall => wall.id === 'wall-u-living'), p = living.thicknessMm / 2, y = living.start.y;
+  assert.deepEqual(faceColours(barn, 'level-upper', y - p, -1), [colour('gypsum')]);
+  assert.deepEqual(faceColours(barn, 'level-upper', y + p, 1), [colour('gypsum')]);
+  // The workshop: brick veneer and block show outside, gypsum inside.
+  const workshop = readFixture('mixed-material-workshop');
+  const upper = workshop.walls.find(wall => wall.id === 'wall-u-south').thicknessMm / 2, ground = workshop.walls.find(wall => wall.id === 'wall-g-south').thicknessMm / 2;
+  assert.deepEqual(faceColours(workshop, 'level-upper', -upper, -1), [colour('brick')]);
+  assert.deepEqual(faceColours(workshop, 'level-upper', upper, 1), [colour('gypsum')]);
+  assert.deepEqual(faceColours(workshop, 'level-ground', -ground, -1), [colour('concrete-masonry')]);
+});
+
+test('the 3D scene is uploaded once per build and drawing re-sends nothing', () => {
+  const { api } = loadStudio();
+  const calls = { createBuffer: 0, bufferData: 0, drawArrays: [] };
+  const gl = {
+    ARRAY_BUFFER: 1, STATIC_DRAW: 2, FLOAT: 3, TRIANGLES: 4, LINES: 5,
+    createBuffer: () => ({ id: ++calls.createBuffer }), bindBuffer() {}, bufferData: (_target, data) => { calls.bufferData += 1; assert.equal(Object.prototype.toString.call(data), '[object Float32Array]'); },
+    enableVertexAttribArray() {}, vertexAttribPointer() {}, drawArrays: (mode, first, count) => calls.drawArrays.push([mode, count])
+  };
+  api.state.model = cloneFixture();
+  api.state.systems = new Set(['plumbing', 'electrical', 'mechanical']);
+  const gls = { gl, triangles: [], lines: [], buffers: {}, position: 0, color: 1 };
+  api.buildScene(gls);
+  api.uploadScene(gls);
+  assert.equal(calls.createBuffer, 2);
+  assert.equal(calls.bufferData, 2);
+  for (let frame = 0; frame < 120; frame += 1) {
+    api.drawBuffer(gls, gls.buffers.triangles, gl.TRIANGLES);
+    api.drawBuffer(gls, gls.buffers.lines, gl.LINES);
+  }
+  assert.equal(calls.bufferData, 2, 'two seconds of frames upload nothing');
+  assert.deepEqual(calls.drawArrays[0], [gl.TRIANGLES, gls.triangles.length / 6]);
+  assert.deepEqual(calls.drawArrays[1], [gl.LINES, gls.lines.length / 6]);
+  assert.ok(gls.center.every(Number.isFinite));
+  let lowest = Infinity;
+  for (let i = 1; i < gls.triangles.length; i += 6) lowest = Math.min(lowest, gls.triangles[i]);
+  assert.ok(lowest < 0, 'the barn slab sits below grade');
+  assert.ok(Math.abs(gls.floor - (lowest - api.WALK.below)) < 1e-9, 'flying stops 8 m below the lowest point of the model');
+
+  api.state.systems = new Set();
+  api.buildScene(gls);
+  api.uploadScene(gls);
+  assert.equal(calls.createBuffer, 2, 'a rebuild reuses the same buffers');
+  assert.equal(calls.bufferData, 4);
 });
 
 test('plans render authored stairs and dimensions', () => {
@@ -1050,8 +1266,8 @@ test('sources manifests are checked before use', () => {
 // A browser stand-in just large enough to run start(): elements are inert records, fetch serves a
 // fixed set of project files, and the clipboard is captured. `token` plays scripts/serve.mjs's write
 // token; `post` answers its POST requests; timers, reloads, and history URLs are captured, not run.
-function startHarness({ files, search = '', token = '', protocol = 'http:', post = null }) {
-  const elements = new Map(), listeners = [];
+function startHarness({ files, search = '', token = '', protocol = 'http:', post = null, picker, pageHtml }) {
+  const elements = new Map(), listeners = [], doc = { activeElement: null, listeners: {}, ...(pageHtml ? { documentElement: { outerHTML: pageHtml } } : {}) };
   class Element {
     constructor(attrs = {}) { Object.assign(this, { innerHTML: '', textContent: '', value: '', hidden: false, disabled: false, style: {}, dataset: {}, options: [], attributes: {}, listeners: {} }, attrs); const set = new Set(); this.classList = { add: c => set.add(c), remove: c => set.delete(c), contains: c => set.has(c), toggle: (c, on = !set.has(c)) => (on ? set.add(c) : set.delete(c), on) }; }
     setAttribute(name, value) { this.attributes[name] = String(value); }
@@ -1060,9 +1276,11 @@ function startHarness({ files, search = '', token = '', protocol = 'http:', post
     dispatch(type, event = {}) { for (const fn of [...(this.listeners[type] ?? [])]) fn({ preventDefault() {}, stopPropagation() {}, target: this, ...event }); }
     querySelector(selector) { return element(`${selector}@child`); }
     querySelectorAll() { return []; }
-    contains() { return false; }
-    focus() {}
+    contains(other) { return other === this || other?.parent === this; }
+    focus() { doc.activeElement = this; }
     select() {}
+    click() { this.clicked = true; }
+    remove() {}
     setPointerCapture() {}
     getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 600 }; }
   }
@@ -1071,13 +1289,15 @@ function startHarness({ files, search = '', token = '', protocol = 'http:', post
     const tab = element(`#${id}`); Object.assign(tab, { id, dataset: { view }, hidden: Boolean(hidden) }); return tab;
   });
   const tools = [...html.matchAll(/data-tool="([a-z]+)"/g)].map(([, tool]) => Object.assign(element(`tool-${tool}`), { dataset: { tool } }));
-  const clipboard = [], posts = [], timers = [], reloads = [], urls = [], session = new Map();
+  const clipboard = [], posts = [], timers = [], reloads = [], urls = [], blobs = [], fetched = [], session = new Map();
   if (token) element('meta[name="architecture-studio-write"]').content = token;
-  const response = (body, status = 200) => ({ ok: status === 200, status, json: async () => JSON.parse(body), arrayBuffer: async () => new Uint8Array(body).buffer });
+  const response = (body, status = 200) => ({ ok: status === 200, status, json: async () => JSON.parse(body), arrayBuffer: async () => (typeof body === 'string' ? new TextEncoder().encode(body) : new Uint8Array(body)).buffer });
   let api;
   const context = vm.createContext({
     console, structuredClone, TextEncoder, URLSearchParams, Blob, crypto: globalThis.crypto,
-    URL: { createObjectURL: () => 'blob:source' },
+    URL: { createObjectURL: blob => { blobs.push(blob); return 'blob:source'; } },
+    // `picker` plays the browser's save dialog (showSaveFilePicker); without it the page falls back to a download.
+    ...(picker ? { showSaveFilePicker: picker } : {}),
     Image: class { set src(value) { this.url = value; } async decode() { this.naturalWidth = 400; this.naturalHeight = 300; } },
     CSS: { escape: value => value },
     navigator: { clipboard: { writeText: async text => { clipboard.push(text); } } },
@@ -1092,17 +1312,328 @@ function startHarness({ files, search = '', token = '', protocol = 'http:', post
         const [status, body] = await post(url, init);
         return { ok: status === 200, status, json: async () => body };
       }
+      fetched.push(url);
       return files[url] === undefined ? response('', 404) : response(files[url]);
     },
-    document: { querySelector: element, getElementById: id => element(`#${id}`), activeElement: null, querySelectorAll: selector => selector === '.tab' ? tabs : selector === '.source-tool' ? tools : [] },
+    document: Object.assign(doc, { querySelector: element, getElementById: id => element(`#${id}`), createElement: () => new Element(), body: { append() {} }, addEventListener(type, fn) { (doc.listeners[type] ??= []).push(fn); }, querySelectorAll: selector => selector === '.tab' ? tabs : selector === '.source-tool' ? tools : [] }),
     __ARCHITECTURE_STUDIO_API__(value) { api = value; }
   });
   vm.runInContext(extractStudioScript(html), context);
   const settle = () => api.sourcesChecked();
-  return { api, element, tabs, tools, clipboard, settle, posts, timers, reloads, urls, session };
+  return { api, element, tabs, tools, clipboard, settle, posts, timers, reloads, urls, session, blobs, fetched, doc };
 }
 const imageBytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);
 const sourcesJson = (overrides = {}) => JSON.stringify({ schemaVersion: '1.0.0', sources: [testSource([], { pixels: { width: 400, height: 300 }, contentHash: `sha256:${crypto.createHash('sha256').update(imageBytes).digest('hex')}`, ...overrides })] });
+
+// Entries of a store-only archive written by zipFiles, by name.
+function readZip(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), decoder = new TextDecoder(), out = {};
+  for (let at = 0; view.getUint32(at, true) === 0x04034b50;) {
+    const size = view.getUint32(at + 18, true), nameLength = view.getUint16(at + 26, true), start = at + 30 + nameLength + view.getUint16(at + 28, true);
+    out[decoder.decode(bytes.subarray(at + 30, at + 30 + nameLength))] = bytes.subarray(start, start + size);
+    at = start + size;
+  }
+  return out;
+}
+const waitFor = async check => { for (let i = 0; i < 100 && !check(); i += 1) await new Promise(resolve => setImmediate(resolve)); };
+const text = bytes => new TextDecoder().decode(bytes);
+
+test('Export project packages every served project file, the stored viewer, and browser approvals', async () => {
+  const listed = ['architecture-studio.json', 'exports/manifest.json', 'exports/plans/removed-level.svg', 'exports/kept.html', 'index.html', 'models/building.json', 'reviews/approvals.json', 'sources/site photo.png'];
+  const files = {
+    '/__architecture-studio/project-files': JSON.stringify({ files: listed }),
+    './architecture-studio.json': '{"tool":"architecture-studio"}',
+    './exports/kept.html': '<p>bundle</p>',
+    './index.html?raw=1': '<!doctype html><title>stored viewer</title>',
+    './models/building.json': JSON.stringify(fixture),
+    './reviews/approvals.json': '{"stale":true}',
+    './sources/site%20photo.png': imageBytes
+  };
+  const { api, element, blobs, fetched } = startHarness({ files, token: 'page-token' });
+  await api.start();
+  api.state.approvals = { 'opening-entry': { approvedAt: '2026-10-01T00:00:00.000Z' } };
+  element('#export-project').dispatch('click');
+  await waitFor(() => /^Saved|Could not/.test(element('#download-status').textContent));
+
+  const status = element('#download-status').textContent;
+  assert.equal(status, "Saved lakeside-barn-residence-project.zip to your browser's downloads folder.");
+  assert.equal(element('#export-project').disabled, false);
+  assert.ok(fetched.includes('./index.html?raw=1') && !fetched.includes('./index.html'), 'the viewer comes from disk, without the live token or reload script');
+  assert.ok(!fetched.includes('./reviews/approvals.json'), 'browser approvals take the place of the saved file');
+  assert.ok(!fetched.some(url => /exports\/(manifest\.json|plans\/)/.test(url)), 'saved drawings are replaced by fresh ones, not read');
+
+  const zip = readZip(new Uint8Array(await blobs.at(-1).arrayBuffer()));
+  const folder = 'lakeside-barn-residence/', sheets = buildDrawingSet(html, fixture).sheets;
+  assert.equal(JSON.stringify(Object.keys(zip)), JSON.stringify([
+    'architecture-studio.json', 'exports/kept.html', 'index.html', 'models/building.json', 'sources/site photo.png', 'reviews/approvals.json',
+    ...sheets.map(sheet => sheet.path), 'exports/manifest.json'
+  ].map(name => folder + name)), 'a sheet for a removed level is dropped, as export-drawings.mjs would');
+  assert.equal(text(zip[`${folder}index.html`]), files['./index.html?raw=1']);
+  assert.deepEqual([...zip[`${folder}sources/site photo.png`]], [...imageBytes], 'images keep their bytes');
+  assert.deepEqual(JSON.parse(text(zip[`${folder}models/building.json`])), fixture);
+  assert.deepEqual(JSON.parse(text(zip[`${folder}exports/manifest.json`])).artifacts, [{ path: 'models/building.json' }]);
+  const approvals = JSON.parse(text(zip[`${folder}reviews/approvals.json`]));
+  assert.equal(approvals.projectId, fixture.project.id);
+  assert.deepEqual(approvals.approvals.map(item => item.entityId), ['opening-entry']);
+});
+
+test('exports/ drawn in the browser matches export-drawings.mjs byte for byte', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'architecture-studio-drawings-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  for (const file of ['models/building.json', 'HANDOFF.md']) {
+    fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+    fs.writeFileSync(path.join(dir, file), 'x');
+  }
+  const { sheets, manifest } = buildDrawingSet(html, fixture, dir);
+  const { api } = loadStudio();
+  const browser = api.drawingSetExport(fixture, name => ['models/building.json', 'HANDOFF.md'].includes(name));
+  assert.equal(JSON.stringify(browser.map(file => file.name)), JSON.stringify([...sheets.map(sheet => sheet.path), 'exports/manifest.json']));
+  sheets.forEach((sheet, i) => assert.equal(browser[i].text, `<?xml version="1.0" encoding="UTF-8"?>\n${sheet.svg}\n`, sheet.path));
+  assert.equal(browser.at(-1).text, `${JSON.stringify(manifest, null, 2)}\n`);
+});
+
+test('the viewer carries the skill version that Export project writes to architecture-studio.json', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(skillRoot, 'package.json'), 'utf8'));
+  assert.match(html, new RegExp(`<meta name="architecture-studio-version" content="${pkg.version.replace(/\./g, '\\.')}">`));
+});
+
+test('Export project always carries the launcher, executable on macOS', async () => {
+  const { api } = loadStudio();
+  const launchers = api.projectLaunchers(html);
+  assert.equal(JSON.stringify(launchers.map(file => file.name)), JSON.stringify(['open-studio.mjs', 'Open Studio.cmd', 'Open Studio.command']));
+
+  const fromPage = await api.projectExportFiles({ listed: null, model: fixture, page: '<!doctype html>', launchers });
+  const command = fromPage.files.find(file => file.name === 'Open Studio.command');
+  assert.equal(command.mode, 0o755);
+  assert.equal(text(fromPage.files.find(file => file.name === 'Open Studio.cmd').bytes), launchers[1].text);
+
+  // A served project keeps its own launcher copy; one made before the launcher existed gets the page's.
+  const served = await api.projectExportFiles({
+    listed: ['index.html', 'open-studio.mjs'], model: fixture, launchers,
+    fetchImpl: async url => ({ ok: true, arrayBuffer: async () => new TextEncoder().encode(url === './open-studio.mjs' ? '// project copy' : 'page').buffer })
+  });
+  assert.equal(text(served.files.find(file => file.name === 'open-studio.mjs').bytes), '// project copy');
+  assert.ok(served.files.some(file => file.name === 'Open Studio.cmd') && served.files.some(file => file.name === 'Open Studio.command' && file.mode === 0o755));
+
+  const zip = api.zipFiles([{ name: 'p/Open Studio.command', bytes: command.bytes, mode: 0o755 }, { name: 'p/index.html', bytes: new Uint8Array([60]) }]);
+  const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+  const central = view.getUint32(zip.byteLength - 22 + 16, true);
+  assert.equal(view.getUint16(central + 4, true), 0x0314, 'made on Unix, so the mode is honored');
+  assert.equal(view.getUint32(central + 38, true) >>> 16, 0o100755);
+  const second = central + 46 + view.getUint16(central + 28, true);
+  assert.equal(view.getUint16(second + 4, true), 20, 'other entries are unchanged');
+  assert.equal(view.getUint32(second + 38, true), 0);
+});
+
+test('a project page opened from disk says to use Open Studio instead of failing to fetch', async () => {
+  const { api, element } = startHarness({ files: {}, protocol: 'file:' });
+  await api.start();
+  assert.equal(api.state.blocked.title, 'Open this project with Open Studio');
+  assert.match(element('#stage-status').innerHTML, /double-click Open Studio\.cmd \(Windows\) or Open Studio\.command \(macOS\)/);
+  assert.doesNotMatch(element('#inspector').innerHTML, /Failed to fetch|Model request failed/);
+
+  const served = startHarness({ files: {} });
+  await served.api.start();
+  assert.equal(served.api.state.blocked.title, 'Model unavailable', 'a served page with no model keeps the model message');
+});
+
+test('Share asks where to save, and saves nothing when the dialog is cancelled', async () => {
+  const written = [], asked = [];
+  let answer = 'save', fetchedWhenAsked = null;
+  const { api, element, blobs, fetched } = startHarness({
+    files: { '/__architecture-studio/project-files': JSON.stringify({ files: ['models/building.json'] }), './models/building.json': JSON.stringify(fixture) },
+    picker: async options => {
+      asked.push(options);
+      fetchedWhenAsked ??= fetched.length;
+      if (answer === 'cancel') throw Object.assign(new Error('The user aborted a request.'), { name: 'AbortError' });
+      if (answer === 'blocked') throw Object.assign(new Error('Must be handling a user gesture.'), { name: 'SecurityError' });
+      return { name: 'Barn backup.zip', createWritable: async () => ({ write: async blob => written.push(blob), close: async () => {} }) };
+    }
+  });
+  await api.start();
+  const settled = () => waitFor(() => /^Saved|Could not/.test(element('#download-status').textContent));
+
+  const startFetches = fetched.length;
+  element('#export-project').dispatch('click');
+  await settled();
+  assert.equal(asked[0].suggestedName, 'lakeside-barn-residence-project.zip');
+  assert.deepEqual(Object.keys(asked[0].types[0].accept), ['application/zip']);
+  assert.equal(fetchedWhenAsked, startFetches, 'the dialog opens before any packaging, while the click still counts as a gesture');
+  assert.equal(element('#download-status').textContent, 'Saved Barn backup.zip.', 'the browser does not reveal the chosen folder');
+  assert.equal(Object.keys(readZip(new Uint8Array(await written[0].arrayBuffer())))[0], 'lakeside-barn-residence/models/building.json');
+  assert.equal(blobs.length, 0, 'nothing went to the downloads folder');
+
+  element('#download-status').textContent = '';
+  element('#download-set').dispatch('click');
+  await settled();
+  assert.equal(asked[1].suggestedName, 'lakeside-barn-residence-drawings.zip');
+  assert.equal(element('#download-status').textContent, 'Saved Barn backup.zip.');
+
+  answer = 'cancel';
+  element('#download-status').textContent = 'an older message';
+  element('#export-project').dispatch('click');
+  await waitFor(() => element('#download-status').textContent === '');
+  element('#download-set').dispatch('click');
+  await waitFor(() => asked.length === 4);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(element('#download-status').textContent, '', 'a cancelled save says nothing');
+  assert.equal(written.length, 2);
+  assert.equal(blobs.length, 0, 'a cancelled save does not download instead');
+
+  answer = 'blocked';
+  element('#download-set').dispatch('click');
+  await settled();
+  assert.match(element('#download-status').textContent, /to your browser's downloads folder\.$/, 'when the dialog cannot open, the browser downloads as usual');
+  assert.equal(blobs.length, 1);
+});
+
+test('a save confirmation clears itself after a few seconds; a problem stays', async () => {
+  const picker = async () => ({ name: 'barn.zip', createWritable: async () => ({ write: async () => {}, close: async () => {} }) });
+  const { api, element, timers } = startHarness({
+    files: { '/__architecture-studio/project-files': JSON.stringify({ files: ['models/building.json', 'brief.json'] }), './models/building.json': JSON.stringify(fixture) },
+    picker
+  });
+  await api.start();
+  const status = element('#download-status'), clears = () => timers.filter(timer => timer.ms === 4000);
+
+  element('#download-set').dispatch('click');
+  await waitFor(() => status.textContent === 'Saved barn.zip.');
+  element('#download-set').dispatch('click');
+  await waitFor(() => clears().length === 2);
+  clears()[0].fn();
+  assert.equal(status.textContent, 'Saved barn.zip.', "the first save's timer does not cut the second confirmation short");
+  clears()[1].fn();
+  assert.equal(status.textContent, '', 'the confirmation clears after 4 seconds');
+
+  element('#export-project').dispatch('click');
+  await waitFor(() => /could not be read/.test(status.textContent));
+  assert.equal(status.textContent, 'Saved barn.zip. 1 file could not be read.');
+  assert.equal(clears().length, 2, 'a save with missing files is not cleared automatically');
+});
+
+test('away from serve.mjs, Export project rebuilds a reopenable project from the page', async () => {
+  const findings = { schemaVersion: '1.0.0', projectId: fixture.project.id, status: 'unavailable', coverage: {}, findings: [] };
+  const files = { './models/building.json': JSON.stringify(fixture), './reviews/code-findings.json': JSON.stringify(findings) };
+  // A page opened from disk with its data embedded, as the preview and bundles are.
+  const pageHtml = '<html lang="en"><head><meta name="architecture-studio-version" content="9.8.7"></head><body><main>viewer</main>'
+    + `<script type="application/json" id="embedded-model">${JSON.stringify(fixture).replace(/</g, '\\u003c')}</script>`
+    + `<script type="application/json" id="embedded-code-findings">${JSON.stringify(findings)}</script><script>/* renderer */</script></body></html>`;
+  const { api, element, blobs, fetched } = startHarness({ files, protocol: 'file:', pageHtml });
+  element('meta[name="architecture-studio-version"]').content = '9.8.7';
+  await api.start();
+  api.state.approvals = { 'opening-entry': { approvedAt: '2026-10-01T00:00:00.000Z' }, 'not-in-the-model': { approvedAt: '2026-10-01T00:00:00.000Z' } };
+  element('#export-project').dispatch('click');
+  await waitFor(() => /^Saved|Could not/.test(element('#download-status').textContent));
+
+  assert.ok(!fetched.includes('/__architecture-studio/project-files'), 'a file page cannot list the folder');
+  assert.equal(element('#download-status').textContent, "Saved lakeside-barn-residence-project.zip to your browser's downloads folder.");
+  const zip = readZip(new Uint8Array(await blobs.at(-1).arrayBuffer())), at = name => zip[`lakeside-barn-residence/${name}`];
+  const sheets = buildDrawingSet(html, fixture).sheets;
+  assert.equal(JSON.stringify(Object.keys(zip)), JSON.stringify([
+    'architecture-studio.json', 'index.html', 'models/building.json', 'reviews/code-findings.json', 'reviews/approvals.json', ...sheets.map(sheet => sheet.path), 'exports/manifest.json'
+  ].map(name => `lakeside-barn-residence/${name}`)));
+  assert.equal(text(at('architecture-studio.json')), '{\n  "tool": "architecture-studio",\n  "skillVersion": "9.8.7"\n}\n', 'the marker init.mjs writes, with the viewer version');
+  assert.equal(text(at('index.html')), '<!doctype html>\n<html lang="en"><head><meta name="architecture-studio-version" content="9.8.7"></head><body><main>viewer</main>'
+    + '<script type="application/json" id="embedded-model"></script><script type="application/json" id="embedded-code-findings"></script><script>/* renderer */</script></body></html>\n',
+  'the viewer without its embedded data, so it reads models/ and reviews/ like any project');
+  assert.equal(text(at('models/building.json')), `${JSON.stringify(fixture, null, 2)}\n`);
+  assert.deepEqual(JSON.parse(text(at('reviews/code-findings.json'))), findings);
+  assert.deepEqual(JSON.parse(text(at('reviews/approvals.json'))).approvals.map(item => item.entityId), ['opening-entry'], 'approvals for missing elements are dropped');
+  assert.equal(text(at(sheets[0].path)), `<?xml version="1.0" encoding="UTF-8"?>\n${sheets[0].svg}\n`);
+  assert.deepEqual(JSON.parse(text(at('exports/manifest.json'))).artifacts, [{ path: 'models/building.json' }, { path: 'reviews/code-findings.json' }]);
+});
+
+test('Export project falls back when the server cannot list files, and keeps archive names safe', async () => {
+  const { api } = loadStudio();
+  const http = { protocol: 'http:' };
+  assert.equal(await api.fetchProjectFileList(async () => ({ ok: false, status: 404 }), http), null, 'a plain static server');
+  assert.equal(await api.fetchProjectFileList(async () => ({ ok: true, json: async () => ({ files: [1] }) }), http), null);
+  assert.equal(await api.fetchProjectFileList(async () => { throw new Error('offline'); }, http), null);
+  assert.deepEqual(await api.fetchProjectFileList(async () => ({ ok: true, json: async () => ({ files: ['index.html'] }) }), http), ['index.html']);
+  assert.equal(await api.fetchProjectFileList(async () => { throw new Error('not called'); }, { protocol: 'file:' }), null);
+  assert.equal(api.archiveFolder('../client/house 2'), 'client-house-2');
+  assert.equal(api.archiveFolder(undefined), 'architecture-studio-project');
+
+  const empty = await api.projectExportFiles({ listed: null, model: null, approvals: { x: {} } });
+  assert.equal(empty.files.length, 0, 'nothing to export without a model or a server');
+});
+
+test('Share opens a keyboard menu with Export project and Download drawings', async () => {
+  // A static page with no exports/ folder, like the preview: Download drawings still has every sheet.
+  const { api, element, doc, blobs, fetched } = startHarness({ files: { './models/building.json': JSON.stringify(fixture) }, protocol: 'file:' });
+  const share = element('#share-button'), menu = Object.assign(element('#share-menu'), { hidden: true });
+  const exportItem = element('#export-project'), download = element('#download-set');
+  for (const item of [share, exportItem, download]) item.parent = element('.share');
+  await api.start();
+  api.state.approvals = { 'opening-entry': { approvedAt: '2026-10-01' } };
+
+  share.dispatch('click');
+  assert.equal(menu.hidden, false);
+  assert.equal(share.attributes['aria-expanded'], 'true');
+  assert.equal(doc.activeElement, exportItem, 'opening lands on the first item');
+  assert.equal(download.hidden, false);
+  menu.dispatch('keydown', { key: 'ArrowDown' });
+  assert.equal(doc.activeElement, download);
+  menu.dispatch('keydown', { key: 'ArrowDown' });
+  assert.equal(doc.activeElement, exportItem, 'the arrows wrap');
+  menu.dispatch('keydown', { key: 'End' });
+  assert.equal(doc.activeElement, download);
+  menu.dispatch('keydown', { key: 'Home' });
+  assert.equal(doc.activeElement, exportItem);
+  menu.dispatch('keydown', { key: 'Escape' });
+  assert.equal(menu.hidden, true);
+  assert.equal(share.attributes['aria-expanded'], 'false');
+  assert.equal(doc.activeElement, share, 'Escape returns focus to Share');
+
+  share.dispatch('keydown', { key: 'ArrowUp' });
+  assert.equal(doc.activeElement, download, 'ArrowUp opens on the last item');
+  for (const fn of doc.listeners.pointerdown) fn({ target: exportItem });
+  assert.equal(menu.hidden, false, 'a press inside the menu keeps it open');
+  for (const fn of doc.listeners.pointerdown) fn({ target: element('#sheet-viewport') });
+  assert.equal(menu.hidden, true, 'a press elsewhere closes it');
+  share.dispatch('click');
+  menu.dispatch('keydown', { key: 'Tab' });
+  assert.equal(menu.hidden, true, 'Tab leaves the menu');
+  share.dispatch('click');
+  share.dispatch('click');
+  assert.equal(menu.hidden, true, 'Share toggles');
+
+  share.dispatch('click');
+  const before = fetched.length;
+  download.dispatch('click');
+  assert.equal(menu.hidden, true, 'choosing closes the menu first');
+  assert.equal(doc.activeElement, share);
+  const sheets = buildDrawingSet(html, fixture).sheets;
+  await waitFor(() => /^Saved|Could not/.test(element('#download-status').textContent));
+  assert.equal(element('#download-status').textContent, "Saved lakeside-barn-residence-drawings.zip to your browser's downloads folder.");
+  assert.equal(fetched.length, before, 'the sheets are drawn from the model, not read from exports/');
+  const zip = readZip(new Uint8Array(await blobs.at(-1).arrayBuffer()));
+  assert.equal(JSON.stringify(Object.keys(zip)), JSON.stringify(sheets.map(sheet => sheet.path.replace('exports/', 'lakeside-barn-residence-drawings/'))), 'only drawing sheets: no manifest, approvals, model, or handoff notes');
+  for (const sheet of sheets) assert.equal(text(zip[sheet.path.replace('exports/', 'lakeside-barn-residence-drawings/')]), `<?xml version="1.0" encoding="UTF-8"?>\n${sheet.svg}\n`, `${sheet.path} matches export-drawings.mjs`);
+});
+
+test('Download drawings keeps sheet names inside its folder', () => {
+  const { api } = loadStudio();
+  const model = cloneFixture();
+  model.project.id = '../escape';
+  model.sections[0].id = '../../section aa';
+  const names = api.drawingFiles(model).map(file => file.name);
+  assert.ok(names.every(name => name.startsWith('escape-drawings/') && !name.includes('..') && name.split('/').length === 3), names.join(', '));
+  assert.ok(names.includes('escape-drawings/sections/section-aa.svg'));
+});
+
+test('with the model blocked, Share offers only Export project', async () => {
+  const { api, element, doc } = startHarness({ files: {} });
+  const menu = Object.assign(element('#share-menu'), { hidden: true });
+  await api.start();
+  assert.equal(api.state.blocked.title, 'Model unavailable');
+  element('#share-button').dispatch('click');
+  assert.equal(menu.hidden, false);
+  assert.equal(element('#download-set').hidden, true);
+  assert.equal(doc.activeElement, element('#export-project'));
+  element('#share-menu').dispatch('keydown', { key: 'ArrowDown' });
+  assert.equal(doc.activeElement, element('#export-project'), 'only one item to move between');
+});
 
 test('without a valid model the Sources view still calibrates', async () => {
   const { api, element, tabs, tools, clipboard, settle } = startHarness({ files: { './sources/sources.json': sourcesJson(), './sources/survey-plat.png': imageBytes }, search: '?view=sources' });

@@ -53,8 +53,8 @@
   },
   "materials": [
     {
-      "id": "mat-envelope",
-      "name": "Envelope allowance",
+      "id": "mat-siding",
+      "name": "Exterior siding, type not yet chosen",
       "category": "generic",
       "evidence": {
         "source": "generated",
@@ -64,9 +64,31 @@
       }
     },
     {
-      "id": "mat-partition",
-      "name": "Partition allowance",
-      "category": "generic",
+      "id": "mat-sheathing",
+      "name": "Wood structural panel sheathing",
+      "category": "engineered-wood",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Illustrative material category, not a product specification or rated assembly."
+      }
+    },
+    {
+      "id": "mat-batt",
+      "name": "Batt insulation in 2x6 stud cavity",
+      "category": "insulation-batt",
+      "evidence": {
+        "source": "generated",
+        "confidence": 0.6,
+        "status": "needs-review",
+        "note": "Illustrative material category, not a product specification or rated assembly."
+      }
+    },
+    {
+      "id": "mat-gypsum",
+      "name": "Gypsum board",
+      "category": "gypsum",
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -100,17 +122,6 @@
       "id": "mat-subfloor",
       "name": "Wood subfloor",
       "category": "engineered-wood",
-      "evidence": {
-        "source": "generated",
-        "confidence": 0.6,
-        "status": "needs-review",
-        "note": "Illustrative material category, not a product specification or rated assembly."
-      }
-    },
-    {
-      "id": "mat-ceiling",
-      "name": "Ceiling lining",
-      "category": "gypsum",
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -164,28 +175,28 @@
       "use": "two vehicle bays and rear workbench",
       "boundary": [
         {
-          "x": 150,
-          "y": 150
+          "x": 92,
+          "y": 92
         },
         {
-          "x": 10823,
-          "y": 150
+          "x": 10881,
+          "y": 92
         },
         {
-          "x": 10823,
-          "y": 14480
+          "x": 10881,
+          "y": 14538
         },
         {
-          "x": 5557,
-          "y": 14480
+          "x": 5545,
+          "y": 14538
         },
         {
-          "x": 5557,
-          "y": 7245
+          "x": 5545,
+          "y": 7257
         },
         {
-          "x": 150,
-          "y": 7245
+          "x": 92,
+          "y": 7257
         }
       ],
       "evidence": {
@@ -202,20 +213,20 @@
       "use": "equipment and wash sink",
       "boundary": [
         {
-          "x": 150,
-          "y": 7385
+          "x": 92,
+          "y": 7373
         },
         {
-          "x": 5417,
-          "y": 7385
+          "x": 5429,
+          "y": 7373
         },
         {
-          "x": 5417,
-          "y": 10903
+          "x": 5429,
+          "y": 10915
         },
         {
-          "x": 150,
-          "y": 10903
+          "x": 92,
+          "y": 10915
         }
       ],
       "evidence": {
@@ -232,20 +243,20 @@
       "use": "workshop storage",
       "boundary": [
         {
-          "x": 150,
-          "y": 11043
+          "x": 92,
+          "y": 11031
         },
         {
-          "x": 5417,
-          "y": 11043
+          "x": 5429,
+          "y": 11031
         },
         {
-          "x": 5417,
-          "y": 14480
+          "x": 5429,
+          "y": 14538
         },
         {
-          "x": 150,
-          "y": 14480
+          "x": 92,
+          "y": 14538
         }
       ],
       "evidence": {
@@ -262,20 +273,20 @@
       "use": "living, dining, and kitchen",
       "boundary": [
         {
-          "x": 150,
-          "y": 150
+          "x": 92,
+          "y": 92
         },
         {
-          "x": 10823,
-          "y": 150
+          "x": 10881,
+          "y": 92
         },
         {
-          "x": 10823,
-          "y": 7245
+          "x": 10881,
+          "y": 7257
         },
         {
-          "x": 150,
-          "y": 7245
+          "x": 92,
+          "y": 7257
         }
       ],
       "evidence": {
@@ -292,20 +303,20 @@
       "use": "bathroom",
       "boundary": [
         {
-          "x": 150,
-          "y": 7385
+          "x": 92,
+          "y": 7373
         },
         {
-          "x": 2978,
-          "y": 7385
+          "x": 2990,
+          "y": 7373
         },
         {
-          "x": 2978,
-          "y": 9684
+          "x": 2990,
+          "y": 9696
         },
         {
-          "x": 150,
-          "y": 9684
+          "x": 92,
+          "y": 9696
         }
       ],
       "evidence": {
@@ -322,20 +333,20 @@
       "use": "laundry",
       "boundary": [
         {
-          "x": 3118,
-          "y": 7385
+          "x": 3106,
+          "y": 7373
         },
         {
-          "x": 5417,
-          "y": 7385
+          "x": 5429,
+          "y": 7373
         },
         {
-          "x": 5417,
-          "y": 9684
+          "x": 5429,
+          "y": 9696
         },
         {
-          "x": 3118,
-          "y": 9684
+          "x": 3106,
+          "y": 9696
         }
       ],
       "evidence": {
@@ -352,28 +363,28 @@
       "use": "residential entry and bedroom corridor",
       "boundary": [
         {
-          "x": 150,
-          "y": 9824
+          "x": 92,
+          "y": 9812
         },
         {
-          "x": 5557,
-          "y": 9824
+          "x": 5545,
+          "y": 9812
         },
         {
-          "x": 5557,
-          "y": 7385
+          "x": 5545,
+          "y": 7373
         },
         {
-          "x": 10823,
-          "y": 7385
+          "x": 10881,
+          "y": 7373
         },
         {
-          "x": 10823,
-          "y": 10903
+          "x": 10881,
+          "y": 10915
         },
         {
-          "x": 150,
-          "y": 10903
+          "x": 92,
+          "y": 10915
         }
       ],
       "evidence": {
@@ -390,20 +401,20 @@
       "use": "sleeping",
       "boundary": [
         {
-          "x": 150,
-          "y": 11043
+          "x": 92,
+          "y": 11031
         },
         {
-          "x": 5417,
-          "y": 11043
+          "x": 5429,
+          "y": 11031
         },
         {
-          "x": 5417,
-          "y": 14480
+          "x": 5429,
+          "y": 14538
         },
         {
-          "x": 150,
-          "y": 14480
+          "x": 92,
+          "y": 14538
         }
       ],
       "evidence": {
@@ -420,20 +431,20 @@
       "use": "sleeping",
       "boundary": [
         {
-          "x": 5557,
-          "y": 11043
+          "x": 5545,
+          "y": 11031
         },
         {
-          "x": 10823,
-          "y": 11043
+          "x": 10881,
+          "y": 11031
         },
         {
-          "x": 10823,
-          "y": 14480
+          "x": 10881,
+          "y": 14538
         },
         {
-          "x": 5557,
-          "y": 14480
+          "x": 5545,
+          "y": 14538
         }
       ],
       "evidence": {
@@ -457,14 +468,36 @@
         "y": 0
       },
       "kind": "exterior",
-      "thicknessMm": 300,
+      "thicknessMm": 184,
       "heightMm": 3250,
-      "materialId": "mat-envelope",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 12
+        },
+        {
+          "id": "siding",
+          "materialId": "mat-siding",
+          "thicknessMm": 19
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x6 wall: gypsum, batt-filled stud cavity, wood structural panel sheathing, and siding of a type not yet chosen. Not a specified or fire-rated assembly."
       }
     },
     {
@@ -479,14 +512,36 @@
         "y": 14630
       },
       "kind": "exterior",
-      "thicknessMm": 300,
+      "thicknessMm": 184,
       "heightMm": 3250,
-      "materialId": "mat-envelope",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 12
+        },
+        {
+          "id": "siding",
+          "materialId": "mat-siding",
+          "thicknessMm": 19
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x6 wall: gypsum, batt-filled stud cavity, wood structural panel sheathing, and siding of a type not yet chosen. Not a specified or fire-rated assembly."
       }
     },
     {
@@ -501,14 +556,36 @@
         "y": 14630
       },
       "kind": "exterior",
-      "thicknessMm": 300,
+      "thicknessMm": 184,
       "heightMm": 3250,
-      "materialId": "mat-envelope",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 12
+        },
+        {
+          "id": "siding",
+          "materialId": "mat-siding",
+          "thicknessMm": 19
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x6 wall: gypsum, batt-filled stud cavity, wood structural panel sheathing, and siding of a type not yet chosen. Not a specified or fire-rated assembly."
       }
     },
     {
@@ -523,14 +600,36 @@
         "y": 0
       },
       "kind": "exterior",
-      "thicknessMm": 300,
+      "thicknessMm": 184,
       "heightMm": 3250,
-      "materialId": "mat-envelope",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 12
+        },
+        {
+          "id": "siding",
+          "materialId": "mat-siding",
+          "thicknessMm": 19
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x6 wall: gypsum, batt-filled stud cavity, wood structural panel sheathing, and siding of a type not yet chosen. Not a specified or fire-rated assembly."
       }
     },
     {
@@ -545,14 +644,36 @@
         "y": 0
       },
       "kind": "exterior",
-      "thicknessMm": 300,
+      "thicknessMm": 184,
       "heightMm": 2800,
-      "materialId": "mat-envelope",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 12
+        },
+        {
+          "id": "siding",
+          "materialId": "mat-siding",
+          "thicknessMm": 19
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x6 wall: gypsum, batt-filled stud cavity, wood structural panel sheathing, and siding of a type not yet chosen. Not a specified or fire-rated assembly."
       }
     },
     {
@@ -567,14 +688,36 @@
         "y": 14630
       },
       "kind": "exterior",
-      "thicknessMm": 300,
+      "thicknessMm": 184,
       "heightMm": 2800,
-      "materialId": "mat-envelope",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 12
+        },
+        {
+          "id": "siding",
+          "materialId": "mat-siding",
+          "thicknessMm": 19
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x6 wall: gypsum, batt-filled stud cavity, wood structural panel sheathing, and siding of a type not yet chosen. Not a specified or fire-rated assembly."
       }
     },
     {
@@ -589,14 +732,36 @@
         "y": 14630
       },
       "kind": "exterior",
-      "thicknessMm": 300,
+      "thicknessMm": 184,
       "heightMm": 2800,
-      "materialId": "mat-envelope",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 12
+        },
+        {
+          "id": "siding",
+          "materialId": "mat-siding",
+          "thicknessMm": 19
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x6 wall: gypsum, batt-filled stud cavity, wood structural panel sheathing, and siding of a type not yet chosen. Not a specified or fire-rated assembly."
       }
     },
     {
@@ -611,14 +776,36 @@
         "y": 0
       },
       "kind": "exterior",
-      "thicknessMm": 300,
+      "thicknessMm": 184,
       "heightMm": 2800,
-      "materialId": "mat-envelope",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        {
+          "id": "gypsum",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-batt",
+          "thicknessMm": 140
+        },
+        {
+          "id": "sheathing",
+          "materialId": "mat-sheathing",
+          "thicknessMm": 12
+        },
+        {
+          "id": "siding",
+          "materialId": "mat-siding",
+          "thicknessMm": 19
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x6 wall: gypsum, batt-filled stud cavity, wood structural panel sheathing, and siding of a type not yet chosen. Not a specified or fire-rated assembly."
       }
     },
     {
@@ -633,14 +820,30 @@
         "y": 7315
       },
       "kind": "interior",
-      "thicknessMm": 140,
+      "thicknessMm": 116,
       "heightMm": 3250,
-      "materialId": "mat-partition",
+      "layers": [
+        {
+          "id": "gypsum-left",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-timber",
+          "thicknessMm": 90
+        },
+        {
+          "id": "gypsum-right",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x4 stud partition with gypsum both sides. Not a fire-rated or acoustic assembly."
       }
     },
     {
@@ -655,14 +858,30 @@
         "y": 14630
       },
       "kind": "interior",
-      "thicknessMm": 140,
+      "thicknessMm": 116,
       "heightMm": 3250,
-      "materialId": "mat-partition",
+      "layers": [
+        {
+          "id": "gypsum-left",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-timber",
+          "thicknessMm": 90
+        },
+        {
+          "id": "gypsum-right",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x4 stud partition with gypsum both sides. Not a fire-rated or acoustic assembly."
       }
     },
     {
@@ -677,14 +896,30 @@
         "y": 10973
       },
       "kind": "interior",
-      "thicknessMm": 140,
+      "thicknessMm": 116,
       "heightMm": 3250,
-      "materialId": "mat-partition",
+      "layers": [
+        {
+          "id": "gypsum-left",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-timber",
+          "thicknessMm": 90
+        },
+        {
+          "id": "gypsum-right",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x4 stud partition with gypsum both sides. Not a fire-rated or acoustic assembly."
       }
     },
     {
@@ -699,14 +934,30 @@
         "y": 7315
       },
       "kind": "interior",
-      "thicknessMm": 140,
+      "thicknessMm": 116,
       "heightMm": 2800,
-      "materialId": "mat-partition",
+      "layers": [
+        {
+          "id": "gypsum-left",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-timber",
+          "thicknessMm": 90
+        },
+        {
+          "id": "gypsum-right",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x4 stud partition with gypsum both sides. Not a fire-rated or acoustic assembly."
       }
     },
     {
@@ -721,14 +972,30 @@
         "y": 9754
       },
       "kind": "interior",
-      "thicknessMm": 140,
+      "thicknessMm": 116,
       "heightMm": 2800,
-      "materialId": "mat-partition",
+      "layers": [
+        {
+          "id": "gypsum-left",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-timber",
+          "thicknessMm": 90
+        },
+        {
+          "id": "gypsum-right",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x4 stud partition with gypsum both sides. Not a fire-rated or acoustic assembly."
       }
     },
     {
@@ -743,14 +1010,30 @@
         "y": 9754
       },
       "kind": "interior",
-      "thicknessMm": 140,
+      "thicknessMm": 116,
       "heightMm": 2800,
-      "materialId": "mat-partition",
+      "layers": [
+        {
+          "id": "gypsum-left",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-timber",
+          "thicknessMm": 90
+        },
+        {
+          "id": "gypsum-right",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x4 stud partition with gypsum both sides. Not a fire-rated or acoustic assembly."
       }
     },
     {
@@ -765,14 +1048,30 @@
         "y": 9754
       },
       "kind": "interior",
-      "thicknessMm": 140,
+      "thicknessMm": 116,
       "heightMm": 2800,
-      "materialId": "mat-partition",
+      "layers": [
+        {
+          "id": "gypsum-left",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-timber",
+          "thicknessMm": 90
+        },
+        {
+          "id": "gypsum-right",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x4 stud partition with gypsum both sides. Not a fire-rated or acoustic assembly."
       }
     },
     {
@@ -787,14 +1086,30 @@
         "y": 10973
       },
       "kind": "interior",
-      "thicknessMm": 140,
+      "thicknessMm": 116,
       "heightMm": 2800,
-      "materialId": "mat-partition",
+      "layers": [
+        {
+          "id": "gypsum-left",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-timber",
+          "thicknessMm": 90
+        },
+        {
+          "id": "gypsum-right",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x4 stud partition with gypsum both sides. Not a fire-rated or acoustic assembly."
       }
     },
     {
@@ -809,14 +1124,30 @@
         "y": 14630
       },
       "kind": "interior",
-      "thicknessMm": 140,
+      "thicknessMm": 116,
       "heightMm": 2800,
-      "materialId": "mat-partition",
+      "layers": [
+        {
+          "id": "gypsum-left",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-timber",
+          "thicknessMm": 90
+        },
+        {
+          "id": "gypsum-right",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 13
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
         "status": "needs-review",
-        "note": "Concept assembly envelope, not a specified or fire-rated assembly."
+        "note": "Concept 2x4 stud partition with gypsum both sides. Not a fire-rated or acoustic assembly."
       }
     }
   ],
@@ -1228,20 +1559,20 @@
       "levelId": "level-ground",
       "boundary": [
         {
-          "x": -150,
-          "y": -150
+          "x": -92,
+          "y": -92
         },
         {
-          "x": 11123,
-          "y": -150
+          "x": 11065,
+          "y": -92
         },
         {
-          "x": 11123,
-          "y": 14780
+          "x": 11065,
+          "y": 14722
         },
         {
-          "x": -150,
-          "y": 14780
+          "x": -92,
+          "y": 14722
         }
       ],
       "thicknessMm": 150,
@@ -1258,20 +1589,20 @@
       "levelId": "level-upper",
       "boundary": [
         {
-          "x": -150,
-          "y": -150
+          "x": -92,
+          "y": -92
         },
         {
-          "x": 11123,
-          "y": -150
+          "x": 11065,
+          "y": -92
         },
         {
-          "x": 11123,
-          "y": 14780
+          "x": 11065,
+          "y": 14722
         },
         {
-          "x": -150,
-          "y": 14780
+          "x": -92,
+          "y": 14722
         }
       ],
       "thicknessMm": 350,
@@ -1288,7 +1619,7 @@
         },
         {
           "id": "lining",
-          "materialId": "mat-ceiling",
+          "materialId": "mat-gypsum",
           "thicknessMm": 30
         }
       ],
@@ -1341,11 +1672,11 @@
       "fromLevelId": "level-ground",
       "toLevelId": "level-upper",
       "start": {
-        "x": 12342,
+        "x": 12284,
         "y": 2605
       },
       "end": {
-        "x": 12342,
+        "x": 12284,
         "y": 7925
       },
       "widthMm": 1219,
@@ -1367,7 +1698,7 @@
       "kind": "utility-sink",
       "levelId": "level-ground",
       "position": {
-        "x": 450,
+        "x": 392,
         "y": 8535,
         "z": 0
       },
@@ -1394,7 +1725,7 @@
       "kind": "kitchen-sink",
       "levelId": "level-upper",
       "position": {
-        "x": 450,
+        "x": 392,
         "y": 4877,
         "z": 3600
       },
@@ -1421,7 +1752,7 @@
       "kind": "lavatory",
       "levelId": "level-upper",
       "position": {
-        "x": 450,
+        "x": 392,
         "y": 8535,
         "z": 3600
       },
@@ -1530,7 +1861,7 @@
       "kind": "dishwasher",
       "levelId": "level-upper",
       "position": {
-        "x": 475,
+        "x": 417,
         "y": 5700,
         "z": 3600
       },
@@ -1610,7 +1941,7 @@
       "kind": "refrigerator",
       "levelId": "level-upper",
       "position": {
-        "x": 550,
+        "x": 492,
         "y": 6500,
         "z": 3600
       },
@@ -1829,7 +2160,7 @@
       "levelId": "level-ground",
       "position": {
         "x": 8700,
-        "y": 14080,
+        "y": 14138,
         "z": 0
       },
       "rotationDeg": 0,
@@ -1852,7 +2183,7 @@
       "kind": "shelving",
       "levelId": "level-ground",
       "position": {
-        "x": 500,
+        "x": 442,
         "y": 12900,
         "z": 0
       },
@@ -1999,7 +2330,7 @@
           "kind": "fixture-connection",
           "levelId": "level-ground",
           "position": {
-            "x": 450,
+            "x": 392,
             "y": 8535,
             "z": 600
           },
@@ -2016,7 +2347,7 @@
           "kind": "fixture-connection",
           "levelId": "level-upper",
           "position": {
-            "x": 450,
+            "x": 392,
             "y": 4877,
             "z": 4200
           },
@@ -2033,7 +2364,7 @@
           "kind": "fixture-connection",
           "levelId": "level-upper",
           "position": {
-            "x": 450,
+            "x": 392,
             "y": 8535,
             "z": 4200
           },
@@ -2101,7 +2432,7 @@
           "kind": "fixture-connection",
           "levelId": "level-upper",
           "position": {
-            "x": 475,
+            "x": 417,
             "y": 5700,
             "z": 4200
           },
@@ -2172,12 +2503,12 @@
               "z": 600
             },
             {
-              "x": 450,
+              "x": 392,
               "y": 8500,
               "z": 600
             },
             {
-              "x": 450,
+              "x": 392,
               "y": 8535,
               "z": 600
             }
@@ -2201,12 +2532,12 @@
               "z": 4200
             },
             {
-              "x": 450,
+              "x": 392,
               "y": 8500,
               "z": 4200
             },
             {
-              "x": 450,
+              "x": 392,
               "y": 4877,
               "z": 4200
             }
@@ -2230,12 +2561,12 @@
               "z": 4200
             },
             {
-              "x": 450,
+              "x": 392,
               "y": 8500,
               "z": 4200
             },
             {
-              "x": 450,
+              "x": 392,
               "y": 8535,
               "z": 4200
             }
@@ -2341,12 +2672,12 @@
               "z": 4200
             },
             {
-              "x": 475,
+              "x": 417,
               "y": 8500,
               "z": 4200
             },
             {
-              "x": 475,
+              "x": 417,
               "y": 5700,
               "z": 4200
             }
@@ -2447,7 +2778,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 9100,
-            "y": 7245,
+            "y": 7257,
             "z": 4700
           },
           "evidence": {
@@ -2463,8 +2794,8 @@
           "kind": "light-ceiling",
           "levelId": "level-upper",
           "position": {
-            "x": 1929,
-            "y": 1924,
+            "x": 1890,
+            "y": 1883,
             "z": 6300
           },
           "evidence": {
@@ -2481,7 +2812,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 5487,
-            "y": 1924,
+            "y": 1883,
             "z": 6300
           },
           "evidence": {
@@ -2497,8 +2828,8 @@
           "kind": "light-ceiling",
           "levelId": "level-upper",
           "position": {
-            "x": 9044,
-            "y": 1924,
+            "x": 9083,
+            "y": 1883,
             "z": 6300
           },
           "evidence": {
@@ -2514,8 +2845,8 @@
           "kind": "light-ceiling",
           "levelId": "level-upper",
           "position": {
-            "x": 1929,
-            "y": 5471,
+            "x": 1890,
+            "y": 5466,
             "z": 6300
           },
           "evidence": {
@@ -2532,7 +2863,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 5487,
-            "y": 5471,
+            "y": 5466,
             "z": 6300
           },
           "evidence": {
@@ -2548,8 +2879,8 @@
           "kind": "light-ceiling",
           "levelId": "level-upper",
           "position": {
-            "x": 9044,
-            "y": 5471,
+            "x": 9083,
+            "y": 5466,
             "z": 6300
           },
           "evidence": {
@@ -2566,7 +2897,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 2700,
-            "y": 11043,
+            "y": 11031,
             "z": 4700
           },
           "evidence": {
@@ -2582,8 +2913,8 @@
           "kind": "light-ceiling",
           "levelId": "level-upper",
           "position": {
-            "x": 2784,
-            "y": 12762,
+            "x": 2761,
+            "y": 12785,
             "z": 6300
           },
           "evidence": {
@@ -2600,7 +2931,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 8200,
-            "y": 11043,
+            "y": 11031,
             "z": 4700
           },
           "evidence": {
@@ -2616,8 +2947,8 @@
           "kind": "light-ceiling",
           "levelId": "level-upper",
           "position": {
-            "x": 8190,
-            "y": 12762,
+            "x": 8213,
+            "y": 12785,
             "z": 6300
           },
           "evidence": {
@@ -2634,7 +2965,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 2900,
-            "y": 9684,
+            "y": 9696,
             "z": 4700
           },
           "evidence": {
@@ -2650,7 +2981,7 @@
           "kind": "light-ceiling",
           "levelId": "level-upper",
           "position": {
-            "x": 1564,
+            "x": 1541,
             "y": 8535,
             "z": 6300
           },
@@ -2668,7 +2999,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 5150,
-            "y": 9684,
+            "y": 9696,
             "z": 4700
           },
           "evidence": {
@@ -2701,7 +3032,7 @@
           "kind": "switch-3way",
           "levelId": "level-upper",
           "position": {
-            "x": 10823,
+            "x": 10881,
             "y": 9053,
             "z": 4700
           },
@@ -2752,7 +3083,7 @@
           "kind": "switch",
           "levelId": "level-ground",
           "position": {
-            "x": 150,
+            "x": 92,
             "y": 5577,
             "z": 1100
           },
@@ -2871,7 +3202,7 @@
           "kind": "switch",
           "levelId": "level-ground",
           "position": {
-            "x": 5417,
+            "x": 5429,
             "y": 8400,
             "z": 1100
           },
@@ -2888,7 +3219,7 @@
           "kind": "light-ceiling",
           "levelId": "level-ground",
           "position": {
-            "x": 2784,
+            "x": 2761,
             "y": 9144,
             "z": 2700
           },
@@ -2905,7 +3236,7 @@
           "kind": "switch",
           "levelId": "level-ground",
           "position": {
-            "x": 5417,
+            "x": 5429,
             "y": 13500,
             "z": 1100
           },
@@ -2922,8 +3253,8 @@
           "kind": "light-ceiling",
           "levelId": "level-ground",
           "position": {
-            "x": 2784,
-            "y": 12762,
+            "x": 2761,
+            "y": 12785,
             "z": 2700
           },
           "evidence": {
@@ -2939,7 +3270,7 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 150,
+            "x": 92,
             "y": 12000,
             "z": 4000
           },
@@ -2956,7 +3287,7 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 150,
+            "x": 92,
             "y": 14000,
             "z": 4000
           },
@@ -2973,8 +3304,8 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 2784,
-            "y": 14480,
+            "x": 2761,
+            "y": 14538,
             "z": 4000
           },
           "evidence": {
@@ -2990,7 +3321,7 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 5417,
+            "x": 5429,
             "y": 14000,
             "z": 4000
           },
@@ -3007,7 +3338,7 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 5417,
+            "x": 5429,
             "y": 12000,
             "z": 4000
           },
@@ -3024,8 +3355,8 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 2784,
-            "y": 11043,
+            "x": 2761,
+            "y": 11031,
             "z": 4000
           },
           "evidence": {
@@ -3041,7 +3372,7 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 5557,
+            "x": 5545,
             "y": 12000,
             "z": 4000
           },
@@ -3058,7 +3389,7 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 5557,
+            "x": 5545,
             "y": 14000,
             "z": 4000
           },
@@ -3075,8 +3406,8 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 8190,
-            "y": 14480,
+            "x": 8213,
+            "y": 14538,
             "z": 4000
           },
           "evidence": {
@@ -3092,7 +3423,7 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 10823,
+            "x": 10881,
             "y": 14000,
             "z": 4000
           },
@@ -3109,7 +3440,7 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 10823,
+            "x": 10881,
             "y": 12000,
             "z": 4000
           },
@@ -3126,8 +3457,8 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 8190,
-            "y": 11043,
+            "x": 8213,
+            "y": 11031,
             "z": 4000
           },
           "evidence": {
@@ -3144,7 +3475,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 1800,
-            "y": 150,
+            "y": 92,
             "z": 4000
           },
           "evidence": {
@@ -3161,7 +3492,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 5000,
-            "y": 150,
+            "y": 92,
             "z": 4000
           },
           "evidence": {
@@ -3178,7 +3509,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 8500,
-            "y": 150,
+            "y": 92,
             "z": 4000
           },
           "evidence": {
@@ -3194,7 +3525,7 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 10823,
+            "x": 10881,
             "y": 2200,
             "z": 4000
           },
@@ -3211,7 +3542,7 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 10823,
+            "x": 10881,
             "y": 5600,
             "z": 4000
           },
@@ -3228,7 +3559,7 @@
           "kind": "receptacle",
           "levelId": "level-upper",
           "position": {
-            "x": 150,
+            "x": 92,
             "y": 1800,
             "z": 4000
           },
@@ -3245,7 +3576,7 @@
           "kind": "receptacle-gfci",
           "levelId": "level-upper",
           "position": {
-            "x": 150,
+            "x": 92,
             "y": 4000,
             "z": 4700
           },
@@ -3262,7 +3593,7 @@
           "kind": "receptacle-gfci",
           "levelId": "level-upper",
           "position": {
-            "x": 150,
+            "x": 92,
             "y": 5300,
             "z": 4700
           },
@@ -3280,7 +3611,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 3200,
-            "y": 7245,
+            "y": 7257,
             "z": 4700
           },
           "evidence": {
@@ -3297,7 +3628,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 4300,
-            "y": 7245,
+            "y": 7257,
             "z": 4700
           },
           "evidence": {
@@ -3313,7 +3644,7 @@
           "kind": "receptacle-gfci",
           "levelId": "level-upper",
           "position": {
-            "x": 150,
+            "x": 92,
             "y": 9000,
             "z": 4700
           },
@@ -3330,7 +3661,7 @@
           "kind": "receptacle-gfci",
           "levelId": "level-ground",
           "position": {
-            "x": 150,
+            "x": 92,
             "y": 1600,
             "z": 1100
           },
@@ -3347,7 +3678,7 @@
           "kind": "receptacle-gfci",
           "levelId": "level-ground",
           "position": {
-            "x": 10823,
+            "x": 10881,
             "y": 1600,
             "z": 1100
           },
@@ -3364,7 +3695,7 @@
           "kind": "receptacle-gfci",
           "levelId": "level-ground",
           "position": {
-            "x": 10823,
+            "x": 10881,
             "y": 6000,
             "z": 1100
           },
@@ -3381,7 +3712,7 @@
           "kind": "receptacle-gfci",
           "levelId": "level-ground",
           "position": {
-            "x": 10823,
+            "x": 10881,
             "y": 12000,
             "z": 1100
           },
@@ -3399,7 +3730,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 3550,
-            "y": 7385,
+            "y": 7373,
             "z": 4050
           },
           "evidence": {
@@ -3416,7 +3747,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 4550,
-            "y": 7385,
+            "y": 7373,
             "z": 4050
           },
           "evidence": {
@@ -3433,7 +3764,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 2200,
-            "y": 7245,
+            "y": 7257,
             "z": 4050
           },
           "evidence": {
@@ -3449,7 +3780,7 @@
           "kind": "receptacle-dedicated",
           "levelId": "level-upper",
           "position": {
-            "x": 150,
+            "x": 92,
             "y": 6500,
             "z": 4050
           },
@@ -3466,7 +3797,7 @@
           "kind": "receptacle-dedicated",
           "levelId": "level-upper",
           "position": {
-            "x": 150,
+            "x": 92,
             "y": 5700,
             "z": 4050
           },
@@ -3534,7 +3865,7 @@
           "kind": "switch-3way",
           "levelId": "level-ground",
           "position": {
-            "x": 13561,
+            "x": 13503,
             "y": 2205,
             "z": 1100
           },
@@ -3551,7 +3882,7 @@
           "kind": "light-exterior",
           "levelId": "level-ground",
           "position": {
-            "x": 11123,
+            "x": 11065,
             "y": 2205,
             "z": 2400
           },
@@ -3568,7 +3899,7 @@
           "kind": "light-exterior",
           "levelId": "level-upper",
           "position": {
-            "x": 11123,
+            "x": 11065,
             "y": 10553,
             "z": 5900
           },
@@ -3585,7 +3916,7 @@
           "kind": "receptacle-weather",
           "levelId": "level-upper",
           "position": {
-            "x": 11123,
+            "x": 11065,
             "y": 8525,
             "z": 4100
           },
@@ -3655,7 +3986,7 @@
             },
             {
               "x": 9100,
-              "y": 7245,
+              "y": 7257,
               "z": 4700
             }
           ],
@@ -3674,22 +4005,22 @@
           "path": [
             {
               "x": 9100,
-              "y": 7245,
+              "y": 7257,
               "z": 4700
             },
             {
               "x": 9100,
-              "y": 7245,
+              "y": 7257,
               "z": 6300
             },
             {
-              "x": 1929,
-              "y": 7245,
+              "x": 1890,
+              "y": 7257,
               "z": 6300
             },
             {
-              "x": 1929,
-              "y": 1924,
+              "x": 1890,
+              "y": 1883,
               "z": 6300
             }
           ],
@@ -3707,13 +4038,13 @@
           "to": "electrical-living-lighting-3",
           "path": [
             {
-              "x": 1929,
-              "y": 1924,
+              "x": 1890,
+              "y": 1883,
               "z": 6300
             },
             {
               "x": 5487,
-              "y": 1924,
+              "y": 1883,
               "z": 6300
             }
           ],
@@ -3732,12 +4063,12 @@
           "path": [
             {
               "x": 5487,
-              "y": 1924,
+              "y": 1883,
               "z": 6300
             },
             {
-              "x": 9044,
-              "y": 1924,
+              "x": 9083,
+              "y": 1883,
               "z": 6300
             }
           ],
@@ -3755,18 +4086,18 @@
           "to": "electrical-living-lighting-5",
           "path": [
             {
-              "x": 9044,
-              "y": 1924,
+              "x": 9083,
+              "y": 1883,
               "z": 6300
             },
             {
-              "x": 1929,
-              "y": 1924,
+              "x": 1890,
+              "y": 1883,
               "z": 6300
             },
             {
-              "x": 1929,
-              "y": 5471,
+              "x": 1890,
+              "y": 5466,
               "z": 6300
             }
           ],
@@ -3784,13 +4115,13 @@
           "to": "electrical-living-lighting-6",
           "path": [
             {
-              "x": 1929,
-              "y": 5471,
+              "x": 1890,
+              "y": 5466,
               "z": 6300
             },
             {
               "x": 5487,
-              "y": 5471,
+              "y": 5466,
               "z": 6300
             }
           ],
@@ -3809,12 +4140,12 @@
           "path": [
             {
               "x": 5487,
-              "y": 5471,
+              "y": 5466,
               "z": 6300
             },
             {
-              "x": 9044,
-              "y": 5471,
+              "x": 9083,
+              "y": 5466,
               "z": 6300
             }
           ],
@@ -3848,7 +4179,7 @@
             },
             {
               "x": 2700,
-              "y": 11043,
+              "y": 11031,
               "z": 4700
             }
           ],
@@ -3867,22 +4198,22 @@
           "path": [
             {
               "x": 2700,
-              "y": 11043,
+              "y": 11031,
               "z": 4700
             },
             {
               "x": 2700,
-              "y": 11043,
+              "y": 11031,
               "z": 6300
             },
             {
-              "x": 2784,
-              "y": 11043,
+              "x": 2761,
+              "y": 11031,
               "z": 6300
             },
             {
-              "x": 2784,
-              "y": 12762,
+              "x": 2761,
+              "y": 12785,
               "z": 6300
             }
           ],
@@ -3916,7 +4247,7 @@
             },
             {
               "x": 8200,
-              "y": 11043,
+              "y": 11031,
               "z": 4700
             }
           ],
@@ -3935,22 +4266,22 @@
           "path": [
             {
               "x": 8200,
-              "y": 11043,
+              "y": 11031,
               "z": 4700
             },
             {
               "x": 8200,
-              "y": 11043,
+              "y": 11031,
               "z": 6300
             },
             {
-              "x": 8190,
-              "y": 11043,
+              "x": 8213,
+              "y": 11031,
               "z": 6300
             },
             {
-              "x": 8190,
-              "y": 12762,
+              "x": 8213,
+              "y": 12785,
               "z": 6300
             }
           ],
@@ -3984,7 +4315,7 @@
             },
             {
               "x": 2900,
-              "y": 9684,
+              "y": 9696,
               "z": 4700
             }
           ],
@@ -4003,21 +4334,21 @@
           "path": [
             {
               "x": 2900,
-              "y": 9684,
+              "y": 9696,
               "z": 4700
             },
             {
               "x": 2900,
-              "y": 9684,
+              "y": 9696,
               "z": 6300
             },
             {
-              "x": 1564,
-              "y": 9684,
+              "x": 1541,
+              "y": 9696,
               "z": 6300
             },
             {
-              "x": 1564,
+              "x": 1541,
               "y": 8535,
               "z": 6300
             }
@@ -4052,7 +4383,7 @@
             },
             {
               "x": 5150,
-              "y": 9684,
+              "y": 9696,
               "z": 4700
             }
           ],
@@ -4071,17 +4402,17 @@
           "path": [
             {
               "x": 5150,
-              "y": 9684,
+              "y": 9696,
               "z": 4700
             },
             {
               "x": 5150,
-              "y": 9684,
+              "y": 9696,
               "z": 6300
             },
             {
               "x": 4268,
-              "y": 9684,
+              "y": 9696,
               "z": 6300
             },
             {
@@ -4114,12 +4445,12 @@
               "z": 4700
             },
             {
-              "x": 10823,
+              "x": 10881,
               "y": 10000,
               "z": 4700
             },
             {
-              "x": 10823,
+              "x": 10881,
               "y": 9053,
               "z": 4700
             }
@@ -4138,12 +4469,12 @@
           "to": "electrical-hall-lighting-2",
           "path": [
             {
-              "x": 10823,
+              "x": 10881,
               "y": 9053,
               "z": 4700
             },
             {
-              "x": 10823,
+              "x": 10881,
               "y": 9053,
               "z": 6300
             },
@@ -4211,12 +4542,12 @@
               "z": 1100
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 10300,
               "z": 1100
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 5577,
               "z": 1100
             }
@@ -4235,12 +4566,12 @@
           "to": "electrical-shop-lighting-2",
           "path": [
             {
-              "x": 150,
+              "x": 92,
               "y": 5577,
               "z": 1100
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 5577,
               "z": 3000
             },
@@ -4404,12 +4735,12 @@
               "z": 1100
             },
             {
-              "x": 5417,
+              "x": 5429,
               "y": 10300,
               "z": 1100
             },
             {
-              "x": 5417,
+              "x": 5429,
               "y": 8400,
               "z": 1100
             }
@@ -4428,22 +4759,22 @@
           "to": "electrical-utility-lighting-2",
           "path": [
             {
-              "x": 5417,
+              "x": 5429,
               "y": 8400,
               "z": 1100
             },
             {
-              "x": 5417,
+              "x": 5429,
               "y": 8400,
               "z": 2700
             },
             {
-              "x": 2784,
+              "x": 2761,
               "y": 8400,
               "z": 2700
             },
             {
-              "x": 2784,
+              "x": 2761,
               "y": 9144,
               "z": 2700
             }
@@ -4472,12 +4803,12 @@
               "z": 1100
             },
             {
-              "x": 5417,
+              "x": 5429,
               "y": 10300,
               "z": 1100
             },
             {
-              "x": 5417,
+              "x": 5429,
               "y": 13500,
               "z": 1100
             }
@@ -4496,23 +4827,23 @@
           "to": "electrical-store-lighting-2",
           "path": [
             {
-              "x": 5417,
+              "x": 5429,
               "y": 13500,
               "z": 1100
             },
             {
-              "x": 5417,
+              "x": 5429,
               "y": 13500,
               "z": 2700
             },
             {
-              "x": 2784,
+              "x": 2761,
               "y": 13500,
               "z": 2700
             },
             {
-              "x": 2784,
-              "y": 12762,
+              "x": 2761,
+              "y": 12785,
               "z": 2700
             }
           ],
@@ -4540,12 +4871,12 @@
               "z": 4000
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 10000,
               "z": 4000
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 12000,
               "z": 4000
             }
@@ -4564,12 +4895,12 @@
           "to": "electrical-bedroom-outlets-2",
           "path": [
             {
-              "x": 150,
+              "x": 92,
               "y": 12000,
               "z": 4000
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 14000,
               "z": 4000
             }
@@ -4588,18 +4919,18 @@
           "to": "electrical-bedroom-outlets-3",
           "path": [
             {
-              "x": 150,
+              "x": 92,
               "y": 14000,
               "z": 4000
             },
             {
-              "x": 2784,
+              "x": 2761,
               "y": 14000,
               "z": 4000
             },
             {
-              "x": 2784,
-              "y": 14480,
+              "x": 2761,
+              "y": 14538,
               "z": 4000
             }
           ],
@@ -4617,17 +4948,17 @@
           "to": "electrical-bedroom-outlets-4",
           "path": [
             {
-              "x": 2784,
-              "y": 14480,
+              "x": 2761,
+              "y": 14538,
               "z": 4000
             },
             {
-              "x": 5417,
-              "y": 14480,
+              "x": 5429,
+              "y": 14538,
               "z": 4000
             },
             {
-              "x": 5417,
+              "x": 5429,
               "y": 14000,
               "z": 4000
             }
@@ -4646,12 +4977,12 @@
           "to": "electrical-bedroom-outlets-5",
           "path": [
             {
-              "x": 5417,
+              "x": 5429,
               "y": 14000,
               "z": 4000
             },
             {
-              "x": 5417,
+              "x": 5429,
               "y": 12000,
               "z": 4000
             }
@@ -4670,18 +5001,18 @@
           "to": "electrical-bedroom-outlets-6",
           "path": [
             {
-              "x": 5417,
+              "x": 5429,
               "y": 12000,
               "z": 4000
             },
             {
-              "x": 2784,
+              "x": 2761,
               "y": 12000,
               "z": 4000
             },
             {
-              "x": 2784,
-              "y": 11043,
+              "x": 2761,
+              "y": 11031,
               "z": 4000
             }
           ],
@@ -4709,12 +5040,12 @@
               "z": 4000
             },
             {
-              "x": 5557,
+              "x": 5545,
               "y": 10000,
               "z": 4000
             },
             {
-              "x": 5557,
+              "x": 5545,
               "y": 12000,
               "z": 4000
             }
@@ -4733,12 +5064,12 @@
           "to": "electrical-bedroom-2-outlets-2",
           "path": [
             {
-              "x": 5557,
+              "x": 5545,
               "y": 12000,
               "z": 4000
             },
             {
-              "x": 5557,
+              "x": 5545,
               "y": 14000,
               "z": 4000
             }
@@ -4757,18 +5088,18 @@
           "to": "electrical-bedroom-2-outlets-3",
           "path": [
             {
-              "x": 5557,
+              "x": 5545,
               "y": 14000,
               "z": 4000
             },
             {
-              "x": 8190,
+              "x": 8213,
               "y": 14000,
               "z": 4000
             },
             {
-              "x": 8190,
-              "y": 14480,
+              "x": 8213,
+              "y": 14538,
               "z": 4000
             }
           ],
@@ -4786,17 +5117,17 @@
           "to": "electrical-bedroom-2-outlets-4",
           "path": [
             {
-              "x": 8190,
-              "y": 14480,
+              "x": 8213,
+              "y": 14538,
               "z": 4000
             },
             {
-              "x": 10823,
-              "y": 14480,
+              "x": 10881,
+              "y": 14538,
               "z": 4000
             },
             {
-              "x": 10823,
+              "x": 10881,
               "y": 14000,
               "z": 4000
             }
@@ -4815,12 +5146,12 @@
           "to": "electrical-bedroom-2-outlets-5",
           "path": [
             {
-              "x": 10823,
+              "x": 10881,
               "y": 14000,
               "z": 4000
             },
             {
-              "x": 10823,
+              "x": 10881,
               "y": 12000,
               "z": 4000
             }
@@ -4839,18 +5170,18 @@
           "to": "electrical-bedroom-2-outlets-6",
           "path": [
             {
-              "x": 10823,
+              "x": 10881,
               "y": 12000,
               "z": 4000
             },
             {
-              "x": 8190,
+              "x": 8213,
               "y": 12000,
               "z": 4000
             },
             {
-              "x": 8190,
-              "y": 11043,
+              "x": 8213,
+              "y": 11031,
               "z": 4000
             }
           ],
@@ -4884,7 +5215,7 @@
             },
             {
               "x": 1800,
-              "y": 150,
+              "y": 92,
               "z": 4000
             }
           ],
@@ -4903,12 +5234,12 @@
           "path": [
             {
               "x": 1800,
-              "y": 150,
+              "y": 92,
               "z": 4000
             },
             {
               "x": 5000,
-              "y": 150,
+              "y": 92,
               "z": 4000
             }
           ],
@@ -4927,12 +5258,12 @@
           "path": [
             {
               "x": 5000,
-              "y": 150,
+              "y": 92,
               "z": 4000
             },
             {
               "x": 8500,
-              "y": 150,
+              "y": 92,
               "z": 4000
             }
           ],
@@ -4951,16 +5282,16 @@
           "path": [
             {
               "x": 8500,
-              "y": 150,
+              "y": 92,
               "z": 4000
             },
             {
-              "x": 10823,
-              "y": 150,
+              "x": 10881,
+              "y": 92,
               "z": 4000
             },
             {
-              "x": 10823,
+              "x": 10881,
               "y": 2200,
               "z": 4000
             }
@@ -4979,12 +5310,12 @@
           "to": "electrical-living-outlets-5",
           "path": [
             {
-              "x": 10823,
+              "x": 10881,
               "y": 2200,
               "z": 4000
             },
             {
-              "x": 10823,
+              "x": 10881,
               "y": 5600,
               "z": 4000
             }
@@ -5003,17 +5334,17 @@
           "to": "electrical-living-outlets-6",
           "path": [
             {
-              "x": 10823,
+              "x": 10881,
               "y": 5600,
               "z": 4000
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 5600,
               "z": 4000
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 1800,
               "z": 4000
             }
@@ -5042,12 +5373,12 @@
               "z": 4700
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 10000,
               "z": 4700
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 4000,
               "z": 4700
             }
@@ -5066,12 +5397,12 @@
           "to": "electrical-kitchen-counter-2",
           "path": [
             {
-              "x": 150,
+              "x": 92,
               "y": 4000,
               "z": 4700
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 5300,
               "z": 4700
             }
@@ -5090,7 +5421,7 @@
           "to": "electrical-kitchen-counter-3",
           "path": [
             {
-              "x": 150,
+              "x": 92,
               "y": 5300,
               "z": 4700
             },
@@ -5101,7 +5432,7 @@
             },
             {
               "x": 3200,
-              "y": 7245,
+              "y": 7257,
               "z": 4700
             }
           ],
@@ -5120,12 +5451,12 @@
           "path": [
             {
               "x": 3200,
-              "y": 7245,
+              "y": 7257,
               "z": 4700
             },
             {
               "x": 4300,
-              "y": 7245,
+              "y": 7257,
               "z": 4700
             }
           ],
@@ -5153,12 +5484,12 @@
               "z": 4700
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 10000,
               "z": 4700
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 9000,
               "z": 4700
             }
@@ -5187,12 +5518,12 @@
               "z": 1100
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 10300,
               "z": 1100
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 1600,
               "z": 1100
             }
@@ -5211,12 +5542,12 @@
           "to": "electrical-shop-outlets-2",
           "path": [
             {
-              "x": 150,
+              "x": 92,
               "y": 1600,
               "z": 1100
             },
             {
-              "x": 10823,
+              "x": 10881,
               "y": 1600,
               "z": 1100
             }
@@ -5235,12 +5566,12 @@
           "to": "electrical-shop-outlets-3",
           "path": [
             {
-              "x": 10823,
+              "x": 10881,
               "y": 1600,
               "z": 1100
             },
             {
-              "x": 10823,
+              "x": 10881,
               "y": 6000,
               "z": 1100
             }
@@ -5259,12 +5590,12 @@
           "to": "electrical-shop-outlets-4",
           "path": [
             {
-              "x": 10823,
+              "x": 10881,
               "y": 6000,
               "z": 1100
             },
             {
-              "x": 10823,
+              "x": 10881,
               "y": 12000,
               "z": 1100
             }
@@ -5299,7 +5630,7 @@
             },
             {
               "x": 3550,
-              "y": 7385,
+              "y": 7373,
               "z": 4050
             }
           ],
@@ -5333,7 +5664,7 @@
             },
             {
               "x": 4550,
-              "y": 7385,
+              "y": 7373,
               "z": 4050
             }
           ],
@@ -5367,7 +5698,7 @@
             },
             {
               "x": 2200,
-              "y": 7245,
+              "y": 7257,
               "z": 4050
             }
           ],
@@ -5395,12 +5726,12 @@
               "z": 4050
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 10000,
               "z": 4050
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 6500,
               "z": 4050
             }
@@ -5429,12 +5760,12 @@
               "z": 4050
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 10000,
               "z": 4050
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 5700,
               "z": 4050
             }
@@ -5545,12 +5876,12 @@
               "z": 1100
             },
             {
-              "x": 13561,
+              "x": 13503,
               "y": 10300,
               "z": 1100
             },
             {
-              "x": 13561,
+              "x": 13503,
               "y": 2205,
               "z": 1100
             }
@@ -5569,17 +5900,17 @@
           "to": "electrical-stair-2",
           "path": [
             {
-              "x": 13561,
+              "x": 13503,
               "y": 2205,
               "z": 1100
             },
             {
-              "x": 13561,
+              "x": 13503,
               "y": 2205,
               "z": 2400
             },
             {
-              "x": 11123,
+              "x": 11065,
               "y": 2205,
               "z": 2400
             }
@@ -5608,12 +5939,12 @@
               "z": 5900
             },
             {
-              "x": 11123,
+              "x": 11065,
               "y": 10000,
               "z": 5900
             },
             {
-              "x": 11123,
+              "x": 11065,
               "y": 10553,
               "z": 5900
             }
@@ -5632,17 +5963,17 @@
           "to": "electrical-deck-2",
           "path": [
             {
-              "x": 11123,
+              "x": 11065,
               "y": 10553,
               "z": 5900
             },
             {
-              "x": 11123,
+              "x": 11065,
               "y": 10553,
               "z": 4100
             },
             {
-              "x": 11123,
+              "x": 11065,
               "y": 8525,
               "z": 4100
             }
@@ -5661,22 +5992,22 @@
           "to": "electrical-hall-lighting-1",
           "path": [
             {
-              "x": 13561,
+              "x": 13503,
               "y": 2205,
               "z": 1100
             },
             {
-              "x": 13561,
+              "x": 13503,
               "y": 2205,
               "z": 4700
             },
             {
-              "x": 10823,
+              "x": 10881,
               "y": 2205,
               "z": 4700
             },
             {
-              "x": 10823,
+              "x": 10881,
               "y": 9053,
               "z": 4700
             }
@@ -5695,22 +6026,22 @@
           "to": "electrical-deck-1",
           "path": [
             {
-              "x": 10823,
+              "x": 10881,
               "y": 9053,
               "z": 4700
             },
             {
-              "x": 10823,
+              "x": 10881,
               "y": 9053,
               "z": 5900
             },
             {
-              "x": 11123,
+              "x": 11065,
               "y": 9053,
               "z": 5900
             },
             {
-              "x": 11123,
+              "x": 11065,
               "y": 10553,
               "z": 5900
             }
@@ -5759,7 +6090,7 @@
           "kind": "ductless-head",
           "levelId": "level-upper",
           "position": {
-            "x": 150,
+            "x": 92,
             "y": 2000,
             "z": 6100
           },
@@ -5777,7 +6108,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 2743,
-            "y": 14480,
+            "y": 14538,
             "z": 6100
           },
           "evidence": {
@@ -5794,7 +6125,7 @@
           "levelId": "level-upper",
           "position": {
             "x": 8230,
-            "y": 14480,
+            "y": 14538,
             "z": 6100
           },
           "evidence": {
@@ -5823,12 +6154,12 @@
               "z": 6100
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 6500,
               "z": 6100
             },
             {
-              "x": 150,
+              "x": 92,
               "y": 2000,
               "z": 6100
             }
@@ -5863,7 +6194,7 @@
             },
             {
               "x": 2743,
-              "y": 14480,
+              "y": 14538,
               "z": 6100
             }
           ],
@@ -5897,7 +6228,7 @@
             },
             {
               "x": 8230,
-              "y": 14480,
+              "y": 14538,
               "z": 6100
             }
           ],
@@ -6189,19 +6520,19 @@
       "levelId": "level-ground",
       "boundary": [
         {
-          "x": 11732,
+          "x": 11674,
           "y": 1386
         },
         {
-          "x": 12952,
+          "x": 12894,
           "y": 1386
         },
         {
-          "x": 12952,
+          "x": 12894,
           "y": 2605
         },
         {
-          "x": 11732,
+          "x": 11674,
           "y": 2605
         }
       ],
@@ -6221,20 +6552,20 @@
       "levelId": "level-ground",
       "boundary": [
         {
-          "x": -150,
+          "x": -92,
           "y": -2438
         },
         {
-          "x": 11123,
+          "x": 11065,
           "y": -2438
         },
         {
-          "x": 11123,
-          "y": -150
+          "x": 11065,
+          "y": -92
         },
         {
-          "x": -150,
-          "y": -150
+          "x": -92,
+          "y": -92
         }
       ],
       "topElevationMm": 0,
@@ -6253,19 +6584,19 @@
       "levelId": "level-ground",
       "boundary": [
         {
-          "x": -1650,
+          "x": -1592,
           "y": 3977
         },
         {
-          "x": -150,
+          "x": -92,
           "y": 3977
         },
         {
-          "x": -150,
+          "x": -92,
           "y": 5777
         },
         {
-          "x": -1650,
+          "x": -1592,
           "y": 5777
         }
       ],
@@ -6285,7 +6616,7 @@
       "id": "column-deck-1",
       "levelId": "level-ground",
       "position": {
-        "x": 13411,
+        "x": 13353,
         "y": 8075
       },
       "baseElevationMm": 0,
@@ -6307,7 +6638,7 @@
       "id": "column-deck-2",
       "levelId": "level-ground",
       "position": {
-        "x": 13411,
+        "x": 13353,
         "y": 10823
       },
       "baseElevationMm": 0,
@@ -6329,7 +6660,7 @@
       "id": "column-deck-guard-1",
       "levelId": "level-upper",
       "position": {
-        "x": 11123,
+        "x": 11065,
         "y": 10923
       },
       "baseElevationMm": 3600,
@@ -6351,7 +6682,7 @@
       "id": "column-deck-guard-2",
       "levelId": "level-upper",
       "position": {
-        "x": 13511,
+        "x": 13453,
         "y": 10923
       },
       "baseElevationMm": 3600,
@@ -6373,7 +6704,7 @@
       "id": "column-deck-guard-3",
       "levelId": "level-upper",
       "position": {
-        "x": 13511,
+        "x": 13453,
         "y": 7975
       },
       "baseElevationMm": 3600,
@@ -6395,7 +6726,7 @@
       "id": "column-deck-guard-4",
       "levelId": "level-upper",
       "position": {
-        "x": 11123,
+        "x": 11065,
         "y": 7975
       },
       "baseElevationMm": 3600,
@@ -6417,7 +6748,7 @@
       "id": "column-deck-guard-5",
       "levelId": "level-upper",
       "position": {
-        "x": 11682,
+        "x": 11624,
         "y": 7975
       },
       "baseElevationMm": 3600,
@@ -6439,7 +6770,7 @@
       "id": "column-deck-guard-6",
       "levelId": "level-upper",
       "position": {
-        "x": 13002,
+        "x": 12944,
         "y": 7975
       },
       "baseElevationMm": 3600,
@@ -6463,11 +6794,11 @@
       "id": "beam-deck",
       "levelId": "level-upper",
       "start": {
-        "x": 13411,
+        "x": 13353,
         "y": 7925
       },
       "end": {
-        "x": 13411,
+        "x": 13353,
         "y": 10973
       },
       "topElevationMm": 3550,
@@ -6488,11 +6819,11 @@
       "id": "beam-deck-guard-1",
       "levelId": "level-upper",
       "start": {
-        "x": 11123,
+        "x": 11065,
         "y": 10923
       },
       "end": {
-        "x": 13511,
+        "x": 13453,
         "y": 10923
       },
       "topElevationMm": 4700,
@@ -6513,11 +6844,11 @@
       "id": "beam-deck-guard-2",
       "levelId": "level-upper",
       "start": {
-        "x": 13511,
+        "x": 13453,
         "y": 7975
       },
       "end": {
-        "x": 13511,
+        "x": 13453,
         "y": 10923
       },
       "topElevationMm": 4700,
@@ -6538,11 +6869,11 @@
       "id": "beam-deck-guard-3",
       "levelId": "level-upper",
       "start": {
-        "x": 11123,
+        "x": 11065,
         "y": 7975
       },
       "end": {
-        "x": 11682,
+        "x": 11624,
         "y": 7975
       },
       "topElevationMm": 4700,
@@ -6563,11 +6894,11 @@
       "id": "beam-deck-guard-4",
       "levelId": "level-upper",
       "start": {
-        "x": 13002,
+        "x": 12944,
         "y": 7975
       },
       "end": {
-        "x": 13511,
+        "x": 13453,
         "y": 7975
       },
       "topElevationMm": 4700,
@@ -6594,7 +6925,7 @@
         "y": 6000
       },
       "end": {
-        "x": 14161,
+        "x": 14103,
         "y": 6000
       },
       "lookDirection": "left"
@@ -6603,11 +6934,11 @@
       "id": "section-bb",
       "name": "Exterior Stair and Deck B-B",
       "start": {
-        "x": 12342,
+        "x": 12284,
         "y": 786
       },
       "end": {
-        "x": 12342,
+        "x": 12284,
         "y": 11573
       },
       "lookDirection": "left"
@@ -6734,7 +7065,7 @@
     {
       "id": "assumption-structure",
       "topic": "structure",
-      "statement": "Envelope, floor, deck posts and beam dimensions are spatial allowances. Clear-span floor and roof structure, vehicle-door headers, deck ledger, bracing, foundations, loads and connections require engineered design. No member sizing or fire rating is established.",
+      "statement": "Walls are nominal 2x6 exterior and 2x4 interior wood-frame assemblies; stud spacing, plates, shear walls and the siding type are not chosen. Floor and deck dimensions are spatial allowances. Clear-span floor and roof structure, vehicle-door headers, deck ledger, bracing, foundations, loads and connections require engineered design. No member sizing or fire rating is established.",
       "impact": "high",
       "affectedEntityIds": [],
       "evidence": {

@@ -176,6 +176,9 @@ the scale bar or north arrow.
 my-workshop/
   architecture-studio.json   skill version that created the project
   index.html                 the studio viewer
+  Open Studio.cmd            double-click to open the viewer (Windows)
+  Open Studio.command        double-click to open the viewer (macOS)
+  open-studio.mjs            the small local server both of them run
   brief.json                 your confirmed answers
   sources/                   sketches, photos, and documents you supplied
   sources/sources.json       scale and placement of each image
@@ -188,22 +191,39 @@ my-workshop/
 ```
 
 The folder carries its viewer and data: zip it or put it under version
-control. Serve it over HTTP on another machine to let the viewer fetch its
-model and supporting files. Opening the folder's `index.html` directly may
-be blocked by the browser's local-file restrictions; use `bundle.mjs` for a
-double-clickable viewer.
+control. Browsers do not let `index.html` opened straight from disk read the
+files beside it, so it shows how to open the project instead. To open it,
+double-click Open Studio (or run `node open-studio.mjs` in the folder). It
+needs only Node.js 20 or newer, not the skill. It serves the folder
+read-only on `127.0.0.1`, at the same address `serve.mjs` uses for that
+folder, so browser approvals stay with the project. Keep its window open
+while you work. The Sources tab's image import and calibration saving still
+need `serve.mjs`. `bundle.mjs` gives a single double-clickable file instead.
 
 ### Sharing formats
 
 | Format | Includes | Does not include |
 | --- | --- | --- |
 | Complete project folder | Viewer, model, brief, sources, reviews, exports, and handoff files that exist | Nothing is generated merely by zipping the folder |
-| Download drawing set | Exported SVGs, manifest, listed handoff artifacts, and browser approvals | Viewer and source image files |
+| Share, then Export project, served by `serve.mjs` | The project files (`architecture-studio.json`, viewer, brief, `models/`, `sources/`, `reviews/`, `ASSUMPTIONS.md`, `HANDOFF.md`) in one `<project-id>/` folder, with browser approvals as `reviews/approvals.json` and `exports/` drawn fresh from the current model | Dotfiles, symbolic links, and other files in the folder, such as version control |
+| Share, then Export project, elsewhere (the preview, a bundle, a page opened from disk) | A reopenable project rebuilt from the page: `architecture-studio.json`, the viewer, the model, code findings, browser approvals, and `exports/` drawn fresh | Brief, source images, variants, and handoff notes, because the page cannot read the folder |
+| Share, then Download drawings | Every drawing sheet as SVG, drawn from the current model, in one `<project-id>-drawings/` folder. Works on any page, with or without an `exports/` folder | Manifest, approvals, handoff files, model, viewer, and source images; use Export project for those |
 | `bundle.mjs` HTML | Viewer with the model and code-findings JSON embedded | Source images and manifest, drawing ZIP, brief, approvals, and Markdown handoff files |
 
-The bundle still renders drawings and 3D, but cannot download the exported
-drawing set without its project files. Review source images for sensitive
-information before sharing the full folder.
+Both Share options ask where to save the ZIP in browsers with a save dialog
+(Chrome and Edge); other browsers save it to their downloads folder.
+
+To reopen an exported project, extract the ZIP and double-click Open Studio
+in the extracted folder, or run `node scripts/serve.mjs <extracted>/<project-id>`.
+Approvals stored in a
+browser belong to the address that saved them, so the export carries them
+as `reviews/approvals.json`; they replace a saved copy of that file. The
+drawings in `exports/` are drawn by the same code as `export-drawings.mjs`,
+so they match the model in the archive.
+
+The bundle renders drawings and 3D, and its Share, then Download drawings,
+draws every sheet as SVG from the embedded model. Review source images for
+sensitive information before sharing the full folder or a project export.
 
 ## Scripts
 
@@ -212,8 +232,8 @@ All scripts live in `scripts/` and run with plain `node`.
 | Command | What it does |
 | --- | --- |
 | `node scripts/check-updates.mjs [--project <project>]` | Check upstream skill and local viewer versions without changing files. Options: `--offline`, `--json`. Failures produce warnings and exit nonzero; an available update is not an error. |
-| `node scripts/init.mjs <project>` | Create the viewer, version marker, and project directories. It does not write a brief or model. `--update` replaces `index.html` and `architecture-studio.json`, not design data. |
-| `node scripts/serve.mjs <project>` | Serve the project on `127.0.0.1` and open the default browser. Live reload is on by default. The Sources tab imports images and saves calibrations through it; nothing else is written. Options: `--port`, `--no-open`, `--no-watch`, `--json`. |
+| `node scripts/init.mjs <project>` | Create the viewer, version marker, Open Studio launcher, and project directories. It does not write a brief or model. `--update` replaces `index.html`, `architecture-studio.json`, and the launcher files, not design data. |
+| `node scripts/serve.mjs <project>` | Serve the project on `127.0.0.1` and open the default browser. Live reload is on by default. The Sources tab imports images and saves calibrations through it; nothing else is written. It also lists the project files for the viewer's Export project. Options: `--port`, `--no-open`, `--no-watch`, `--json`. |
 | `node scripts/export-drawings.mjs --project <project>` | Validate the model and write `exports/**/*.svg` plus `exports/manifest.json`. Writes nothing while the model has errors. |
 | `node scripts/inspect.mjs --project <project> --id <id>` | Report one element as numbers (size, area, path width and radii, clearance to the building and the lot, its findings), so the agent can check a curve edit without looking at a drawing. For a door or window it lists the jamb and centre points anchors can use. Without `--id` it lists the elements. |
 | `node scripts/compose.mjs --project <project>` | Report each facade as seen (centreline, third lines, every opening's centre from the left corner), the composition findings, and one proposed layout with exact `offsetMm`, `sillMm`, and fixture or light positions. It never writes the model. `--json` for machine-readable output. |
@@ -295,7 +315,8 @@ turning such requests into numbers.
 Selecting an element in any drawing opens its review details: key dimensions,
 a small detail drawing for stairs, openings, and roofs, the decisions the
 concept leaves open, and its evidence. You can approve an element there.
-Approvals are exported as `reviews/approvals.json` with the drawing set; they
+Approvals are exported as `reviews/approvals.json` by Share, then Export
+project; they
 record your sign-off on the concept, not a professional approval.
 They stay in that browser until exported, and the viewer does not
 automatically clear them after a model edit. Review changed elements again
@@ -399,7 +420,7 @@ documents:
 
 | Example | Units | Exercises |
 | --- | --- | --- |
-| `lakeside-barn-residence` | feet-inches | The live demo: a 36 x 48 ft workshop with a two-bedroom home above, an exterior stair and 8 ft deep deck landing, furnished rooms, separate bath and laundry, stacked openings, water supply, lighting, switches, outlets, alarms, dwelling-only HVAC, and separate exhaust routes. Generated by `examples/build-lakeside-barn-residence.mjs`; edit the generator, not the JSON |
+| `lakeside-barn-residence` | feet-inches | The live demo: a 36 x 48 ft workshop with a two-bedroom home above, an exterior stair and 8 ft deep deck landing, layered 2x6 exterior walls (gypsum, batt cavity, sheathing, and siding whose type is not yet chosen) and 2x4 partitions, furnished rooms, separate bath and laundry, stacked openings, water supply, lighting, switches, outlets, alarms, dwelling-only HVAC, and separate exhaust routes. Generated by `examples/build-lakeside-barn-residence.mjs`; edit the generator, not the JSON |
 | `compact-metric-studio` | metric | Crowded labels, an L-shaped room, sections through openings, stacked studio glazing, a centred kitchen sink with connected supply, a floor-box symbol, and a wall-mounted ductless head |
 | `mixed-material-workshop` | feet-inches | Material hatching: CMU, brick veneer, wood frame, insulation, steel and glulam members, seven header types, footings, gravel, concrete, a variable-width L-shaped landing/walk with wall-face anchors, earth, and stacked east/west openings. Generated by `examples/build-mixed-material-workshop.mjs`; edit the generator, not the JSON |
 | `mixed-material-workshop-metric` | metric | The same layout in metric sizes, from the same generator, for comparing the two hatching profiles |

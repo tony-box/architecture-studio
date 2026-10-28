@@ -1,17 +1,17 @@
 {
   "lakeside-barn-residence": {
-    "manifest": "db589c84f80513c5faf8e10ea581e1327e34d87dc1299dd1ba81602b0a48074b",
+    "manifest": "43e846d6677b3e3361769b9f3ebcebc7798b935fdd070b3c2c0876773dba53a1",
     "sheets": {
-      "exports/plans/level-ground.svg": "eb531dcd494540ec34736cca8007ab852d254d94aeaa06704d7c2d8a2412abf8",
-      "exports/plans/level-upper.svg": "f412217b7a0f30bfb0c779205a9c9ee7d1692a405525e187490a25e544e9c173",
-      "exports/elevations/north.svg": "26d66a1f0a26d418f026ad129e57d546227d6246e4179c95d83340774af191d0",
+      "exports/plans/level-ground.svg": "20f50b70915113f77fdb00dd32d019b9caccece5bad7dc3245282d2939c8ceb6",
+      "exports/plans/level-upper.svg": "ce98bb7a021e7b5d75fc71bde3ffb8ff91f728670795c1a7d36d9c85245165d0",
+      "exports/elevations/north.svg": "1d9c8b231175aa07f7be1bba07bb32d66f0d0abe654f3e482e0fe074051a6f4b",
       "exports/elevations/east.svg": "ad55f8b33773038e4292efcfbc4c6d12702f6ef353d61e6bd44fbbc1acfa832d",
-      "exports/elevations/south.svg": "62c419d50155770e222723bec2c0a23cdb7533853da307077479cb10d214b6fb",
+      "exports/elevations/south.svg": "8f1fdb5936503cadc486ee6eb7ae71d5ced1f311096c39ea171078bdfa84c9bb",
       "exports/elevations/west.svg": "54336dc2d1b7b1d1fa6ca68e855fdec84f1d4ace7788e8c7f6826ec7d49a70aa",
-      "exports/sections/section-aa.svg": "4f616213e1085dad78c187634d7573a995704d22e8ae7b07baafe982431d15c1",
-      "exports/sections/section-bb.svg": "9b0ed1dab9c5237a95f20231ff7dd25af69d800d6295571434c5c533e3678d7e",
-      "exports/systems/level-ground.svg": "eb726c6dbe1e38c8d0b46ef8ef0facd6bb0f84eec34e44c2bb5af14d98a1dcd8",
-      "exports/systems/level-upper.svg": "c475f2994c95c490d083064504805e6987e72860e78dc74b592d2ffb73747713"
+      "exports/sections/section-aa.svg": "39a6a436b8768812f91a2ab9bbb5ce7f30edbb4cb7ec9b2f0eadc1d469288c77",
+      "exports/sections/section-bb.svg": "63fe8bb5999564b31d7077bf33acd70781333e7584875833eea931ac2a07ed4c",
+      "exports/systems/level-ground.svg": "6642602f59c5db3d8f8300ff5573df0dc7bd2e7695f99318862abeb48a780c12",
+      "exports/systems/level-upper.svg": "3a47612639d624ba4ae99e72e25e45a34cca1e129d1d377954117d828006f8ad"
     }
   },
   "compact-metric-studio": {

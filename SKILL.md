@@ -154,10 +154,12 @@ and times out after five seconds. It does not install or replace anything.
    `node <skill>/scripts/export-drawings.mjs --project <project>`. It renders
    every sheet with the same code as `index.html` and writes
    `exports/**/*.svg` plus `exports/manifest.json`. Rerun it after every model
-   change; never hand-write or edit the SVG files. The viewer's Download
-   drawing set button packages these files.
+   change; never hand-write or edit the SVG files. The viewer's Share menu
+   offers the same sheets with Download drawings, drawn in the browser from
+   the loaded model, so a user can download them without this step.
 10. **Apply approvals.** If the user returns a `reviews/approvals.json` (the
-    viewer's Download drawing set includes browser-stored approvals), first
+    viewer's Share, then Export project, includes browser-stored approvals;
+    Download drawings does not), first
     check its `projectId` and whole-model `modelFingerprint` against the
     current model and export manifest. The viewer does not store an
     entity fingerprint or automatically invalidate approvals after edits.
@@ -177,11 +179,19 @@ and times out after five seconds. It does not install or replace anything.
     self-contained HTML file to `exports/` that opens with a double-click.
     It embeds the model and code findings, not source images, the drawing
     ZIP, the brief, or handoff files. Share the drawing ZIP or complete
-    project separately when those are needed.
+    project separately when those are needed. To move the project to
+    another machine or skill install, choose Share, then Export project, while
+    `serve.mjs` serves it: the ZIP holds the project files and the browser's
+    approvals, and reopens by double-clicking Open Studio once extracted. Exported from a
+    page not served by `serve.mjs` (the preview or a bundle), it rebuilds a
+    reopenable project from the page (viewer, version marker, model, code
+    findings, approvals) but cannot include the brief, source images,
+    variants, or handoff notes. Either way `exports/` is drawn fresh.
 
 To move an existing project to a newer version of this skill's viewer, run
 `node <skill>/scripts/init.mjs <project> --update`. It replaces only
-`index.html` and `architecture-studio.json`. Before doing so, obtain approval,
+`index.html`, `architecture-studio.json`, and the launcher files
+(`open-studio.mjs`, `Open Studio.cmd`, `Open Studio.command`). Before doing so, obtain approval,
 explain that viewer customizations will be replaced, and preserve the current
 project in a backup or version-control checkpoint without overwriting an
 existing backup. Do not change the model, brief, sources, variants, or reviews
@@ -198,6 +208,9 @@ Do not claim that the upgrade adds model data required by new features.
 ```text
 architecture-studio.json          # written by init.mjs
 index.html                        # the studio viewer, written by init.mjs
+open-studio.mjs                   # launcher: serves the folder read-only, written by init.mjs
+Open Studio.cmd                   # double-click launcher for Windows
+Open Studio.command               # double-click launcher for macOS
 brief.json                        # the confirmed intake brief
 sources/                          # user-supplied sketches, photos, documents
 sources/sources.json              # image scale and placement, written by import-image.mjs

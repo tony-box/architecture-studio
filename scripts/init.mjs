@@ -1,16 +1,24 @@
 // Creates an Architecture Studio project folder, or refreshes the viewer of an existing one.
 //
 //   node <skill>/scripts/init.mjs <project-dir>            # create
-//   node <skill>/scripts/init.mjs <project-dir> --update   # replace index.html with this skill's viewer
+//   node <skill>/scripts/init.mjs <project-dir> --update   # replace the viewer and launcher with this skill's
 //
 // A project is self-contained: it carries its own copy of the viewer, so the folder can be
-// zipped, shared, or served without the skill installed.
+// zipped, shared, or served without the skill installed. Its launcher (open-studio.mjs, with
+// Open Studio.cmd and Open Studio.command to double-click) serves it locally with Node.js alone.
 import fs from 'node:fs';
 import path from 'node:path';
+import { loadStudioApi } from './export-drawings.mjs';
 import { TEMPLATE_PATH, isMain, parseArgs, skillVersion } from './lib.mjs';
 
 export const MARKER_FILE = 'architecture-studio.json';
 export const PROJECT_DIRS = ['models/variants', 'exports', 'reviews', 'sources'];
+
+// open-studio.mjs and its double-click wrappers, carried in the viewer template so the browser's Export
+// project writes the same files.
+export function launcherFiles(html = fs.readFileSync(TEMPLATE_PATH, 'utf8')) {
+  return Array.from(loadStudioApi(html).api.projectLaunchers(html), ({ name, text, mode }) => ({ name, text, mode }));
+}
 
 export function initProject(projectDir, { update = false } = {}) {
   const root = path.resolve(projectDir);
@@ -20,6 +28,11 @@ export function initProject(projectDir, { update = false } = {}) {
   if (isProject && !update) return { status: 'exists', root };
   for (const dir of PROJECT_DIRS) fs.mkdirSync(path.join(root, dir), { recursive: true });
   fs.copyFileSync(TEMPLATE_PATH, indexPath);
+  for (const launcher of launcherFiles()) {
+    const target = path.join(root, launcher.name);
+    fs.writeFileSync(target, launcher.text);
+    if (process.platform !== 'win32') fs.chmodSync(target, launcher.mode);
+  }
   const marker = { tool: 'architecture-studio', skillVersion: skillVersion() };
   fs.writeFileSync(markerPath, `${JSON.stringify(marker, null, 2)}\n`);
   return { status: isProject ? 'updated' : 'created', root };

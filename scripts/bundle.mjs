@@ -3,8 +3,8 @@
 //
 //   node <skill>/scripts/bundle.mjs [project-dir] [--out <file>]
 //
-// The shared file is a viewer: it renders every sheet and the 3D model, but it cannot package
-// the exported drawing set. Share the exports/ folder (or the viewer's ZIP) for the drawings.
+// The shared file is a viewer: it renders every sheet and the 3D model, and its Share menu's
+// Download drawings draws the SVG sheets from the embedded model.
 // Source images (sources/) are not embedded; the bundle names the ones it leaves out.
 import fs from 'node:fs';
 import path from 'node:path';

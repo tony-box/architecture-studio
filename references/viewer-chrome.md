@@ -151,9 +151,39 @@ table".
   active view are shown. The view's sheet dropdown (Level, Face, or Section)
   comes first. Related buttons are fused into one segmented control (zoom,
   camera mode, system toggles) so each group reads as a single tool. The
-  primary "Download drawing set" sits at the far right on the drawing views
-  (Plans, Elevations, Sections, Systems, Site) only; the 3D model, Code
-  review, Assumptions, and Sources views do not show it. On the Sources view
+  primary "Share" (the tray-with-up-arrow share icon and its name) sits at
+  the far right on every view, including a page whose model is blocked, so
+  a broken project can still move. It is a menu button (`aria-haspopup`,
+  `aria-expanded`) that opens a small menu below it, right-aligned, and
+  left-aligned on narrow screens. Each item has a name and a one-line note:
+  "Export project" ("Back up, restore, or share with another Architecture
+  Studio user") and "Download drawings" ("Only the drawing sheets, as
+  SVG."). Download drawings draws every sheet from the loaded model with
+  the same code as `export-drawings.mjs`, so it works on any page and never
+  needs an `exports/` folder, and packages the SVG sheets and nothing else
+  in a `<project-id>-drawings/` folder; the manifest, approvals, and handoff
+  notes travel with Export project. Download drawings is left out while the
+  model is blocked. Export
+  project packages the project files when `serve.mjs` lists them. Otherwise
+  it rebuilds a reopenable project from the page: `index.html` from the page
+  as loaded (embedded data emptied), `architecture-studio.json` from the
+  `architecture-studio-version` meta, the model, code findings, and
+  approvals. With a valid model, `exports/` is drawn fresh in both cases,
+  byte for byte what `export-drawings.mjs` writes. Enter, Space, or
+  ArrowDown opens the menu on its first item and ArrowUp on its last; the
+  arrows wrap, Home and End jump; Escape closes it back onto Share; Tab or a
+  press elsewhere closes it. Choosing an item closes the menu. Both items
+  then open the browser's save dialog (`showSaveFilePicker`, in Chrome and
+  Edge) before packaging anything, while the click still counts as a user
+  gesture, suggesting `<project-id>-project.zip` or
+  `<project-id>-drawings.zip`. Without the dialog the browser downloads the
+  file as usual. Cancelling saves nothing and clears the status toast.
+  Otherwise the toast names the saved file, "Saved barn.zip.", and clears
+  itself after 4 seconds; a failure, or a project export with unreadable
+  files, stays until the next message. Browsers do
+  not reveal the folder the user picked, so it gives no location; only the
+  fallback download adds "to your browser's downloads folder". The menu is the
+  chrome's only shadow, because it floats over the drawing. On the Sources view
   of a page that can write, "Add image" (a sheet-with-plus icon in the
   drafting-symbol style) follows the Image select.
 - **Structure only**: on the Elevations and Sections views, when the model has
@@ -269,6 +299,47 @@ table".
   "Model unavailable" or "Resolve model errors" message, and the Sources view
   works, because calibration does not need the model. Placements wait for a
   valid model.
+- **Opened from disk**: a project page on `file://` with no embedded model
+  cannot fetch its files, so instead of "Model unavailable" it is titled
+  "Open this project with Open Studio" and says to double-click Open
+  Studio.cmd (Windows) or Open Studio.command (macOS), which need Node.js.
+- **3D model**: the scene is uploaded to the GPU once per build (model or
+  system toggles), and each frame only sets the camera, so the view keeps
+  up with the display. Faces are lit by a soft sky (brighter on upward
+  faces), a sun from the south-east, and a weak fill from the north-west, so
+  each side of a mass takes its own tone and corners and slopes read; lines
+  (roofs, systems) stay flat. Each material category with a texture draws a
+  procedural pattern at real size in the plane of the face: running-bond
+  brick and block with joints, decking boards, unit pavers, irregular
+  flagstone, and grain or speckle for concrete, wood, steel, gravel, sand,
+  earth, mulch, asphalt, lawn (also grassed terrain), and water. Gypsum
+  takes a faint orange-peel stipple, as painted board. Unspecified
+  assemblies, insulation, and fixtures stay plain, and detail too
+  fine to see fades to the material colour instead of shimmering. Stairs
+  take their material's colour. Each wall face shows the layer it exposes,
+  from the wall's resolved layer order: siding, brick, or block outside,
+  gypsum inside, gypsum on both faces of a stud partition; tops, ends, and
+  jambs show the exterior face's layer. Slabs keep the colour of their
+  thickest layer other than insulation and gypsum. Walls are extruded from the same joined
+  outlines as the plan (corners miter, tees stop at the face they meet,
+  among the walls of one level), so corners are closed rather than notched,
+  including the pieces above and below openings near a corner. Held keys
+  move by elapsed time on a
+  `requestAnimationFrame` loop, not by keyboard repeat. The camera buttons
+  are Orbit and Fly. In Fly mode W and S fly along the line of sight at
+  3 m/s (7 m/s with Shift), so aiming up or down climbs or dives; A and D
+  strafe level; Q and E go straight down and up at 1.5 m/s (3.5 m/s with
+  Shift). The eye can go from 8 m below the lowest point of the model (from
+  the uploaded scene, so footings and graded sites count) up to 60 m, high
+  enough to fly over the roof. Arrow keys turn
+  and tilt in both modes. Drags,
+  scrolling, and resizing ask for at most one draw per frame. Keys held when
+  the window loses focus are released. Each mode keeps its own heading, so
+  switching never hands Fly the orbit's downward aim. Fly opens outside the
+  south face, level and centred on it, far enough back that the walls and
+  roof fit a 60-degree view; Orbit opens above one corner. A "Reset view"
+  button (circular-arrow icon) floats at the top right of the 3D view itself
+  and restores both starting views without changing the Orbit or Fly mode.
 - **Toggle buttons** use `aria-pressed`; pressed is ink-filled.
 - **Inspector (default)**: "Needs your input". Findings are grouped into To
   check (errors as Fix, warnings as Check) and Notes (advisories), each with a
@@ -298,7 +369,7 @@ table".
 ## Do's and Don'ts
 
 - Do keep one focal point: the sheet.
-- Do name the action on every control ("Fit sheet", "Download drawing set").
+- Do name the action on every control ("Fit sheet", "Share").
 - Do keep every claim in the interface honest: concept only, no compliance.
 - Don't add eyebrow labels above headings.
 - Don't use the accent for text, data, or decoration.

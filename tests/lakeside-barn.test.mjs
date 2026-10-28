@@ -19,6 +19,28 @@ test('the rebuilt barn is generated from its current brief', () => {
   assert.ok(!model.stairs.some(stair => stair.start.x < ft(36)), 'no internal stair');
 });
 
+test('walls are layered wood-frame assemblies, and rooms end at their finished faces', () => {
+  const category = id => model.materials.find(item => item.id === id).category;
+  const layersOf = wall => wall.layers.map(item => [item.id, category(item.materialId), item.thicknessMm]);
+  for (const wall of model.walls) {
+    assert.equal(wall.layers.reduce((sum, item) => sum + item.thicknessMm, 0), wall.thicknessMm, `${wall.id} layers fill the wall`);
+    if (wall.kind === 'exterior') {
+      assert.equal(wall.layerOrder, 'interior-to-exterior');
+      assert.deepEqual(layersOf(wall), [['gypsum', 'gypsum', 13], ['studs', 'insulation-batt', 140], ['sheathing', 'engineered-wood', 12], ['siding', 'generic', 19]], wall.id);
+    } else {
+      assert.deepEqual(layersOf(wall), [['gypsum-left', 'gypsum', 13], ['studs', 'wood-framing', 90], ['gypsum-right', 'gypsum', 13]], wall.id);
+    }
+  }
+  assert.match(model.materials.find(item => item.id === 'mat-siding').name, /not yet chosen/, 'the siding type stays an open decision');
+  // The living room reaches the exterior faces and stops at the partition face, with no gap or overlap.
+  const living = model.spaces.find(space => space.id === 'space-great-room').boundary;
+  assert.deepEqual([Math.min(...living.map(p => p.x)), Math.min(...living.map(p => p.y))], [92, 92]);
+  assert.equal(Math.max(...living.map(p => p.y)), ft(24) - 58);
+  // Fixtures that stand against an exterior wall still touch its inside face.
+  const sink = model.fixtures.find(item => item.id === 'fixture-kitchen-sink');
+  assert.equal(sink.position.x - sink.size.y / 2, 92);
+});
+
 test('exterior stair meets full-width landings at the residence datum', () => {
   const stair = model.stairs[0], deck = api.outlineOf(model, model.surfaces.find(item => item.id === 'surface-deck'));
   const pad = model.surfaces.find(item => item.id === 'surface-stair-landing');
@@ -50,8 +72,9 @@ function reachable(levelId, start, destinations) {
   const radius = 300, step = 100, width = ft(36), depth = ft(48);
   const walls = model.walls.filter(wall => wall.levelId === levelId);
   const objects = [...model.fixtures, ...model.equipment].filter(item => item.levelId === levelId);
+  const face = walls.find(wall => wall.kind === 'exterior').thicknessMm / 2;
   const blocked = (x, y) => {
-    if (x < 150 + radius || x > width - 150 - radius || y < 150 + radius || y > depth - 150 - radius) return true;
+    if (x < face + radius || x > width - face - radius || y < face + radius || y > depth - face - radius) return true;
     for (const wall of walls) {
       const vertical = wall.start.x === wall.end.x, axis = vertical ? 'y' : 'x';
       const across = vertical ? x : y, along = vertical ? y : x;
