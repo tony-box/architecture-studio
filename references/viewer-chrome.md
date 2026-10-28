@@ -301,8 +301,9 @@ table".
   valid model.
 - **Opened from disk**: a project page on `file://` with no embedded model
   cannot fetch its files, so instead of "Model unavailable" it is titled
-  "Open this project with Open Studio" and says to double-click Open
-  Studio.cmd (Windows) or Open Studio.command (macOS), which need Node.js.
+  "Start this project with Start-ArchitectureStudio" and says to double-click
+  Start-ArchitectureStudio.cmd (Windows) or Start-ArchitectureStudio.command
+  (macOS), which need Node.js.
 - **3D model**: the scene is uploaded to the GPU once per build (model or
   system toggles), and each frame only sets the camera, so the view keeps
   up with the display. Faces are lit by a soft sky (brighter on upward

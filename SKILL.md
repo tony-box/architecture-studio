@@ -4,7 +4,7 @@ description: Brainstorm close-to-accurate building concepts with drafted plans, 
 license: MIT
 metadata:
   author: Tony Box
-  version: "0.5.2"
+  version: "0.5.3"
 ---
 
 # Architecture Studio
@@ -182,7 +182,7 @@ and times out after five seconds. It does not install or replace anything.
     project separately when those are needed. To move the project to
     another machine or skill install, choose Share, then Export project, while
     `serve.mjs` serves it: the ZIP holds the project files and the browser's
-    approvals, and reopens by double-clicking Open Studio once extracted. Exported from a
+    approvals, and reopens by double-clicking Start-ArchitectureStudio once extracted. Exported from a
     page not served by `serve.mjs` (the preview or a bundle), it rebuilds a
     reopenable project from the page (viewer, version marker, model, code
     findings, approvals) but cannot include the brief, source images,
@@ -191,7 +191,7 @@ and times out after five seconds. It does not install or replace anything.
 To move an existing project to a newer version of this skill's viewer, run
 `node <skill>/scripts/init.mjs <project> --update`. It replaces only
 `index.html`, `architecture-studio.json`, and the launcher files
-(`open-studio.mjs`, `Open Studio.cmd`, `Open Studio.command`). Before doing so, obtain approval,
+(`start-architecture-studio.mjs`, `Start-ArchitectureStudio.cmd`, `Start-ArchitectureStudio.command`). Before doing so, obtain approval,
 explain that viewer customizations will be replaced, and preserve the current
 project in a backup or version-control checkpoint without overwriting an
 existing backup. Do not change the model, brief, sources, variants, or reviews
@@ -208,9 +208,9 @@ Do not claim that the upgrade adds model data required by new features.
 ```text
 architecture-studio.json          # written by init.mjs
 index.html                        # the studio viewer, written by init.mjs
-open-studio.mjs                   # launcher: serves the folder read-only, written by init.mjs
-Open Studio.cmd                   # double-click launcher for Windows
-Open Studio.command               # double-click launcher for macOS
+start-architecture-studio.mjs                   # launcher: serves the folder read-only, written by init.mjs
+Start-ArchitectureStudio.cmd                   # double-click launcher for Windows
+Start-ArchitectureStudio.command               # double-click launcher for macOS
 brief.json                        # the confirmed intake brief
 sources/                          # user-supplied sketches, photos, documents
 sources/sources.json              # image scale and placement, written by import-image.mjs

@@ -47,7 +47,7 @@ export const CALIBRATION_PATH = '/__architecture-studio/calibration';
 export const PROJECT_FILES_PATH = '/__architecture-studio/project-files';
 // What Export project packages: the files of the project contract (SKILL.md, Output Contract), not
 // whatever else shares the folder, such as version control or editor files.
-export const PROJECT_ROOT_FILES = ['architecture-studio.json', 'index.html', 'brief.json', 'ASSUMPTIONS.md', 'HANDOFF.md', 'open-studio.mjs', 'Open Studio.cmd', 'Open Studio.command'];
+export const PROJECT_ROOT_FILES = ['architecture-studio.json', 'index.html', 'brief.json', 'ASSUMPTIONS.md', 'HANDOFF.md', 'start-architecture-studio.mjs', 'Start-ArchitectureStudio.cmd', 'Start-ArchitectureStudio.command'];
 export const PROJECT_TREES = ['models', 'sources', 'reviews', 'exports'];
 export const TOKEN_HEADER = 'x-architecture-studio-token';
 export const WRITE_META = 'architecture-studio-write';

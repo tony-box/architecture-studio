@@ -90,8 +90,8 @@ test('Export project lists the project contract and reads the viewer without its
     const listed = await send(port, 'GET', PROJECT_FILES_PATH);
     assert.equal(listed.status, 200);
     assert.deepEqual(listed.json.files, [
-      'HANDOFF.md', 'Open Studio.cmd', 'Open Studio.command', 'architecture-studio.json', 'brief.json', 'exports/manifest.json', 'exports/plans/level-1.svg', 'index.html',
-      'models/building.json', 'models/variants/option-b.json', 'open-studio.mjs', 'reviews/code-findings.json', 'sources/site photo.png'
+      'HANDOFF.md', 'Start-ArchitectureStudio.cmd', 'Start-ArchitectureStudio.command', 'architecture-studio.json', 'brief.json', 'exports/manifest.json', 'exports/plans/level-1.svg', 'index.html',
+      'models/building.json', 'models/variants/option-b.json', 'reviews/code-findings.json', 'sources/site photo.png', 'start-architecture-studio.mjs'
     ]);
     assert.deepEqual(projectFiles(dir), listed.json.files);
     assert.ok(!listed.text.includes(token));

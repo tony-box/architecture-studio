@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="architecture-studio-version" content="0.5.2">
+<meta name="architecture-studio-version" content="0.5.3">
 <title>Architecture Studio</title>
 <style>
   /* Viewer chrome tokens. See references/viewer-chrome.md. Drawing sheets carry their own
@@ -384,9 +384,9 @@
   </div>
 </div>
 <!-- Project launcher. scripts/init.mjs and Export project write these beside index.html: a page opened from disk cannot read its project files, so they serve the folder on 127.0.0.1 and open it. -->
-<script type="text/plain" data-project-file="open-studio.mjs">
-// Opens this Architecture Studio project in your browser. Double-click Open Studio.cmd (Windows) or
-// Open Studio.command (macOS), or run: node open-studio.mjs [--port <n>] [--no-open]
+<script type="text/plain" data-project-file="start-architecture-studio.mjs">
+// Opens this Architecture Studio project in your browser. Double-click Start-ArchitectureStudio.cmd (Windows) or
+// Start-ArchitectureStudio.command (macOS), or run: node start-architecture-studio.mjs [--port <n>] [--no-open]
 //
 // Browsers do not let a page opened from disk read the files beside it, so this serves the folder,
 // read-only, on 127.0.0.1 until you close the window. It needs Node.js 20 or newer. It picks the same
@@ -406,7 +406,7 @@ const TYPES = {
   '.pdf': 'application/pdf', '.zip': 'application/zip', '.mjs': 'text/javascript; charset=utf-8'
 };
 // What Share, then Export project, packages: the same list as scripts/serve.mjs.
-const ROOT_FILES = ['architecture-studio.json', 'index.html', 'brief.json', 'ASSUMPTIONS.md', 'HANDOFF.md', 'open-studio.mjs', 'Open Studio.cmd', 'Open Studio.command'];
+const ROOT_FILES = ['architecture-studio.json', 'index.html', 'brief.json', 'ASSUMPTIONS.md', 'HANDOFF.md', 'start-architecture-studio.mjs', 'Start-ArchitectureStudio.cmd', 'Start-ArchitectureStudio.command'];
 const TREES = ['models', 'sources', 'reviews', 'exports'];
 
 function projectFiles() {
@@ -479,7 +479,7 @@ console.log(`Architecture Studio is open at ${url}`);
 console.log('Keep this window open while you use it. Close it, or press Ctrl+C, to stop.');
 if (!args.includes('--no-open')) openBrowser(url);
 </script>
-<script type="text/plain" data-project-file="Open Studio.cmd" data-line-endings="crlf">
+<script type="text/plain" data-project-file="Start-ArchitectureStudio.cmd" data-line-endings="crlf">
 @echo off
 rem Opens this Architecture Studio project in your browser. Keep this window open while you use it.
 cd /d "%~dp0"
@@ -489,10 +489,10 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-node open-studio.mjs %*
+node start-architecture-studio.mjs %*
 if errorlevel 1 pause
 </script>
-<script type="text/plain" data-project-file="Open Studio.command" data-mode="755">
+<script type="text/plain" data-project-file="Start-ArchitectureStudio.command" data-mode="755">
 #!/bin/sh
 # Opens this Architecture Studio project in your browser. Keep this window open while you use it.
 cd "$(dirname "$0")" || exit 1
@@ -501,7 +501,7 @@ if ! command -v node >/dev/null 2>&1; then
   read -r _
   exit 1
 fi
-exec node open-studio.mjs "$@"
+exec node start-architecture-studio.mjs "$@"
 </script>
 <script type="application/json" id="embedded-model"></script>
 <script type="application/json" id="embedded-code-findings"></script>
@@ -5443,7 +5443,7 @@ void main() {
     if (!html) return null;
     return `<!doctype html>\n${html.replace(/(<script type="application\/json" id="embedded-(?:model|code-findings)">)[\s\S]*?(<\/script>)/g, '$1$2')}\n`;
   }
-  // The launcher files carried in the page (open-studio.mjs and its double-click wrappers), as
+  // The launcher files carried in the page (start-architecture-studio.mjs and its double-click wrappers), as
   // { name, text, mode }. scripts/init.mjs writes them from the template; Export project from the page.
   function projectLaunchers(html = PAGE_SOURCE) {
     if (!html) return [];
@@ -6978,10 +6978,10 @@ void main() {
   }
 
   // A page opened from disk cannot fetch its project files; say how to open it instead of "Failed to fetch".
-  const OPEN_FROM_DISK = 'Browsers do not let a page opened from disk read its project files. In the project folder, double-click Open Studio.cmd (Windows) or Open Studio.command (macOS). It needs Node.js.';
+  const OPEN_FROM_DISK = 'Browsers do not let a page opened from disk read its project files. In the project folder, double-click Start-ArchitectureStudio.cmd (Windows) or Start-ArchitectureStudio.command (macOS). It needs Node.js.';
   const modelUnavailable = error => String(globalThis.location?.protocol) === 'file:' && !$('#embedded-model')?.textContent?.trim() ? {
-    title: 'Open this project with Open Studio', detail: OPEN_FROM_DISK,
-    inspector: `<h2>Open this project with Open Studio</h2><p class="lede">${escapeHtml(OPEN_FROM_DISK)}</p><div class="disclaimer">Without Node.js, the agent can run <code>scripts/serve.mjs</code> on the folder, or <code>scripts/bundle.mjs</code> for a single file that opens with a double-click.</div>`
+    title: 'Start this project with Start-ArchitectureStudio', detail: OPEN_FROM_DISK,
+    inspector: `<h2>Start this project with Start-ArchitectureStudio</h2><p class="lede">${escapeHtml(OPEN_FROM_DISK)}</p><div class="disclaimer">Without Node.js, the agent can run <code>scripts/serve.mjs</code> on the folder, or <code>scripts/bundle.mjs</code> for a single file that opens with a double-click.</div>`
   } : {
     title: 'Model unavailable', detail: 'Expected a schema-valid model at models/building.json. The studio does not invent fallback geometry.',
     inspector: `<h2>Model unavailable</h2><p class="lede">${escapeHtml(error instanceof Error ? error.message : String(error))}</p><div class="disclaimer">Expected a schema-valid model at <code>models/building.json</code>. The studio will not invent fallback geometry.</div>`

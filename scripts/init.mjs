@@ -4,8 +4,8 @@
 //   node <skill>/scripts/init.mjs <project-dir> --update   # replace the viewer and launcher with this skill's
 //
 // A project is self-contained: it carries its own copy of the viewer, so the folder can be
-// zipped, shared, or served without the skill installed. Its launcher (open-studio.mjs, with
-// Open Studio.cmd and Open Studio.command to double-click) serves it locally with Node.js alone.
+// zipped, shared, or served without the skill installed. Its launcher (start-architecture-studio.mjs, with
+// Start-ArchitectureStudio.cmd and Start-ArchitectureStudio.command to double-click) serves it locally with Node.js alone.
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadStudioApi } from './export-drawings.mjs';
@@ -13,8 +13,10 @@ import { TEMPLATE_PATH, isMain, parseArgs, skillVersion } from './lib.mjs';
 
 export const MARKER_FILE = 'architecture-studio.json';
 export const PROJECT_DIRS = ['models/variants', 'exports', 'reviews', 'sources'];
+// Launcher names from skill versions before 0.5.3; --update removes them so a project has one launcher.
+export const RETIRED_LAUNCHERS = ['open-studio.mjs', 'Open Studio.cmd', 'Open Studio.command'];
 
-// open-studio.mjs and its double-click wrappers, carried in the viewer template so the browser's Export
+// start-architecture-studio.mjs and its double-click wrappers, carried in the viewer template so the browser's Export
 // project writes the same files.
 export function launcherFiles(html = fs.readFileSync(TEMPLATE_PATH, 'utf8')) {
   return Array.from(loadStudioApi(html).api.projectLaunchers(html), ({ name, text, mode }) => ({ name, text, mode }));
@@ -33,6 +35,7 @@ export function initProject(projectDir, { update = false } = {}) {
     fs.writeFileSync(target, launcher.text);
     if (process.platform !== 'win32') fs.chmodSync(target, launcher.mode);
   }
+  for (const name of RETIRED_LAUNCHERS) fs.rmSync(path.join(root, name), { force: true });
   const marker = { tool: 'architecture-studio', skillVersion: skillVersion() };
   fs.writeFileSync(markerPath, `${JSON.stringify(marker, null, 2)}\n`);
   return { status: isProject ? 'updated' : 'created', root };

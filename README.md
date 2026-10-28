@@ -176,9 +176,9 @@ the scale bar or north arrow.
 my-workshop/
   architecture-studio.json   skill version that created the project
   index.html                 the studio viewer
-  Open Studio.cmd            double-click to open the viewer (Windows)
-  Open Studio.command        double-click to open the viewer (macOS)
-  open-studio.mjs            the small local server both of them run
+  Start-ArchitectureStudio.cmd            double-click to open the viewer (Windows)
+  Start-ArchitectureStudio.command        double-click to open the viewer (macOS)
+  start-architecture-studio.mjs            the small local server both of them run
   brief.json                 your confirmed answers
   sources/                   sketches, photos, and documents you supplied
   sources/sources.json       scale and placement of each image
@@ -193,7 +193,7 @@ my-workshop/
 The folder carries its viewer and data: zip it or put it under version
 control. Browsers do not let `index.html` opened straight from disk read the
 files beside it, so it shows how to open the project instead. To open it,
-double-click Open Studio (or run `node open-studio.mjs` in the folder). It
+double-click Start-ArchitectureStudio (or run `node start-architecture-studio.mjs` in the folder). It
 needs only Node.js 20 or newer, not the skill. It serves the folder
 read-only on `127.0.0.1`, at the same address `serve.mjs` uses for that
 folder, so browser approvals stay with the project. Keep its window open
@@ -213,7 +213,7 @@ need `serve.mjs`. `bundle.mjs` gives a single double-clickable file instead.
 Both Share options ask where to save the ZIP in browsers with a save dialog
 (Chrome and Edge); other browsers save it to their downloads folder.
 
-To reopen an exported project, extract the ZIP and double-click Open Studio
+To reopen an exported project, extract the ZIP and double-click Start-ArchitectureStudio
 in the extracted folder, or run `node scripts/serve.mjs <extracted>/<project-id>`.
 Approvals stored in a
 browser belong to the address that saved them, so the export carries them
@@ -232,7 +232,7 @@ All scripts live in `scripts/` and run with plain `node`.
 | Command | What it does |
 | --- | --- |
 | `node scripts/check-updates.mjs [--project <project>]` | Check upstream skill and local viewer versions without changing files. Options: `--offline`, `--json`. Failures produce warnings and exit nonzero; an available update is not an error. |
-| `node scripts/init.mjs <project>` | Create the viewer, version marker, Open Studio launcher, and project directories. It does not write a brief or model. `--update` replaces `index.html`, `architecture-studio.json`, and the launcher files, not design data. |
+| `node scripts/init.mjs <project>` | Create the viewer, version marker, Start-ArchitectureStudio launcher, and project directories. It does not write a brief or model. `--update` replaces `index.html`, `architecture-studio.json`, and the launcher files (removing the older `Open Studio` launcher names), not design data. |
 | `node scripts/serve.mjs <project>` | Serve the project on `127.0.0.1` and open the default browser. Live reload is on by default. The Sources tab imports images and saves calibrations through it; nothing else is written. It also lists the project files for the viewer's Export project. Options: `--port`, `--no-open`, `--no-watch`, `--json`. |
 | `node scripts/export-drawings.mjs --project <project>` | Validate the model and write `exports/**/*.svg` plus `exports/manifest.json`. Writes nothing while the model has errors. |
 | `node scripts/inspect.mjs --project <project> --id <id>` | Report one element as numbers (size, area, path width and radii, clearance to the building and the lot, its findings), so the agent can check a curve edit without looking at a drawing. For a door or window it lists the jamb and centre points anchors can use. Without `--id` it lists the elements. |

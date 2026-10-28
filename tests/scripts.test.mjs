@@ -48,20 +48,22 @@ test('init creates a self-contained project and refuses to overwrite it', t => {
   assert.equal(fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), template);
   assert.equal(JSON.parse(fs.readFileSync(path.join(dir, MARKER_FILE), 'utf8')).tool, 'architecture-studio');
   for (const launcher of launcherFiles()) assert.equal(fs.readFileSync(path.join(dir, launcher.name), 'utf8'), launcher.text, launcher.name);
-  if (process.platform !== 'win32') assert.equal(fs.statSync(path.join(dir, 'Open Studio.command')).mode & 0o777, 0o755);
+  if (process.platform !== 'win32') assert.equal(fs.statSync(path.join(dir, 'Start-ArchitectureStudio.command')).mode & 0o777, 0o755);
 
   fs.writeFileSync(path.join(dir, 'index.html'), 'customized');
-  fs.writeFileSync(path.join(dir, 'open-studio.mjs'), 'old launcher');
+  fs.writeFileSync(path.join(dir, 'start-architecture-studio.mjs'), 'old launcher');
+  for (const name of ['open-studio.mjs', 'Open Studio.cmd', 'Open Studio.command']) fs.writeFileSync(path.join(dir, name), 'retired launcher');
   assert.equal(initProject(dir).status, 'exists');
   assert.equal(fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), 'customized');
   assert.equal(initProject(dir, { update: true }).status, 'updated');
   assert.equal(fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), template);
-  assert.notEqual(fs.readFileSync(path.join(dir, 'open-studio.mjs'), 'utf8'), 'old launcher', 'a viewer refresh refreshes the launcher too');
+  assert.notEqual(fs.readFileSync(path.join(dir, 'start-architecture-studio.mjs'), 'utf8'), 'old launcher', 'a viewer refresh refreshes the launcher too');
+  for (const name of ['open-studio.mjs', 'Open Studio.cmd', 'Open Studio.command']) assert.ok(!fs.existsSync(path.join(dir, name)), `${name} is retired`);
 });
 
-test('the launcher is open-studio.mjs and two double-click wrappers', () => {
+test('the launcher is start-architecture-studio.mjs and two double-click wrappers', () => {
   const launchers = launcherFiles();
-  assert.deepEqual(launchers.map(file => file.name), ['open-studio.mjs', 'Open Studio.cmd', 'Open Studio.command']);
+  assert.deepEqual(launchers.map(file => file.name), ['start-architecture-studio.mjs', 'Start-ArchitectureStudio.cmd', 'Start-ArchitectureStudio.command']);
   const [server, cmd, command] = launchers;
   assert.match(server.text, /^\/\/ Opens this Architecture Studio project/);
   assert.ok(!server.text.includes('\r'));
@@ -70,20 +72,20 @@ test('the launcher is open-studio.mjs and two double-click wrappers', () => {
   assert.match(command.text, /^#!\/bin\/sh\n/);
   assert.equal(command.mode, 0o755);
   assert.equal(cmd.mode, 0o644);
-  assert.ok(launchers.every(file => file.text.endsWith(file.name === 'Open Studio.cmd' ? '\r\n' : '\n')));
+  assert.ok(launchers.every(file => file.text.endsWith(file.name === 'Start-ArchitectureStudio.cmd' ? '\r\n' : '\n')));
 });
 
-test('open-studio.mjs serves the project read-only on the same port as serve.mjs', async t => {
+test('start-architecture-studio.mjs serves the project read-only on the same port as serve.mjs', async t => {
   const dir = seedProject(t);
   fs.writeFileSync(path.join(dir, '.env'), 'secret');
   fs.mkdirSync(path.join(dir, '.git'));
   fs.writeFileSync(path.join(dir, '.git', 'config'), 'secret');
-  const child = spawn(process.execPath, [path.join(dir, 'open-studio.mjs'), '--no-open'], { cwd: os.tmpdir() });
+  const child = spawn(process.execPath, [path.join(dir, 'start-architecture-studio.mjs'), '--no-open'], { cwd: os.tmpdir() });
   t.after(() => child.kill());
   const url = await new Promise((resolve, reject) => {
     let out = '';
     child.stdout.on('data', chunk => { out += chunk; const match = out.match(/open at (http:\/\/127\.0\.0\.1:\d+\/)/); if (match) resolve(match[1]); });
-    child.on('exit', code => reject(new Error(`open-studio.mjs exited with ${code}: ${out}`)));
+    child.on('exit', code => reject(new Error(`start-architecture-studio.mjs exited with ${code}: ${out}`)));
   });
   const port = Number(new URL(url).port);
   const page = await request(port, '/');

@@ -1452,22 +1452,22 @@ test('the viewer carries the skill version that Export project writes to archite
 test('Export project always carries the launcher, executable on macOS', async () => {
   const { api } = loadStudio();
   const launchers = api.projectLaunchers(html);
-  assert.equal(JSON.stringify(launchers.map(file => file.name)), JSON.stringify(['open-studio.mjs', 'Open Studio.cmd', 'Open Studio.command']));
+  assert.equal(JSON.stringify(launchers.map(file => file.name)), JSON.stringify(['start-architecture-studio.mjs', 'Start-ArchitectureStudio.cmd', 'Start-ArchitectureStudio.command']));
 
   const fromPage = await api.projectExportFiles({ listed: null, model: fixture, page: '<!doctype html>', launchers });
-  const command = fromPage.files.find(file => file.name === 'Open Studio.command');
+  const command = fromPage.files.find(file => file.name === 'Start-ArchitectureStudio.command');
   assert.equal(command.mode, 0o755);
-  assert.equal(text(fromPage.files.find(file => file.name === 'Open Studio.cmd').bytes), launchers[1].text);
+  assert.equal(text(fromPage.files.find(file => file.name === 'Start-ArchitectureStudio.cmd').bytes), launchers[1].text);
 
   // A served project keeps its own launcher copy; one made before the launcher existed gets the page's.
   const served = await api.projectExportFiles({
-    listed: ['index.html', 'open-studio.mjs'], model: fixture, launchers,
-    fetchImpl: async url => ({ ok: true, arrayBuffer: async () => new TextEncoder().encode(url === './open-studio.mjs' ? '// project copy' : 'page').buffer })
+    listed: ['index.html', 'start-architecture-studio.mjs'], model: fixture, launchers,
+    fetchImpl: async url => ({ ok: true, arrayBuffer: async () => new TextEncoder().encode(url === './start-architecture-studio.mjs' ? '// project copy' : 'page').buffer })
   });
-  assert.equal(text(served.files.find(file => file.name === 'open-studio.mjs').bytes), '// project copy');
-  assert.ok(served.files.some(file => file.name === 'Open Studio.cmd') && served.files.some(file => file.name === 'Open Studio.command' && file.mode === 0o755));
+  assert.equal(text(served.files.find(file => file.name === 'start-architecture-studio.mjs').bytes), '// project copy');
+  assert.ok(served.files.some(file => file.name === 'Start-ArchitectureStudio.cmd') && served.files.some(file => file.name === 'Start-ArchitectureStudio.command' && file.mode === 0o755));
 
-  const zip = api.zipFiles([{ name: 'p/Open Studio.command', bytes: command.bytes, mode: 0o755 }, { name: 'p/index.html', bytes: new Uint8Array([60]) }]);
+  const zip = api.zipFiles([{ name: 'p/Start-ArchitectureStudio.command', bytes: command.bytes, mode: 0o755 }, { name: 'p/index.html', bytes: new Uint8Array([60]) }]);
   const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
   const central = view.getUint32(zip.byteLength - 22 + 16, true);
   assert.equal(view.getUint16(central + 4, true), 0x0314, 'made on Unix, so the mode is honored');
@@ -1477,11 +1477,11 @@ test('Export project always carries the launcher, executable on macOS', async ()
   assert.equal(view.getUint32(second + 38, true), 0);
 });
 
-test('a project page opened from disk says to use Open Studio instead of failing to fetch', async () => {
+test('a project page opened from disk says to use Start-ArchitectureStudio instead of failing to fetch', async () => {
   const { api, element } = startHarness({ files: {}, protocol: 'file:' });
   await api.start();
-  assert.equal(api.state.blocked.title, 'Open this project with Open Studio');
-  assert.match(element('#stage-status').innerHTML, /double-click Open Studio\.cmd \(Windows\) or Open Studio\.command \(macOS\)/);
+  assert.equal(api.state.blocked.title, 'Start this project with Start-ArchitectureStudio');
+  assert.match(element('#stage-status').innerHTML, /double-click Start-ArchitectureStudio\.cmd \(Windows\) or Start-ArchitectureStudio\.command \(macOS\)/);
   assert.doesNotMatch(element('#inspector').innerHTML, /Failed to fetch|Model request failed/);
 
   const served = startHarness({ files: {} });
