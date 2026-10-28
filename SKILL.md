@@ -4,7 +4,7 @@ description: Brainstorm close-to-accurate building concepts with drafted plans, 
 license: MIT
 metadata:
   author: Tony Box
-  version: "0.4.0"
+  version: "0.5.0"
 ---
 
 # Architecture Studio

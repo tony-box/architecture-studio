@@ -413,6 +413,15 @@ In PowerShell use `$env:UPDATE_GOLDEN='1'; node --test
 tests\legacy-output.test.mjs; Remove-Item Env:\UPDATE_GOLDEN`.
 Review the changed sheets before accepting new hashes.
 
+Every change pushed to `main` bumps the version, because installed copies
+only see an update when the version number changes. Bump the patch
+(`0.5.0` to `0.5.1`) for fixes, example and documentation updates; bump the
+minor (`0.5.0` to `0.6.0`) for new features or model and viewer changes.
+Change `package.json`, the `metadata.version` in `SKILL.md`, and the
+`architecture-studio-version` meta tag in `assets/studio-template.html`
+together, then run `node scripts/build-preview.mjs`. The tests fail if they
+disagree.
+
 `preview/index.html` is the studio template with the example model embedded.
 Regenerate it after changing either file. The examples in `examples/` are
 synthetic and contain no private addresses, imagery, or construction

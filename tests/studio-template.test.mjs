@@ -1406,6 +1406,8 @@ test('exports/ drawn in the browser matches export-drawings.mjs byte for byte', 
 test('the viewer carries the skill version that Export project writes to architecture-studio.json', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(skillRoot, 'package.json'), 'utf8'));
   assert.match(html, new RegExp(`<meta name="architecture-studio-version" content="${pkg.version.replace(/\./g, '\\.')}">`));
+  const skill = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8');
+  assert.match(skill, new RegExp(`^  version: "${pkg.version.replace(/\./g, '\\.')}"$`, 'm'), 'SKILL.md metadata matches package.json');
 });
 
 test('Export project always carries the launcher, executable on macOS', async () => {
