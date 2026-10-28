@@ -33,6 +33,16 @@
       { "entityId": "opening-studio-window", "rules": ["symmetry"], "reason": "Window stays in the east studio, not across the upper partition." }
     ]
   },
+  "materials": [
+    { "id": "mat-plasterboard", "name": "Gypsum plasterboard", "category": "gypsum", "evidence": { "source": "generated", "confidence": 0.6, "status": "needs-review", "note": "Illustrative material category, not a product specification." } },
+    { "id": "mat-mineral-wool", "name": "Mineral wool between timber studs", "category": "insulation-batt", "evidence": { "source": "generated", "confidence": 0.6, "status": "needs-review", "note": "Illustrative material category, not a product specification." } },
+    { "id": "mat-osb", "name": "OSB/3 sheathing", "category": "engineered-wood", "evidence": { "source": "generated", "confidence": 0.6, "status": "needs-review", "note": "Illustrative material category, not a product specification." } },
+    { "id": "mat-wood-fibre", "name": "Wood-fibre insulation board", "category": "insulation-rigid", "evidence": { "source": "generated", "confidence": 0.6, "status": "needs-review", "note": "Illustrative material category, not a product specification." } },
+    { "id": "mat-cladding", "name": "External cladding, type not yet chosen", "category": "generic", "evidence": { "source": "generated", "confidence": 0.6, "status": "needs-review", "note": "The cladding is an open decision; the layer reserves its depth." } },
+    { "id": "mat-timber", "name": "Solid timber C24", "category": "wood-framing", "evidence": { "source": "generated", "confidence": 0.6, "status": "needs-review", "note": "Illustrative material category, not a product specification." } },
+    { "id": "mat-concrete", "name": "Concrete C25/30", "category": "concrete", "evidence": { "source": "generated", "confidence": 0.6, "status": "needs-review", "note": "Illustrative material category, not a product specification." } },
+    { "id": "mat-rigid", "name": "XPS insulation board", "category": "insulation-rigid", "evidence": { "source": "generated", "confidence": 0.6, "status": "needs-review", "note": "Illustrative material category, not a product specification." } }
+  ],
   "levels": [
     {
       "id": "level-ground",
@@ -204,6 +214,14 @@
       "thicknessMm": 250,
       "heightMm": 3000,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        { "id": "plasterboard", "materialId": "mat-plasterboard", "thicknessMm": 15 },
+        { "id": "studs", "materialId": "mat-mineral-wool", "thicknessMm": 145 },
+        { "id": "sheathing", "materialId": "mat-osb", "thicknessMm": 15 },
+        { "id": "insulation", "materialId": "mat-wood-fibre", "thicknessMm": 50 },
+        { "id": "cladding", "materialId": "mat-cladding", "thicknessMm": 25 }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -225,6 +243,14 @@
       "thicknessMm": 250,
       "heightMm": 3000,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        { "id": "plasterboard", "materialId": "mat-plasterboard", "thicknessMm": 15 },
+        { "id": "studs", "materialId": "mat-mineral-wool", "thicknessMm": 145 },
+        { "id": "sheathing", "materialId": "mat-osb", "thicknessMm": 15 },
+        { "id": "insulation", "materialId": "mat-wood-fibre", "thicknessMm": 50 },
+        { "id": "cladding", "materialId": "mat-cladding", "thicknessMm": 25 }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -246,6 +272,14 @@
       "thicknessMm": 250,
       "heightMm": 3000,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        { "id": "plasterboard", "materialId": "mat-plasterboard", "thicknessMm": 15 },
+        { "id": "studs", "materialId": "mat-mineral-wool", "thicknessMm": 145 },
+        { "id": "sheathing", "materialId": "mat-osb", "thicknessMm": 15 },
+        { "id": "insulation", "materialId": "mat-wood-fibre", "thicknessMm": 50 },
+        { "id": "cladding", "materialId": "mat-cladding", "thicknessMm": 25 }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -267,6 +301,14 @@
       "thicknessMm": 250,
       "heightMm": 3000,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        { "id": "plasterboard", "materialId": "mat-plasterboard", "thicknessMm": 15 },
+        { "id": "studs", "materialId": "mat-mineral-wool", "thicknessMm": 145 },
+        { "id": "sheathing", "materialId": "mat-osb", "thicknessMm": 15 },
+        { "id": "insulation", "materialId": "mat-wood-fibre", "thicknessMm": 50 },
+        { "id": "cladding", "materialId": "mat-cladding", "thicknessMm": 25 }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -288,6 +330,14 @@
       "thicknessMm": 250,
       "heightMm": 2800,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        { "id": "plasterboard", "materialId": "mat-plasterboard", "thicknessMm": 15 },
+        { "id": "studs", "materialId": "mat-mineral-wool", "thicknessMm": 145 },
+        { "id": "sheathing", "materialId": "mat-osb", "thicknessMm": 15 },
+        { "id": "insulation", "materialId": "mat-wood-fibre", "thicknessMm": 50 },
+        { "id": "cladding", "materialId": "mat-cladding", "thicknessMm": 25 }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -309,6 +359,14 @@
       "thicknessMm": 250,
       "heightMm": 2800,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        { "id": "plasterboard", "materialId": "mat-plasterboard", "thicknessMm": 15 },
+        { "id": "studs", "materialId": "mat-mineral-wool", "thicknessMm": 145 },
+        { "id": "sheathing", "materialId": "mat-osb", "thicknessMm": 15 },
+        { "id": "insulation", "materialId": "mat-wood-fibre", "thicknessMm": 50 },
+        { "id": "cladding", "materialId": "mat-cladding", "thicknessMm": 25 }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -330,6 +388,14 @@
       "thicknessMm": 250,
       "heightMm": 2800,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        { "id": "plasterboard", "materialId": "mat-plasterboard", "thicknessMm": 15 },
+        { "id": "studs", "materialId": "mat-mineral-wool", "thicknessMm": 145 },
+        { "id": "sheathing", "materialId": "mat-osb", "thicknessMm": 15 },
+        { "id": "insulation", "materialId": "mat-wood-fibre", "thicknessMm": 50 },
+        { "id": "cladding", "materialId": "mat-cladding", "thicknessMm": 25 }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -351,6 +417,14 @@
       "thicknessMm": 250,
       "heightMm": 2800,
       "kind": "exterior",
+      "layerOrder": "interior-to-exterior",
+      "layers": [
+        { "id": "plasterboard", "materialId": "mat-plasterboard", "thicknessMm": 15 },
+        { "id": "studs", "materialId": "mat-mineral-wool", "thicknessMm": 145 },
+        { "id": "sheathing", "materialId": "mat-osb", "thicknessMm": 15 },
+        { "id": "insulation", "materialId": "mat-wood-fibre", "thicknessMm": 50 },
+        { "id": "cladding", "materialId": "mat-cladding", "thicknessMm": 25 }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -372,6 +446,11 @@
       "thicknessMm": 100,
       "heightMm": 2700,
       "kind": "interior",
+      "layers": [
+        { "id": "plasterboard-left", "materialId": "mat-plasterboard", "thicknessMm": 15 },
+        { "id": "studs", "materialId": "mat-timber", "thicknessMm": 70 },
+        { "id": "plasterboard-right", "materialId": "mat-plasterboard", "thicknessMm": 15 }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -393,6 +472,11 @@
       "thicknessMm": 100,
       "heightMm": 2700,
       "kind": "interior",
+      "layers": [
+        { "id": "plasterboard-left", "materialId": "mat-plasterboard", "thicknessMm": 15 },
+        { "id": "studs", "materialId": "mat-timber", "thicknessMm": 70 },
+        { "id": "plasterboard-right", "materialId": "mat-plasterboard", "thicknessMm": 15 }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -414,6 +498,11 @@
       "thicknessMm": 100,
       "heightMm": 2600,
       "kind": "interior",
+      "layers": [
+        { "id": "plasterboard-left", "materialId": "mat-plasterboard", "thicknessMm": 15 },
+        { "id": "studs", "materialId": "mat-timber", "thicknessMm": 70 },
+        { "id": "plasterboard-right", "materialId": "mat-plasterboard", "thicknessMm": 15 }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -575,6 +664,10 @@
         }
       ],
       "thicknessMm": 200,
+      "layers": [
+        { "id": "slab", "materialId": "mat-concrete", "thicknessMm": 150 },
+        { "id": "insulation", "materialId": "mat-rigid", "thicknessMm": 50 }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -604,6 +697,11 @@
         }
       ],
       "thicknessMm": 250,
+      "layers": [
+        { "id": "subfloor", "materialId": "mat-osb", "thicknessMm": 22 },
+        { "id": "joists", "materialId": "mat-timber", "thicknessMm": 213 },
+        { "id": "ceiling", "materialId": "mat-plasterboard", "thicknessMm": 15 }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -663,6 +761,7 @@
       "widthMm": 900,
       "riserCount": 17,
       "treadDepthMm": 200,
+      "materialId": "mat-timber",
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
@@ -1179,6 +1278,14 @@
       "impact": "high",
       "affectedEntityIds": ["system-plumbing", "system-electrical", "system-mechanical"],
       "evidence": { "source": "generated", "confidence": 1, "status": "needs-review", "note": "Synthetic legibility and coordination study, not a completed dwelling." }
+    },
+    {
+      "id": "assumption-construction",
+      "topic": "structure",
+      "statement": "Walls and floors are nominal timber-frame build-ups that reserve depth for each layer. Stud and joist sizes and spacing, the cladding type, fire and acoustic performance, and the ground slab's structure are not chosen.",
+      "impact": "high",
+      "affectedEntityIds": [],
+      "evidence": { "source": "generated", "confidence": 1, "status": "needs-review", "note": "Synthetic fixture; professional review required." }
     },
     {
       "id": "assumption-site",

@@ -29,7 +29,7 @@ function build(s) {
     wall('wall-east-north', P(42, 48), P(42, 60), {}, frame),
     wall('wall-north', P(42, 60), P(18, 60), {}, frame),
     wall('wall-west', P(18, 60), P(18, 30), {}, frame),
-    { id: 'wall-bedroom', levelId: 'level-ground', start: P(18, 52), end: P(42, 52), thicknessMm: s.partitionThickness, heightMm: s.wallHeight, kind: 'interior', materialId: 'mat-lumber', evidence: ev('Concept stud partition.') }
+    { id: 'wall-bedroom', levelId: 'level-ground', start: P(18, 52), end: P(42, 52), thicknessMm: s.partitionThickness, heightMm: s.wallHeight, kind: 'interior', layers: s.partition, evidence: ev('Concept stud partition.') }
   ];
   const op = (id, wallId, kind, o, note) => ({ id, wallId, kind, offsetMm: U(o.offset), widthMm: o.width, heightMm: o.height, sillMm: o.sill ?? 0, swing: o.swing ?? 'none', evidence: ev(note) });
   const openings = [
@@ -162,6 +162,7 @@ const imperial = {
   door: inch(36), slider: inch(72), doorHeight: inch(80), window: inch(48), bayWindow: inch(60), windowHeight: inch(48), sill: inch(36),
   extWall: [L('gypsum', 'mat-gypsum', 13), L('studs', 'mat-batt', 140), L('sheathing', 'mat-sheathing', 11), L('cladding', 'mat-cladding', 19)],
   partitionThickness: 114,
+  partition: [L('gypsum-a', 'mat-gypsum', 13), L('studs', 'mat-lumber', 88), L('gypsum-b', 'mat-gypsum', 13)],
   slab: [L('slab', 'mat-concrete', 102), L('base', 'mat-gravel', 152)],
   deck: [L('decking', 'mat-decking', 25), L('joists', 'mat-lumber', 184)],
   lawn: inch(4), mulch: inch(3), walk: inch(4), drive: inch(6), patio: inch(6), pondTop: -1800, pondDepth: inch(24),
@@ -183,6 +184,7 @@ const metric = {
   door: 900, slider: 1800, doorHeight: 2100, window: 1200, bayWindow: 1500, windowHeight: 1200, sill: 900,
   extWall: [L('gypsum', 'mat-gypsum', 15), L('studs', 'mat-batt', 150), L('sheathing', 'mat-sheathing', 15), L('cladding', 'mat-cladding', 20)],
   partitionThickness: 120,
+  partition: [L('gypsum-a', 'mat-gypsum', 15), L('studs', 'mat-lumber', 90), L('gypsum-b', 'mat-gypsum', 15)],
   slab: [L('slab', 'mat-concrete', 150), L('base', 'mat-gravel', 200)],
   deck: [L('decking', 'mat-decking', 25), L('joists', 'mat-lumber', 175)],
   lawn: 100, mulch: 75, walk: 100, drive: 150, patio: 150, pondTop: -1500, pondDepth: 600,

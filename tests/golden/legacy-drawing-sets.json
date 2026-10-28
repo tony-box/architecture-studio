@@ -15,16 +15,16 @@
     }
   },
   "compact-metric-studio": {
-    "manifest": "b60ff343377e5cfd99adc50437709a3d31a8a5205be8e53bc37bca3e43dea2d8",
+    "manifest": "155f1aa088ded5909582614450f49e34ee132201b0bde1d1f97312eadf75289a",
     "sheets": {
-      "exports/plans/level-ground.svg": "d7409a95caa57e7bfcf80c1098b921518f67cdf689bf79565d66d978f931cddc",
-      "exports/plans/level-upper.svg": "fb069cf00c9d59fde24fe8bbf811399c37f1f794a7951398d4db8b57a3bc8a6b",
+      "exports/plans/level-ground.svg": "8f4df2c477fdffb70eccb30af2fc4487de613f794c8bb95b57e0894342836fbd",
+      "exports/plans/level-upper.svg": "d7781d1c67af994c020b76edc5027645b779e2ca04324762c9defc06c19180dd",
       "exports/elevations/north.svg": "173c51755d1d7c46412f12ccca51483bc0ad1e59e9eda644a9797c17e1ea30c3",
       "exports/elevations/east.svg": "80249dc7cf612fde095bb181a4eaca88b9aa87412880052175628915852dbb2e",
       "exports/elevations/south.svg": "6d48b9f556c80cd05229f46c65e130f35cf69ca33d70783cf6b10fc086c6c28b",
       "exports/elevations/west.svg": "23ef849fa9e446dab317a3410f841818c22fea4ae37f5b1aa5aaf45172234408",
-      "exports/sections/section-a.svg": "bcb9d98a7ce33dbba66ae5059da04c81d92d9f3d8cdcdd26bcb9584a973849ff",
-      "exports/sections/section-b.svg": "7d5996c2c7671c9d66769e7c50a3b2f4869226b5566b456cf83af44e5f63dab5",
+      "exports/sections/section-a.svg": "97626105f3d738da3be4687b4715e7d3426de9b5c0d51aba701b368faeaf5d28",
+      "exports/sections/section-b.svg": "77b44787b6f92704acedc6f993ae2dccf7875134990b52d7e06f300ba0e0dfe6",
       "exports/systems/level-ground.svg": "947ec463204e4ea3678cba825776b2646573c549b3ef1d2c409c7cc50574e172",
       "exports/systems/level-upper.svg": "a246a49d233f9b07d4bf6663350c15887b961678a68faeb6880aeb07fc0beee9"
     }

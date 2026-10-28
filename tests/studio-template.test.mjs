@@ -16,6 +16,17 @@ const metricFixture = readFixture('compact-metric-studio');
 const materialFixture = readFixture('mixed-material-workshop');
 const metricMaterialFixture = readFixture('mixed-material-workshop-metric');
 
+function withoutCatalog(source) {
+  const model = structuredClone(source);
+  delete model.materials;
+  for (const item of [...(model.walls ?? []), ...(model.slabs ?? []), ...(model.stairs ?? [])]) {
+    delete item.layers;
+    delete item.layerOrder;
+    delete item.materialId;
+  }
+  return model;
+}
+
 function loadStudio() {
   return loadStudioApi(html);
 }
@@ -599,7 +610,7 @@ test('material hatching follows the drafting profile', () => {
     const model = structuredClone(metricFixture);
     model.project.coordinates.displayUnits = units;
     model.materials = [{ id: 'mat-rc', name: 'Reinforced concrete', category: 'reinforced-concrete' }];
-    for (const slab of model.slabs) slab.materialId = 'mat-rc';
+    for (const slab of model.slabs) { delete slab.layers; slab.materialId = 'mat-rc'; }
     return api.renderSectionSheet(model, 'section-a').svg;
   };
   const imperial = slabMaterial('feet-inches'), metric = slabMaterial('metric');
@@ -621,7 +632,7 @@ test('material hatching follows the drafting profile', () => {
 
 test('material detail falls back to poche without a catalog or at small scales', () => {
   const { api } = loadStudio();
-  const legacy = api.renderPlanSheet(structuredClone(metricFixture), 'level-ground').svg;
+  const legacy = api.renderPlanSheet(withoutCatalog(metricFixture), 'level-ground').svg;
   assert.doesNotMatch(legacy, /hatch-|MATERIALS/);
 
   const distant = structuredClone(materialFixture);
@@ -846,7 +857,7 @@ test('thin regions stay unhatched except steel, and material detail follows each
   assert.equal(api.materialsActive(imperial, 128), false, '3/32" = 1\'-0"');
   assert.equal(api.materialsActive(metric, 100), true, '1:100');
   assert.equal(api.materialsActive(metric, 200), false, '1:200');
-  assert.equal(api.materialsActive(structuredClone(metricFixture), 12), false, 'no catalog, no detail');
+  assert.equal(api.materialsActive(withoutCatalog(metricFixture), 12), false, 'no catalog, no detail');
 });
 
 test('oblique layered walls hatch, miter, and stay finite', () => {

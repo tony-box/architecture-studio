@@ -1175,7 +1175,23 @@
       "thicknessMm": 120,
       "heightMm": 2700,
       "kind": "interior",
-      "materialId": "mat-lumber",
+      "layers": [
+        {
+          "id": "gypsum-a",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        },
+        {
+          "id": "studs",
+          "materialId": "mat-lumber",
+          "thicknessMm": 90
+        },
+        {
+          "id": "gypsum-b",
+          "materialId": "mat-gypsum",
+          "thicknessMm": 15
+        }
+      ],
       "evidence": {
         "source": "generated",
         "confidence": 0.6,
